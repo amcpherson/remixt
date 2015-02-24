@@ -6,8 +6,8 @@ import numpy as np
 import scipy
 import scipy.stats
 
-import utils
-import cn_model
+import demix.utils
+import demix.cn_model
 
 
 MAX_SEED = 2**32
@@ -528,7 +528,7 @@ class RearrangedGenome(object):
                 segment_sequence = germline_genome[(chromosome_id, allele_id)][start:end]
 
                 if orientation < 0:
-                    segment_sequence = utils.reverse_complement(segment_sequence)
+                    segment_sequence = demix.utils.reverse_complement(segment_sequence)
 
                 rearranged_chromosome.append(segment_sequence)
 
