@@ -21,7 +21,7 @@ np.random.seed(2014)
 
 if __name__ == '__main__':
 
-    class cn_unittest(unittest.TestCase):
+    class demix_unittest(unittest.TestCase):
 
         def generate_simple_data(self, total_cn):
 
