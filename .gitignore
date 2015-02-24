@@ -2,3 +2,8 @@
 *.pyc
 src/external/boost*
 .sconsign.dblite
+src/bamconcordantreads
+src/bamstats
+src/estimategc
+src/external/blossom5*
+src/samplegc
