@@ -2,7 +2,7 @@ import os
 import fnmatch
 import subprocess
 
-external_dir = os.path.join(os.pardir, 'external')
+external_dir = 'external'
 
 boost_version = '1.55.0'
 boost_basename = 'boost_1_55_0'
@@ -26,7 +26,8 @@ common_sources = """
     DebugCheck.cpp
 """.split()
 
-bamtools_dir = os.path.join(external_dir, 'BamTools-2.0')
+bamtools_dir = os.path.join(external_dir, 'bamtools', 'src')
+bamtools_api_dir = os.path.join(bamtools_dir, 'api')
 
 def find_files(directory, pattern):
     for root, dirs, files in os.walk(directory):
@@ -35,12 +36,15 @@ def find_files(directory, pattern):
                 filename = os.path.join(root, basename)
                 yield filename
 
-bamtools_sources = list(find_files(bamtools_dir, '*.cpp'))
+bamtools_sources = list(find_files(bamtools_api_dir, '*.cpp'))
+bamtools_sources = filter(lambda a: not a.endswith('win_p.cpp'), bamtools_sources)
 
 boost_iostreams_sources = list(find_files(os.path.join(boost_dir, 'libs/iostreams/src'), '*.cpp'))
 boost_serialization_sources = list(find_files(os.path.join(boost_dir, 'libs/serialization/src'), '*.cpp'))
 
-env.Append(CPPPATH=[external_dir, bamtools_dir, boost_dir])
+tclap_dir = os.path.join(external_dir, 'tclap', 'include')
+
+env.Append(CPPPATH=[external_dir, bamtools_dir, boost_dir, tclap_dir])
 env.Append(LIBS=['z', 'bz2'])
 env.Append(CCFLAGS='-O3')
 env.Append(CCFLAGS='-g')
@@ -53,17 +57,17 @@ env.Program(target='../bin/bamconcordantreads', source=common_sources+bamtools_s
 sources = """
     bamstats.cpp
 """.split()
-env.Program(target='bamstats', source=common_sources+bamtools_sources+sources)
+env.Program(target='../bin/bamstats', source=common_sources+bamtools_sources+sources)
 
 sources = """
     Sequences.cpp
     samplegc.cpp
 """.split()
-env.Program(target='samplegc', source=common_sources+bamtools_sources+sources)
+env.Program(target='../bin/samplegc', source=common_sources+bamtools_sources+sources)
 
 sources = """
     Sequences.cpp
     estimategc.cpp
 """.split()
-env.Program(target='estimategc', source=common_sources+bamtools_sources+sources)
+env.Program(target='../bin/estimategc', source=common_sources+bamtools_sources+sources)
 
