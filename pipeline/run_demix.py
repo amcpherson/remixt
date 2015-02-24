@@ -335,7 +335,7 @@ else:
 
         cn, brk_cn = model.decode(exp.x, exp.l, h)
 
-        fig = cn_plot.experiment_plot(exp, cn=cn, h=h)
+        fig = cn_plot.experiment_plot(exp, cn, h, model.p)
 
         fig.savefig(experiment_plot_filename, format='pdf', bbox_inches='tight')
 

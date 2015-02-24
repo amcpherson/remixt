@@ -4,9 +4,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-import experiment_sim
-import cn_model
-import cn_plot
+import demix_paths
+import demix.simulations.experiment as sim_experiment
+import demix.cn_model as cn_model
+import demix.cn_plot as cn_plot
 
 
 def read_sim_defs(sim_defs_filename):
@@ -69,8 +70,8 @@ def read_sim_defs(sim_defs_filename):
 
 def simulate_genomes(genomes_filename, params):
 
-    rh_sampler = experiment_sim.RearrangementHistorySampler(params)
-    gc_sampler = experiment_sim.GenomeCollectionSampler(rh_sampler, params)
+    rh_sampler = sim_experiment.RearrangementHistorySampler(params)
+    gc_sampler = sim_experiment.GenomeCollectionSampler(rh_sampler, params)
 
     np.random.seed(params['random_seed'])
 
@@ -82,7 +83,7 @@ def simulate_genomes(genomes_filename, params):
 
 def simulate_mixture(mixture_filename, genomes_filename, params):
 
-    gm_sampler = experiment_sim.GenomeMixtureSampler(params)
+    gm_sampler = sim_experiment.GenomeMixtureSampler(params)
 
     with open(genomes_filename, 'r') as genomes_file:
         gc = pickle.load(genomes_file)
@@ -97,7 +98,7 @@ def simulate_mixture(mixture_filename, genomes_filename, params):
 
 def simulate_experiment(experiment_filename, mixture_filename, params):
 
-    exp_sampler = experiment_sim.ExperimentSampler(params)
+    exp_sampler = sim_experiment.ExperimentSampler(params)
 
     with open(mixture_filename, 'r') as mixture_file:
         gm = pickle.load(mixture_file)
@@ -139,7 +140,7 @@ def plot_experiment(experiment_plot_filename, experiment_filename):
     with open(experiment_filename, 'r') as experiment_file:
         exp = pickle.load(experiment_file)
 
-    fig = cn_plot.experiment_plot(exp)
+    fig = cn_plot.experiment_plot(exp, exp.cn, exp.h, exp.p)
 
     fig.savefig(experiment_plot_filename, format='pdf', bbox_inches='tight', dpi=300)
 

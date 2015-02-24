@@ -155,23 +155,19 @@ def cn_mix_plot(data):
     return fig
 
 
-def experiment_plot(experiment, **override):
+def experiment_plot(experiment, cn, h, p):
     """ Plot a genome mixture from an experiment
 
     Args:
-        experiment (experiment_sim.Experiment): experiment object containing simulation information
-
-    KwArgs:
-        override: override parameters of the experiment including cn, h and p
+        experiment (Experiment): experiment object containing simulation information
+        cn (numpy.array): segment copy number
+        h (numpy.array): haploid depths
+        p (numpy.array): measurable read proportion
 
     Returns:
         matplotlib.Figure: figure object of plots
 
     """
-
-    h = override.get('h', experiment.h)
-    cn = override.get('cn', experiment.cn)
-    p = override.get('p', experiment.p)
 
     data = pd.DataFrame({
             'chrom':experiment.segment_chromosome_id,

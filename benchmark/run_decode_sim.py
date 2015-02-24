@@ -9,9 +9,10 @@ import matplotlib.pyplot as plt
 import pypeliner
 import pypeliner.managed as mgd
 
-import experiment_sim
-import cn_model
-import cn_plot
+import demix_paths
+import demix.simulations.experiment as sim_experiment
+import demix.cn_model as cn_model
+import demix.cn_plot as cn_plot
 import sim_pipeline
 
 if __name__ == '__main__':
@@ -127,7 +128,7 @@ else:
 
         cn, brk_cn = model.decode(exp.x, exp.l, exp.h_pred)
 
-        fig = cn_plot.experiment_plot(exp, cn=cn)
+        fig = cn_plot.experiment_plot(exp, cn, exp.h_pred, model.p)
 
         fig.savefig(cn_plot_filename, format='pdf', bbox_inches='tight', dpi=300)
 

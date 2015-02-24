@@ -1,5 +1,3 @@
-import os
-import sys
 import ConfigParser
 import itertools
 import argparse
@@ -11,12 +9,10 @@ import matplotlib.pyplot as plt
 import pypeliner
 import pypeliner.managed as mgd
 
-demix_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
-sys.path.append(demix_directory)
-
-import experiment_sim
-import cn_model
-import cn_plot
+import demix_paths
+import demix.simulations.experiment as sim_experiment
+import demix.cn_model as cn_model
+import demix.cn_plot as cn_plot
 import sim_pipeline
 
 if __name__ == '__main__':
@@ -222,7 +218,7 @@ else:
 
         cn, brk_cn = model.decode(exp.x, exp.l, h)
 
-        fig = cn_plot.experiment_plot(exp, cn=cn, h=h)
+        fig = cn_plot.experiment_plot(exp, cn, h, model.p)
 
         fig.savefig(experiment_plot_filename, format='pdf', bbox_inches='tight', dpi=300)
 
