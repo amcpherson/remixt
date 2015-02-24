@@ -1,2 +1,4 @@
 *.o
+*.pyc
+src/external/boost*
 .sconsign.dblite
