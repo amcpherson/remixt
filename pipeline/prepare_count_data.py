@@ -26,10 +26,10 @@ import pypeliner
 import pypeliner.managed as mgd
 
 
-destruct_directory = os.path.abspath(os.path.dirname(__file__))
+demix_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
 
-tools_directory = os.path.join(destruct_directory, 'tools')
-default_config_filename = os.path.join(destruct_directory, 'defaultconfig.py')
+bin_directory = os.path.join(demix_directory, 'bin')
+default_config_filename = os.path.join(demix_directory, 'defaultconfig.py')
 
 
 if __name__ == '__main__':
@@ -91,7 +91,7 @@ if __name__ == '__main__':
     for lib_id, bam_filename in zip(args['lib_ids'] + [normal_lib_id], args['bam_files'] + [args['normal_bam_file']]):
 
         pyp.sch.commandline('bam_stats_{0}'.format(lib_id), (), ctx_general,
-            os.path.join(tools_directory, 'bamstats'),
+            os.path.join(bin_directory, 'bamstats'),
             '-b', mgd.InputFile(bam_filename),
             '--flen', '1000',
             '-s', mgd.TempOutputFile('bamstats.file.{0}'.format(lib_id)))
@@ -104,7 +104,7 @@ if __name__ == '__main__':
     for chromosome in config['chromosomes']:
 
         pyp.sch.commandline('read_concordant_{0}_{1}'.format(chromosome, normal_lib_id), (), ctx_general,
-            os.path.join(tools_directory, 'bamconcordantreads'),
+            os.path.join(bin_directory, 'bamconcordantreads'),
             '--clipmax', '8',
             '--flen', '1000',
             '--chr', chromosome,
@@ -130,7 +130,7 @@ if __name__ == '__main__':
         for chromosome in config['chromosomes']:
 
             pyp.sch.commandline('read_concordant_{0}_{1}'.format(chromosome, lib_id), (), ctx_general,
-                os.path.join(tools_directory, 'bamconcordantreads'),
+                os.path.join(bin_directory, 'bamconcordantreads'),
                 '--clipmax', '8',
                 '--flen', '1000',
                 '--chr', chromosome,
@@ -178,7 +178,7 @@ if __name__ == '__main__':
             *[mgd.TempInputFile('alleles.readcounts.phased.{0}.{1}'.format(chromosome, lib_id)) for chromosome in config['chromosomes']])
 
         pyp.sch.commandline('samplegc_{0}'.format(lib_id), (), ctx_general,
-            os.path.join(tools_directory, 'samplegc'),
+            os.path.join(bin_directory, 'samplegc'),
             '-b', mgd.InputFile(bam_filename),
             '-m', config['mappability_filename'],
             '-g', config['genome_fasta'],
@@ -195,7 +195,7 @@ if __name__ == '__main__':
             mgd.TempOutputFile('gcplots.{0}'.format(lib_id)))
 
         pyp.sch.commandline('gc_interval_{0}'.format(lib_id), (), ctx_general,
-            os.path.join(tools_directory, 'estimategc'),
+            os.path.join(bin_directory, 'estimategc'),
             '-m', config['mappability_filename'],
             '-g', config['genome_fasta'],
             '-c', mgd.TempInputFile('interval.readcounts.{0}'.format(lib_id)),

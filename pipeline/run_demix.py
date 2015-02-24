@@ -1,3 +1,5 @@
+import os
+import sys
 import ConfigParser
 import itertools
 import argparse
@@ -10,8 +12,16 @@ import matplotlib.pyplot as plt
 import pypeliner
 import pypeliner.managed as mgd
 
-import cn_model
-import cn_plot
+
+demix_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
+
+default_config_filename = os.path.join(demix_directory, 'defaultconfig.py')
+
+sys.path.append(demix_directory)
+
+import demix.cn_model as cn_model
+import demix.cn_plot as cn_plot
+
 
 if __name__ == '__main__':
 
