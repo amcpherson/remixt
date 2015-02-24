@@ -1,0 +1,69 @@
+import os
+import fnmatch
+import subprocess
+
+external_dir = os.path.join(os.pardir, 'external')
+
+boost_version = '1.55.0'
+boost_basename = 'boost_1_55_0'
+
+boost_url = 'http://downloads.sourceforge.net/project/boost/boost/' + boost_version + '/' + boost_basename + '.tar.gz'
+boost_tgz_filename = boost_basename + '.tar.gz'
+boost_dir = os.path.join(external_dir, boost_basename)
+boost_sentinal = os.path.join(boost_dir, 'sentinal')
+
+if not os.path.exists(boost_sentinal):
+    subprocess.check_call('wget -c ' + boost_url, shell=True)
+    subprocess.check_call('tar -C ' + external_dir + ' -xzvf ' + boost_tgz_filename, shell=True)
+    os.remove(boost_tgz_filename)
+    with open(boost_sentinal, 'w'):
+        pass
+
+env = Environment(ENV=os.environ)
+
+common_sources = """
+    Common.cpp
+    DebugCheck.cpp
+""".split()
+
+bamtools_dir = os.path.join(external_dir, 'BamTools-2.0')
+
+def find_files(directory, pattern):
+    for root, dirs, files in os.walk(directory):
+        for basename in files:
+            if fnmatch.fnmatch(basename, pattern):
+                filename = os.path.join(root, basename)
+                yield filename
+
+bamtools_sources = list(find_files(bamtools_dir, '*.cpp'))
+
+boost_iostreams_sources = list(find_files(os.path.join(boost_dir, 'libs/iostreams/src'), '*.cpp'))
+boost_serialization_sources = list(find_files(os.path.join(boost_dir, 'libs/serialization/src'), '*.cpp'))
+
+env.Append(CPPPATH=[external_dir, bamtools_dir, boost_dir])
+env.Append(LIBS=['z', 'bz2'])
+env.Append(CCFLAGS='-O3')
+env.Append(CCFLAGS='-g')
+
+sources = """
+    bamconcordantreads.cpp
+""".split()
+env.Program(target='../bin/bamconcordantreads', source=common_sources+bamtools_sources+sources+boost_iostreams_sources+boost_serialization_sources)
+
+sources = """
+    bamstats.cpp
+""".split()
+env.Program(target='bamstats', source=common_sources+bamtools_sources+sources)
+
+sources = """
+    Sequences.cpp
+    samplegc.cpp
+""".split()
+env.Program(target='samplegc', source=common_sources+bamtools_sources+sources)
+
+sources = """
+    Sequences.cpp
+    estimategc.cpp
+""".split()
+env.Program(target='estimategc', source=common_sources+bamtools_sources+sources)
+
