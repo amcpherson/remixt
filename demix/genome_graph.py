@@ -7,8 +7,7 @@ import numpy as np
 import pandas as pd
 
 
-blossomv_bin = os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                            'blossom5-v2.04.src', 'blossom5')
+blossomv_bin = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir, 'bin', 'blossom5'))
 
 def df_stack(df, cols, suffixes):
 
