@@ -1,3 +1,5 @@
+import sys
+import os
 import unittest
 import copy
 import itertools
@@ -5,10 +7,14 @@ import numpy as np
 import scipy
 import scipy.optimize
 
-import cn_sim
-import cn_model
-import genome_graph
-import experiment_sim
+demix_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+
+sys.path.append(demix_directory)
+
+import demix.simulations.simple as sim_simple
+import demix.simulations.experiment as sim_experiment
+import demix.cn_model as cn_model
+import demix.genome_graph as genome_graph
 
 np.random.seed(2014)
 
@@ -27,7 +33,7 @@ if __name__ == '__main__':
             p = np.random.uniform(low=0.2, high=0.4, size=N)
             p = np.vstack([p, p, np.ones(p.shape)]).T
 
-            cn = cn_sim.generate_cn(N, M, 2.0, 0.5, 0.5, 2)
+            cn = sim_simple.generate_cn(N, M, 2.0, 0.5, 0.5, 2)
             h = np.random.uniform(low=0.5, high=2.0, size=M)
 
             model = cn_model.CopyNumberModel(M, set(), set())
@@ -339,9 +345,9 @@ if __name__ == '__main__':
 
         def test_recreate(self):
 
-            rparams = experiment_sim.RearrangedGenome.default_params.copy()
+            rparams = sim_experiment.RearrangedGenome.default_params.copy()
 
-            genome = experiment_sim.RearrangedGenome(100)
+            genome = sim_experiment.RearrangedGenome(100)
 
             genome.create(rparams)
 
@@ -362,9 +368,9 @@ if __name__ == '__main__':
 
         def test_rewind(self):
 
-            rparams = experiment_sim.RearrangedGenome.default_params.copy()
+            rparams = sim_experiment.RearrangedGenome.default_params.copy()
 
-            genome = experiment_sim.RearrangedGenome(100)
+            genome = sim_experiment.RearrangedGenome(100)
 
             genome.create(rparams)
 
@@ -388,11 +394,11 @@ if __name__ == '__main__':
 
         def test_create_rearranged_sequence(self):
 
-            rparams = experiment_sim.RearrangedGenome.default_params.copy()
+            rparams = sim_experiment.RearrangedGenome.default_params.copy()
 
             rparams['chromosome_lengths'] = {'1':20, '2':10}
 
-            genome = experiment_sim.RearrangedGenome(4)
+            genome = sim_experiment.RearrangedGenome(4)
 
             np.random.seed(2014)
 
