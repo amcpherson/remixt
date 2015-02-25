@@ -40,8 +40,6 @@ if __name__ == '__main__':
 
     pypeliner.app.add_arguments(argparser)
 
-    argparser.add_argument('--version', action='version')
-
     argparser.add_argument('ref_data_dir',
                            help='Reference dataset directory')
 
