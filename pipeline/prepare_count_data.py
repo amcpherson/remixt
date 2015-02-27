@@ -149,25 +149,25 @@ if __name__ == '__main__':
                 mgd.TempInputFile('haps.{0}'.format(chromosome)),
                 mgd.TempInputFile('reads.{0}.{1}'.format(chromosome, lib_id)),
                 mgd.TempInputFile('alleles.{0}.{1}'.format(chromosome, lib_id)),
-                mgd.TempOutputFile('interval.readcounts.{0}.{1}'.format(chromosome, lib_id)),
+                mgd.TempOutputFile('segment.readcounts.{0}.{1}'.format(chromosome, lib_id)),
                 mgd.TempOutputFile('alleles.readcounts.{0}.{1}'.format(chromosome, lib_id)),
                 mgd.InputFile(config['genome_fai']))
 
     for chromosome in config['chromosomes']:
 
-        pyp.sch.transform('phase_intervals_{0}'.format(chromosome), (), ctx_general,
-            demix.phase_intervals,
+        pyp.sch.transform('phase_segments_{0}'.format(chromosome), (), ctx_general,
+            demix.phase_segments,
             None,
             *([mgd.TempInputFile('alleles.readcounts.{0}.{1}'.format(chromosome, lib_id)) for lib_info in sorted(tumour_lib_infos.values())] + 
               [mgd.TempOutputFile('alleles.readcounts.phased.{0}.{1}'.format(chromosome, lib_id)) for lib_info in sorted(tumour_lib_infos.values())]))
 
     for lib_id, bam_filename in zip(args['lib_ids'], args['bam_files']):
 
-        pyp.sch.transform('merge_interval_readcounts_{0}'.format(lib_id), (), ctx_general,
+        pyp.sch.transform('merge_segment_readcounts_{0}'.format(lib_id), (), ctx_general,
             demix.merge_files,
             None,
-            mgd.TempOutputFile('interval.readcounts.{0}'.format(lib_id)),
-            *[mgd.TempInputFile('interval.readcounts.{0}.{1}'.format(chromosome, lib_id)) for chromosome in config['chromosomes']])
+            mgd.TempOutputFile('segment.readcounts.{0}'.format(lib_id)),
+            *[mgd.TempInputFile('segment.readcounts.{0}.{1}'.format(chromosome, lib_id)) for chromosome in config['chromosomes']])
 
         pyp.sch.transform('merge_allele_readcounts_{0}'.format(lib_id), (), ctx_general,
             demix.merge_files,
@@ -185,48 +185,36 @@ if __name__ == '__main__':
             '-f', mgd.TempInputObj('bamstats.{0}'.format(lib_id)).prop('fragment_length'),
             '>', mgd.TempOutputFile('gcsamples.{0}'.format(lib_id)))
 
-        pyp.sch.transform('gcloess_{0}'.format(lib_id), (), ctx_general,
+        pyp.sch.transform('gc_lowess_{0}'.format(lib_id), (), ctx_general,
             demix.gc_lowess,
             None,
             mgd.TempInputFile('gcsamples.{0}'.format(lib_id)),
             mgd.TempOutputFile('gcloess.{0}'.format(lib_id)),
             mgd.TempOutputFile('gcplots.{0}'.format(lib_id)))
 
-        pyp.sch.commandline('gc_interval_{0}'.format(lib_id), (), ctx_general,
+        pyp.sch.commandline('gc_segment_{0}'.format(lib_id), (), ctx_general,
             os.path.join(bin_directory, 'estimategc'),
             '-m', config['mappability_filename'],
             '-g', config['genome_fasta'],
-            '-c', mgd.TempInputFile('interval.readcounts.{0}'.format(lib_id)),
+            '-c', mgd.TempInputFile('segment.readcounts.{0}'.format(lib_id)),
             '-i',
             '-o', '4',
             '-u', mgd.TempInputObj('bamstats.{0}'.format(lib_id)).prop('fragment_mean'),
             '-s', mgd.TempInputObj('bamstats.{0}'.format(lib_id)).prop('fragment_stddev'),
             '-a', config['mappability_length'],
             '-l', mgd.TempInputFile('gcloess.{0}'.format(lib_id)),
-            '>', mgd.TempOutputFile('interval.readcounts.lengths.{0}'.format(lib_id)))
+            '>', mgd.TempOutputFile('segment.readcounts.lengths.{0}'.format(lib_id)))
 
     for lib_id, count_filename in tumour_count_filenames.iteritems():
 
         pyp.sch.transform('prepare_counts_{0}'.format(lib_id), (), ctx_general,
             demix.prepare_count_data,
             None,
-            mgd.TempInputFile('interval.readcounts.lengths.{0}'.format(lib_id)),
+            mgd.TempInputFile('segment.readcounts.lengths.{0}'.format(lib_id)),
             mgd.TempInputFile('alleles.readcounts.phased.{0}'.format(lib_id)),
             mgd.OutputFile(count_filename))
 
     pyp.run()
-
-
-LibInfo = namedtuple('LibInfo', ['id', 'bam_filename'])
-
-def read_libs(libs_filename):
-    lib_infos = dict()
-    with open(libs_filename, 'r') as libs_file:
-        for row in csv.reader(libs_file, delimiter='\t'):
-            id = row[0]
-            bam_filename = row[1]
-            lib_infos[id] = LibInfo(id, bam_filename)
-    return lib_infos
 
 
 class ConcordantReadStats(object):
@@ -334,7 +322,7 @@ def read_alleles_data(alleles_filename, num_rows=-1):
 
 
 def create_counts(chromosome, changepoints_filename, haps_filename, reads_filename, 
-                  alleles_filename, interval_filename, allele_counts_filename,
+                  alleles_filename, segment_filename, allele_counts_filename,
                   genome_fai_filename):
     
     # Read changepoint data
@@ -360,24 +348,24 @@ def create_counts(chromosome, changepoints_filename, haps_filename, reads_filena
     # Create an index that matches the sort order
     regions.index = xrange(len(regions))
 
-     # Count interval reads
-    interval_counts = contained_counts(regions[['start', 'end']].values, reads[['start', 'end']].values)
+     # Count segment reads
+    segment_counts = contained_counts(regions[['start', 'end']].values, reads[['start', 'end']].values)
 
     del reads
 
-    # Create interval data
-    interval_data = pd.DataFrame({'start':regions['start'].values, 'end':regions['end'].values, 'counts':interval_counts})
+    # Create segment data
+    segment_data = pd.DataFrame({'start':regions['start'].values, 'end':regions['end'].values, 'counts':segment_counts})
 
-    # Write interval data to a file
-    interval_data['id'] = chromosome + '_'
-    interval_data['id'] += interval_data.index.values.astype(str)
-    interval_data['counts'] = interval_data['counts'].astype(int)
-    interval_data['chromosome_1'] = chromosome
-    interval_data['strand_1'] = '-'
-    interval_data['chromosome_2'] = chromosome
-    interval_data['strand_2'] = '+'
-    interval_data = interval_data[['id', 'chromosome_1', 'start', 'strand_1', 'chromosome_2', 'end', 'strand_2', 'counts']]
-    interval_data.to_csv(interval_filename, sep='\t', index=False, header=False)
+    # Write segment data to a file
+    segment_data['id'] = chromosome + '_'
+    segment_data['id'] += segment_data.index.values.astype(str)
+    segment_data['counts'] = segment_data['counts'].astype(int)
+    segment_data['chromosome_1'] = chromosome
+    segment_data['strand_1'] = '-'
+    segment_data['chromosome_2'] = chromosome
+    segment_data['strand_2'] = '+'
+    segment_data = segment_data[['id', 'chromosome_1', 'start', 'strand_1', 'chromosome_2', 'end', 'strand_2', 'counts']]
+    segment_data.to_csv(segment_filename, sep='\t', index=False, header=False)
 
     # Merge haplotype information into read alleles table
     alleles = list()
@@ -628,7 +616,7 @@ def savefig_tar(tar, fig, filename):
     tar.addfile(tarinfo=info, fileobj=plot_buffer)
 
 
-def phase_intervals(*args):
+def phase_segments(*args):
 
     input_alleles_filenames = args[:len(args)/2]
     output_alleles_filenames = args[len(args)/2:]
@@ -638,10 +626,10 @@ def phase_intervals(*args):
 
     for idx, input_alleles_filename in enumerate(input_alleles_filenames):
 
-        allele_data = pd.read_csv(input_alleles_filename, sep='\t', header=None, names=['interval_id', 'hap_label', 'allele_id', 'readcount'])
+        allele_data = pd.read_csv(input_alleles_filename, sep='\t', header=None, names=['segment_id', 'hap_label', 'allele_id', 'readcount'])
         
         # Allele readcount table
-        allele_data = allele_data.set_index(['interval_id', 'hap_label', 'allele_id'])['readcount'].unstack().fillna(0.0)
+        allele_data = allele_data.set_index(['segment_id', 'hap_label', 'allele_id'])['readcount'].unstack().fillna(0.0)
         allele_data = allele_data.astype(float)
         
         # Create major allele call
@@ -657,7 +645,7 @@ def phase_intervals(*args):
         allele_data['diff_readcount'] = allele_data['major_readcount'] - allele_data['minor_readcount']
         allele_data['total_readcount'] = allele_data['major_readcount'] + allele_data['minor_readcount']
 
-        # Calculate normalized major and minor read counts difference per interval
+        # Calculate normalized major and minor read counts difference per segment
         allele_diff = allele_data.groupby(level=[0])[['diff_readcount', 'total_readcount']].sum()
         allele_diff['norm_diff_readcount'] = allele_diff['diff_readcount'] / allele_diff['total_readcount']
         allele_diff = allele_diff[['norm_diff_readcount']]
@@ -674,24 +662,24 @@ def phase_intervals(*args):
         largest_idx = np.argmax(df['norm_diff_readcount'].values)
         return df['library_idx'].values[largest_idx]
 
-    # For each interval, select the library with the largest difference between major and minor
-    interval_library = allele_diffs.set_index('interval_id').groupby(level=0).apply(select_largest_diff)
-    interval_library.name = 'library_idx'
-    interval_library = interval_library.reset_index()
+    # For each segment, select the library with the largest difference between major and minor
+    segment_library = allele_diffs.set_index('segment_id').groupby(level=0).apply(select_largest_diff)
+    segment_library.name = 'library_idx'
+    segment_library = segment_library.reset_index()
 
-    # For each haplotype block in each interval, take the major allele call of the library
+    # For each haplotype block in each segment, take the major allele call of the library
     # with the largest major minor difference and call it allele 'a'
-    allele_phases = allele_phases.merge(interval_library, left_on=['interval_id', 'library_idx'], right_on=['interval_id', 'library_idx'], how='right')
-    allele_phases = allele_phases[['interval_id', 'hap_label', 'major_allele_id']].rename(columns={'major_allele_id': 'allele_a_id'})
+    allele_phases = allele_phases.merge(segment_library, left_on=['segment_id', 'library_idx'], right_on=['segment_id', 'library_idx'], how='right')
+    allele_phases = allele_phases[['segment_id', 'hap_label', 'major_allele_id']].rename(columns={'major_allele_id': 'allele_a_id'})
 
     for idx, (input_alleles_filename, output_allele_filename) in enumerate(zip(input_alleles_filenames, output_alleles_filenames)):
 
-        allele_data = pd.read_csv(input_alleles_filename, sep='\t', header=None, names=['interval_id', 'hap_label', 'allele_id', 'readcount'])
+        allele_data = pd.read_csv(input_alleles_filename, sep='\t', header=None, names=['segment_id', 'hap_label', 'allele_id', 'readcount'])
         
         # Add a boolean column denoting which allele is allele 'a'
-        allele_data = allele_data.merge(allele_phases, left_on=['interval_id', 'hap_label'], right_on=['interval_id', 'hap_label'])
+        allele_data = allele_data.merge(allele_phases, left_on=['segment_id', 'hap_label'], right_on=['segment_id', 'hap_label'])
         allele_data['is_allele_a'] = (allele_data['allele_id'] == allele_data['allele_a_id']) * 1
-        allele_data = allele_data[['interval_id', 'hap_label', 'allele_id', 'readcount', 'is_allele_a']]
+        allele_data = allele_data[['segment_id', 'hap_label', 'allele_id', 'readcount', 'is_allele_a']]
 
         allele_data.to_csv(output_allele_filename, sep='\t', header=False, index=False)
 
@@ -734,23 +722,23 @@ def gc_lowess(gc_samples_filename, gc_dist_filename, plot_filename, gc_resolutio
     gc_binned[['smoothed']].to_csv(gc_dist_filename, sep='\t', index=False, header=False)
 
 
-def prepare_count_data(intervals_filename, alleles_filename, count_filename):
+def prepare_count_data(segments_filename, alleles_filename, count_filename):
 
-    interval_data = pd.read_csv(intervals_filename, sep='\t', header=None,
-                                converters={'id':str, 'chromosome_1':str, 'chromosome_2':str},
-                                names=['id', 'chromosome_1', 'position_1', 'strand_1',
+    segment_data = pd.read_csv(segments_filename, sep='\t', header=None,
+                                converters={'segment_id':str, 'chromosome_1':str, 'chromosome_2':str},
+                                names=['segment_id', 'chromosome_1', 'position_1', 'strand_1',
                                        'chromosome_2', 'position_2', 'strand_2',
                                        'readcount', 'length'])
 
     allele_data = pd.read_csv(alleles_filename, sep='\t', header=None,
-                              names=['interval_id', 'hap_label', 'allele_id', 'readcount', 'is_allele_a'])
+                              names=['segment_id', 'hap_label', 'allele_id', 'readcount', 'is_allele_a'])
 
     # Calculate allele a/b readcounts
-    allele_data = allele_data.set_index(['interval_id', 'hap_label', 'is_allele_a'])['readcount'].unstack().fillna(0.0)
+    allele_data = allele_data.set_index(['segment_id', 'hap_label', 'is_allele_a'])['readcount'].unstack().fillna(0.0)
     allele_data = allele_data.astype(int)
     allele_data = allele_data.rename(columns={0:'allele_b_readcount', 1:'allele_a_readcount'})
 
-    # Merge haplotype blocks contained within the same interval
+    # Merge haplotype blocks contained within the same segment
     allele_data = allele_data.groupby(level=[0])[['allele_a_readcount', 'allele_b_readcount']].sum()
 
     # Calculate major and minor readcounts, and relationship to allele a/b
@@ -758,8 +746,8 @@ def prepare_count_data(intervals_filename, alleles_filename, count_filename):
     allele_data['minor_readcount'] = allele_data[['allele_a_readcount', 'allele_b_readcount']].apply(min, axis=1)
     allele_data['major_is_allele_a'] = (allele_data['major_readcount'] == allele_data['allele_a_readcount']) * 1
 
-    # Merge allele data with interval data
-    interval_data = interval_data.merge(allele_data, left_on='id', right_index=True)
+    # Merge allele data with segment data
+    segment_data = segment_data.merge(allele_data, left_on='segment_id', right_index=True)
 
-    interval_data.to_csv(count_filename, sep='\t', index=False, header=True)
+    segment_data.to_csv(count_filename, sep='\t', index=False, header=True)
 

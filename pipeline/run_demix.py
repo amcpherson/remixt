@@ -110,28 +110,28 @@ else:
     ])
 
 
-    def find_closest_interval_end(interval_data, breakpoint_data):
+    def find_closest_segment_end(segment_data, breakpoint_data):
 
         break_ends = breakpoint_data[['prediction_id',
-                              'chromosome_1', 'strand_1', 'position_1',
-                              'chromosome_2', 'strand_2', 'position_2']]
+                                      'chromosome_1', 'strand_1', 'position_1',
+                                      'chromosome_2', 'strand_2', 'position_2']]
 
         break_ends.set_index('prediction_id', inplace=True)
         break_ends.columns = pd.MultiIndex.from_tuples([tuple(c.split('_')) for c in break_ends.columns])
         break_ends = break_ends.stack()
 
-        interval_end = interval_data[['segment_id',
-                                      'chromosome_1', 'strand_1', 'position_1',
-                                      'chromosome_2', 'strand_2', 'position_2']]
+        segment_end = segment_data[['segment_id',
+                                    'chromosome_1', 'strand_1', 'position_1',
+                                    'chromosome_2', 'strand_2', 'position_2']]
 
-        interval_end.set_index('segment_id', inplace=True)
-        interval_end.columns = pd.MultiIndex.from_tuples([tuple(c.split('_')) for c in interval_end.columns])
-        interval_end = interval_end.stack()
+        segment_end.set_index('segment_id', inplace=True)
+        segment_end.columns = pd.MultiIndex.from_tuples([tuple(c.split('_')) for c in segment_end.columns])
+        segment_end = segment_end.stack()
 
-        chromosomes = list(set(list(break_ends['chromosome'].unique()) + list(interval_end['chromosome'].unique())))
+        chromosomes = list(set(list(break_ends['chromosome'].unique()) + list(segment_end['chromosome'].unique())))
         strands = ('+', '-')
 
-        break_interval_table = list()
+        break_segment_table = list()
 
         for chromosome, strand in itertools.product(chromosomes, strands):
 
@@ -139,15 +139,15 @@ else:
                                            (break_ends['strand'] == strand), 'position']
             break_end_pos.sort()
 
-            interval_end_pos = interval_end.loc[(interval_end['chromosome'] == chromosome) &
-                                                (interval_end['strand'] == strand), 'position']
-            interval_end_pos.sort()
+            segment_end_pos = segment_end.loc[(segment_end['chromosome'] == chromosome) &
+                                              (segment_end['strand'] == strand), 'position']
+            segment_end_pos.sort()
 
-            right_idx = np.minimum(np.searchsorted(interval_end_pos.values, break_end_pos.values), len(interval_end_pos.values)-1)
+            right_idx = np.minimum(np.searchsorted(segment_end_pos.values, break_end_pos.values), len(segment_end_pos.values)-1)
             left_idx = np.maximum(right_idx - 1, 0)
 
-            left_pos = interval_end_pos.values[left_idx]
-            right_pos = interval_end_pos.values[right_idx]
+            left_pos = segment_end_pos.values[left_idx]
+            right_pos = segment_end_pos.values[right_idx]
 
             left_dist = break_end_pos.values - left_pos
             right_dist = right_pos - break_end_pos.values
@@ -155,23 +155,23 @@ else:
             least_dist_idx = np.where(left_dist < right_dist, left_idx, right_idx)
             least_dist = np.minimum(left_dist, right_dist)
             
-            least_dist_intervals = pd.DataFrame.from_records(list(interval_end_pos.index.values[least_dist_idx]),
-                                                             columns=['segment_id', 'segment_side'])
+            least_dist_segments = pd.DataFrame.from_records(list(segment_end_pos.index.values[least_dist_idx]),
+                                                            columns=['segment_id', 'segment_side'])
             
             break_end_pos = break_end_pos.reset_index()
             break_end_pos.columns = ['prediction_id', 'prediction_side', 'position']
             
             break_end_pos['dist'] = least_dist
-            break_end_pos['segment_id'] = interval_end_pos.index.get_level_values(0)[least_dist_idx]
-            break_end_pos['segment_side'] = interval_end_pos.index.get_level_values(1)[least_dist_idx]
+            break_end_pos['segment_id'] = segment_end_pos.index.get_level_values(0)[least_dist_idx]
+            break_end_pos['segment_side'] = segment_end_pos.index.get_level_values(1)[least_dist_idx]
             break_end_pos['chromosome'] = chromosome
             break_end_pos['strand'] = strand
 
-            break_interval_table.append(break_end_pos)
+            break_segment_table.append(break_end_pos)
 
-        break_interval_table = pd.concat(break_interval_table, ignore_index=True)
+        break_segment_table = pd.concat(break_segment_table, ignore_index=True)
 
-        return break_interval_table
+        return break_segment_table
 
 
     def create_experiment(experiment_filename, count_filename, breakpoint_filename, min_length=100000, min_brk_dist=2000):
@@ -187,27 +187,27 @@ else:
         # Ensure the data frame is indexed 0..n-1 and add the index as a column called 'index'
         count_data = count_data.reset_index(drop=True).reset_index()
 
-        # Adjacent intervals in the same chromosome
+        # Adjacent segments in the same chromosome
         adjacencies = set()
         for idx in xrange(len(count_data.index) - 1):
             if count_data.iloc[idx]['chromosome_1'] == count_data.iloc[idx+1]['chromosome_1']:
                 adjacencies.add((idx, idx+1))
 
-        # Table of intervals closest to breakpoints
-        break_interval_table = find_closest_interval_end(count_data, breakpoint_data)
+        # Table of segments closest to breakpoints
+        break_segment_table = find_closest_segment_end(count_data, breakpoint_data)
 
         # Data is indexed by position in count_data table, add that index
-        break_interval_table = break_interval_table.merge(count_data['segment_id'].reset_index(), how='left')
+        break_segment_table = break_segment_table.merge(count_data['segment_id'].reset_index(), how='left')
 
         # Should have a pair of breakends per breakpoint
-        break_interval_table = break_interval_table.set_index(['prediction_id', 'prediction_side']) \
-                                                   .unstack() \
-                                                   .dropna() \
-                                                   .reset_index()
+        break_segment_table = break_segment_table.set_index(['prediction_id', 'prediction_side']) \
+                                                 .unstack() \
+                                                 .dropna() \
+                                                 .reset_index()
 
         # Breakpoints as segment index, segment side (0/1)
         breakpoint_ids = dict()
-        for idx, row in break_interval_table.iterrows():
+        for idx, row in break_segment_table.iterrows():
 
             if row['dist'].sum() > 'min_brk_dist':
                 continue
