@@ -128,7 +128,7 @@ else:
         interval_end.columns = pd.MultiIndex.from_tuples([tuple(c.split('_')) for c in interval_end.columns])
         interval_end = interval_end.stack()
 
-        chromosomes = list(set(list(break_ends['chromosome'].unique()) + list(interval_end['chromosome'].unique())))
+        chromosomes = list(interval_end['chromosome'].unique())
         strands = ('+', '-')
 
         break_interval_table = list()
@@ -183,6 +183,14 @@ else:
         count_data = count_data[count_data['length'] > min_length]
 
         count_data = count_data.sort(['chromosome_1', 'strand_1', 'position_1'])
+
+        chromosomes = count_data['chromosome_1'].unique()
+
+        # Filter breakpoints between chromosomes with no count data
+        breakpoint_data = breakpoint_data[(
+            (breakpoint_data['chromosome_1'].isin(chromosomes)) &
+            (breakpoint_data['chromosome_2'].isin(chromosomes))
+        )]
 
         # Ensure the data frame is indexed 0..n-1 and add the index as a column called 'index'
         count_data = count_data.reset_index(drop=True).reset_index()

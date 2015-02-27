@@ -95,7 +95,7 @@ if __name__ == '__main__':
             '-s', mgd.TempOutputFile('bamstats.file.{0}'.format(lib_id)))
 
         pyp.sch.transform('read_bam_stats_{0}'.format(lib_id), (), ctx_general,
-            demix.read_stats,
+            prepare_count_data.read_stats,
             mgd.TempOutputObj('bamstats.{0}'.format(lib_id)),
             mgd.TempInputFile('bamstats.file.{0}'.format(lib_id)))
 
@@ -112,7 +112,7 @@ if __name__ == '__main__':
             '-a', mgd.TempOutputFile('alleles.{0}.{1}'.format(chromosome, normal_lib_id)))
 
         pyp.sch.transform('infer_haps_{0}'.format(chromosome), (), ctx_general,
-            demix.infer_haps,
+            prepare_count_data.infer_haps,
             None,
             config,
             pyp.sch.temps_dir,
@@ -142,7 +142,7 @@ if __name__ == '__main__':
         for chromosome in config['chromosomes']:
 
             pyp.sch.transform('create_readcounts_{0}_{1}'.format(chromosome, lib_id), (), ctx_general,
-                demix.create_counts,
+                prepare_count_data.create_counts,
                 None,
                 chromosome, 
                 mgd.InputFile(config['changepoints']),
@@ -156,21 +156,21 @@ if __name__ == '__main__':
     for chromosome in config['chromosomes']:
 
         pyp.sch.transform('phase_intervals_{0}'.format(chromosome), (), ctx_general,
-            demix.phase_intervals,
+            prepare_count_data.phase_intervals,
             None,
-            *([mgd.TempInputFile('alleles.readcounts.{0}.{1}'.format(chromosome, lib_id)) for lib_info in sorted(tumour_lib_infos.values())] + 
-              [mgd.TempOutputFile('alleles.readcounts.phased.{0}.{1}'.format(chromosome, lib_id)) for lib_info in sorted(tumour_lib_infos.values())]))
+            *([mgd.TempInputFile('alleles.readcounts.{0}.{1}'.format(chromosome, lib_id)) for lib_id in args['lib_ids']] + 
+              [mgd.TempOutputFile('alleles.readcounts.phased.{0}.{1}'.format(chromosome, lib_id)) for lib_id in args['lib_ids']]))
 
     for lib_id, bam_filename in zip(args['lib_ids'], args['bam_files']):
 
         pyp.sch.transform('merge_interval_readcounts_{0}'.format(lib_id), (), ctx_general,
-            demix.merge_files,
+            prepare_count_data.merge_files,
             None,
             mgd.TempOutputFile('interval.readcounts.{0}'.format(lib_id)),
             *[mgd.TempInputFile('interval.readcounts.{0}.{1}'.format(chromosome, lib_id)) for chromosome in config['chromosomes']])
 
         pyp.sch.transform('merge_allele_readcounts_{0}'.format(lib_id), (), ctx_general,
-            demix.merge_files,
+            prepare_count_data.merge_files,
             None,
             mgd.TempOutputFile('alleles.readcounts.phased.{0}'.format(lib_id)),
             *[mgd.TempInputFile('alleles.readcounts.phased.{0}.{1}'.format(chromosome, lib_id)) for chromosome in config['chromosomes']])
@@ -186,7 +186,7 @@ if __name__ == '__main__':
             '>', mgd.TempOutputFile('gcsamples.{0}'.format(lib_id)))
 
         pyp.sch.transform('gcloess_{0}'.format(lib_id), (), ctx_general,
-            demix.gc_lowess,
+            prepare_count_data.gc_lowess,
             None,
             mgd.TempInputFile('gcsamples.{0}'.format(lib_id)),
             mgd.TempOutputFile('gcloess.{0}'.format(lib_id)),
@@ -205,10 +205,10 @@ if __name__ == '__main__':
             '-l', mgd.TempInputFile('gcloess.{0}'.format(lib_id)),
             '>', mgd.TempOutputFile('interval.readcounts.lengths.{0}'.format(lib_id)))
 
-    for lib_id, count_filename in tumour_count_filenames.iteritems():
+    for lib_id, count_filename in zip(args['lib_ids'], args['count_files']):
 
         pyp.sch.transform('prepare_counts_{0}'.format(lib_id), (), ctx_general,
-            demix.prepare_count_data,
+            prepare_count_data.prepare_count_data,
             None,
             mgd.TempInputFile('interval.readcounts.lengths.{0}'.format(lib_id)),
             mgd.TempInputFile('alleles.readcounts.phased.{0}'.format(lib_id)),
