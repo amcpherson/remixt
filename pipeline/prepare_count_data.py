@@ -238,59 +238,6 @@ def read_stats(stats_filename):
         return ConcordantReadStats(dict(zip(header,values)))
 
 
-def is_contained(a, b):
-    """ Check if region b is fully contained within region a """
-    return b[0] >= a[0] and b[1] <= a[1]
-
-
-def contained_counts(X, Y):
-    """ Find counts of regions in Y contained in regions in X
-    X and Y are assumed sorted by start
-    X is a set of non-overlapping regions
-    """
-    C = np.zeros(X.shape[0])
-    y_idx = 0
-    for x_idx, x in enumerate(X):
-        while y_idx < Y.shape[0] and Y[y_idx][0] < x[0]:
-            y_idx += 1
-        while y_idx < Y.shape[0] and Y[y_idx][0] <= x[1]:
-            if is_contained(x, Y[y_idx]):
-                C[x_idx] += 1
-            y_idx += 1
-    return C
-
-
-def overlapping_counts(X, Y):
-    """ Find counts of regions in Y overlapping positions in X
-    X and Y are assume sorted, Y by starting position, X by position
-    """
-    C = np.zeros(X.shape[0])
-    x_idx = 0
-    for y in Y:
-        while x_idx < X.shape[0] and X[x_idx] <= y[0]:
-            x_idx += 1
-        x_idx_1 = x_idx
-        while x_idx_1 < X.shape[0] and X[x_idx_1] < y[1]:
-            C[x_idx_1] += 1
-            x_idx_1 += 1
-    return C
-
-
-def find_contained(X, Y):
-    """ Find mapping of positions in Y contained within regions in X
-    X and Y are assume sorted, X by starting position, Y by position
-    X is a set of non-overlapping regions
-    """
-    M = [None]*Y.shape[0]
-    y_idx = 0
-    for x_idx, x in enumerate(X):
-        while y_idx < Y.shape[0] and Y[y_idx] <= x[1]:
-            if Y[y_idx] >= x[0]:
-                M[y_idx] = x_idx
-            y_idx += 1
-    return M
-
-
 def read_reads_data(reads_filename, num_rows=-1):
     dt = np.dtype([('start', np.uint32), ('length', np.uint16)])
     with gzip.open(reads_filename, 'rb') as reads_file:
