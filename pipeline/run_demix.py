@@ -353,7 +353,7 @@ else:
             'end':exp.segment_end,
         })
 
-        for m in xrange(1, exp.M):
+        for m in xrange(1, model.M):
             for l in xrange(2):
                 cn_table['cn_{0}_{1}'.format(m, l)] = cn[:,m,l]
 
@@ -364,7 +364,7 @@ else:
 
         brk_cn_table = pd.DataFrame({'prediction_id':brk_ids})
 
-        for m in xrange(1, exp.M):
+        for m in xrange(1, model.M):
             for l in xrange(2):
                 brk_cn_table['cn_{0}_{1}'.format(m, l)] = brk_cn_values[:,m,l]
 
