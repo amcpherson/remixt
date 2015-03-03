@@ -305,9 +305,9 @@ if __name__ == '__main__':
             model.false_cn = False
 
             wt_adj = set()
-            for seg in xrange(3):
+            for seg in xrange(2):
                 for allele in (0, 1):
-                    wt_adj.add(frozenset([((seg, allele), 1), (((seg + 1) % 3, allele), 0)]))
+                    wt_adj.add(frozenset([((seg, allele), 1), ((seg + 1, allele), 0)]))
 
             tmr_adj = set()
             for allele_1, allele_2 in itertools.product(xrange(2), repeat=2):
@@ -334,8 +334,6 @@ if __name__ == '__main__':
             self.assertTrue(np.all(bond_cn.loc[0,1,1,1,1,0].values == np.array([1, 2])))
             self.assertTrue(np.all(bond_cn.loc[1,0,1,2,0,0].values == np.array([2, 2])))
             self.assertTrue(np.all(bond_cn.loc[1,1,1,2,1,0].values == np.array([1, 2])))
-            self.assertTrue(np.all(bond_cn.loc[0,0,0,2,0,1].values == np.array([2, 2])))
-            self.assertTrue(np.all(bond_cn.loc[0,1,0,2,1,1].values == np.array([2, 2])))
 
             # Check variant edge
             self.assertTrue(np.all(bond_cn.loc[0,1,1,2,1,0].values == np.array([1, 0])))

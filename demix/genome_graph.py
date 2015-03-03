@@ -43,6 +43,12 @@ def df_merge_product(df, col, values):
     return pd.concat(merged, ignore_index=True)
 
 
+vertex_cols = ['n', 'ell', 'side']
+
+
+edge_cols = ['n_1', 'ell_1', 'side_1', 'n_2', 'ell_2', 'side_2']
+
+
 def create_adj_table(adj):
 
     adj_table = list()
@@ -57,8 +63,7 @@ def create_adj_table(adj):
 
         adj_table.append(end_1 + end_2)
 
-    adj_table = pd.DataFrame(adj_table, columns=['n_1', 'ell_1', 'side_1',
-                                                 'n_2', 'ell_2', 'side_2'])
+    adj_table = pd.DataFrame(adj_table, columns=edge_cols)
 
     return adj_table
 
@@ -123,8 +128,7 @@ class GenomeGraph(object):
             assert v_1 < v_t
             tel_table.append(v_1 + v_t)
 
-        tel_table = pd.DataFrame(tel_table, columns=['n_1', 'ell_1', 'side_1',
-                                                     'n_2', 'ell_2', 'side_2'])
+        tel_table = pd.DataFrame(tel_table, columns=edge_cols)
         tel_table['is_telomere'] = True
 
         # Table of bond copy number
@@ -141,8 +145,6 @@ class GenomeGraph(object):
             self.bond_cn[f_cn_col(m)] = 0
 
         # Initialize bond reference edge copy number to minimum of adjacent segment copy number
-        # Initialize telomere edge copy number to remainder from segment and bond
-        # Calculate total telomere edge copy number
         self.tel_segment_cn = np.zeros((self.M, 2))
         for idx, row in self.bond_cn[self.bond_cn['is_reference']].iterrows():
 
@@ -155,29 +157,46 @@ class GenomeGraph(object):
 
                 self.bond_cn.loc[idx, f_cn_col(m)] = min(cn_1, cn_2)
 
-                if cn_1 > cn_ref:
+        # Calculate total bond copy number incident at vertices
+        vertex_bond_cn = (
+            df_stack(self.bond_cn, vertex_cols, ('_1', '_2'))
+            .groupby(vertex_cols)[self.cn_cols+['is_reference']]
+            .sum()
+        )
 
-                    self.bond_cn.loc[(self.bond_cn['n_1'] == row['n_1']) &
-                                     (self.bond_cn['n_2'] == self.tel_segment_idx) &
-                                     (self.bond_cn['ell_1'] == row['ell_1']) &
-                                     (self.bond_cn['ell_2'] == row['ell_1']) &
-                                     (self.bond_cn['side_1'] == row['side_1']) &
-                                     (self.bond_cn['side_2'] == row['side_1']),
-                                     f_cn_col(m)] = cn_1 - cn_ref
+        # Initialize telomere edge copy number to remainder from segment and bond
+        # Calculate total telomere edge copy number
+        for n in xrange(self.N):
 
-                    self.tel_segment_cn[m,row['ell_1']] += cn_1 - cn_ref
+            for ell in xrange(2):
 
-                elif cn_2 > cn_ref:
+                for side in xrange(2):
 
-                    self.bond_cn.loc[(self.bond_cn['n_1'] == row['n_2']) &
-                                     (self.bond_cn['n_2'] == self.tel_segment_idx) &
-                                     (self.bond_cn['ell_1'] == row['ell_2']) &
-                                     (self.bond_cn['ell_2'] == row['ell_2']) &
-                                     (self.bond_cn['side_1'] == row['side_2']) &
-                                     (self.bond_cn['side_2'] == row['side_2']),
-                                     f_cn_col(m)] = cn_2 - cn_ref
+                    if not vertex_bond_cn.loc[(n,ell,side),'is_reference']:
 
-                    self.tel_segment_cn[m,row['ell_2']] += cn_2 - cn_ref
+                        self.bond_cn.loc[(self.bond_cn['n_1'] == n) &
+                                         (self.bond_cn['n_2'] == self.tel_segment_idx) &
+                                         (self.bond_cn['ell_1'] == ell) &
+                                         (self.bond_cn['ell_2'] == ell) &
+                                         (self.bond_cn['side_1'] == side) &
+                                         (self.bond_cn['side_2'] == side),
+                                         'is_observed'] = True
+
+                    for m in xrange(self.M):
+
+                        cn_seg = self.cn[n,m,ell]
+                        cn_bond = vertex_bond_cn.loc[(n,ell,side),f_cn_col(m)]
+                        cn_tel = cn_seg - cn_bond
+
+                        self.bond_cn.loc[(self.bond_cn['n_1'] == n) &
+                                         (self.bond_cn['n_2'] == self.tel_segment_idx) &
+                                         (self.bond_cn['ell_1'] == ell) &
+                                         (self.bond_cn['ell_2'] == ell) &
+                                         (self.bond_cn['side_1'] == side) &
+                                         (self.bond_cn['side_2'] == side),
+                                         f_cn_col(m)] = cn_tel
+
+                        self.tel_segment_cn[m,ell] += cn_tel
 
         # Each copy at a telomere was double counted towards the telomere segment copy number
         self.tel_segment_cn /= 2
@@ -431,7 +450,6 @@ class GenomeGraph(object):
         min_cost_edges = mod_edge_costs.merge(min_cost_edges)
 
         # Remove duplicated edges resulting from non-convex cost functions
-        edge_cols = ['n_1', 'ell_1', 'side_1', 'n_2', 'ell_2', 'side_2']
         min_cost_edges.set_index(edge_cols, inplace=True)
         min_cost_edges['edge_count'] = min_cost_edges.groupby(level=range(len(edge_cols))).size()
         min_cost_edges.reset_index(inplace=True)
@@ -461,8 +479,6 @@ class GenomeGraph(object):
             else:
                 self.cn[n,:,ell] += sign * delta
 
-        edge_cols = ['n_1', 'ell_1', 'side_1', 'n_2', 'ell_2', 'side_2']
-
         for idx, row in seg_mods[seg_mods.duplicated(edge_cols)].iterrows():
             raise Exception('duplicated edge {0}'.format(row[edge_cols].to_dict()))
 
@@ -490,8 +506,6 @@ class GenomeGraph(object):
             Exception: raised if not a valid circulation
 
         """
-
-        vertex_cols = ['n', 'ell', 'side']
 
         vertex_bond_cn = df_stack(self.bond_cn, vertex_cols, ('_1', '_2'))
 
