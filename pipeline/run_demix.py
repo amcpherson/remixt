@@ -217,7 +217,7 @@ else:
         breakpoint_ids = dict()
         for idx, row in break_segment_table.iterrows():
 
-            if row['dist'].sum() > 'min_brk_dist':
+            if row['dist'].sum() > min_brk_dist:
                 continue
 
             n_1 = row['index']['1']
@@ -236,7 +236,7 @@ else:
             if (n_1, side_1) == (n_2, side_2):
                 continue
 
-            breakpoint_ids[frozenset([(n_1, side_1), (n_2, side_2)])] = row['prediction_id']
+            breakpoint_ids[frozenset([(n_1, side_1), (n_2, side_2)])] = row['prediction_id'].iloc[0]
 
         x = count_data[['major_readcount', 'minor_readcount', 'readcount']].values
         l = count_data['length'].values
@@ -359,21 +359,19 @@ else:
 
         cn_table.to_csv(cn_table_filename, sep='\t', index=False, header=True)
 
-        brk_ids = list(exp.breakpoint_ids.values())
-        brk_cn_values = [brk_cn[bp] for bp in exp.breakpoint_ids.iterkeys()]
+        brk_cn_table = list()
 
-        brk_cn_table = pd.DataFrame({'prediction_id':brk_ids})
+        for bp, bp_cn in brk_cn.iteritems():
+            ((n_1, ell_1), side_1), ((n_2, ell_2), side_2) = bp
+            bp_id = exp.breakpoint_ids[frozenset([(n_1, side_1), (n_2, side_2)])]
+            brk_cn_table.append([bp_id, ell_1, ell_2] + list(bp_cn[1:]))
 
+        brk_cn_cols = ['prediction_id', 'allele_1', 'allele_2']
         for m in xrange(1, model.M):
-            for l in xrange(2):
-                brk_cn_table['cn_{0}_{1}'.format(m, l)] = brk_cn_values[:,m,l]
+            brk_cn_cols.append('cn_{0}'.format(m))
+        brk_cn_table = pd.DataFrame(brk_cn_table, columns=brk_cn_cols)
 
         brk_cn_table.to_csv(brk_cn_table_filename, sep='\t', index=False, header=True)
-
-
-
-
-
 
 
 
