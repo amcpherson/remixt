@@ -31,6 +31,10 @@ demix_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pa
 bin_directory = os.path.join(demix_directory, 'bin')
 default_config_filename = os.path.join(demix_directory, 'defaultconfig.py')
 
+sys.path.append(demix_directory)
+
+import demix.segalg as segalg
+
 
 if __name__ == '__main__':
 
@@ -296,7 +300,7 @@ def create_counts(chromosome, changepoints_filename, haps_filename, reads_filena
     regions.index = xrange(len(regions))
 
      # Count segment reads
-    segment_counts = contained_counts(regions[['start', 'end']].values, reads[['start', 'end']].values)
+    segment_counts = segalg.contained_counts(regions[['start', 'end']].values, reads[['start', 'end']].values)
 
     del reads
 
@@ -326,7 +330,7 @@ def create_counts(chromosome, changepoints_filename, haps_filename, reads_filena
 
     # Create a mapping between regions and snp positions
     snp_region = pd.DataFrame({'pos':haps['pos'].unique()})
-    snp_region['region_idx'] = find_contained(regions[['start', 'end']].values, snp_region['pos'].values)
+    snp_region['region_idx'] = segalg.find_contained(regions[['start', 'end']].values, snp_region['pos'].values)
     snp_region = snp_region.dropna()
     snp_region['region_idx'] = snp_region['region_idx'].astype(int)
 
