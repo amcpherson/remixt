@@ -46,6 +46,9 @@ if __name__ == '__main__':
     argparser.add_argument('cn_plot',
                            help='Output segment copy number plot pdf filename')
 
+    argparser.add_argument('mix',
+                           help='Output mixture filename')
+
     args = vars(argparser.parse_args())
 
     pyp = pypeliner.app.Pypeline([run_demix], args)
@@ -89,6 +92,7 @@ if __name__ == '__main__':
         mgd.OutputFile(args['cn']),
         mgd.OutputFile(args['brk_cn']),
         mgd.OutputFile(args['cn_plot']),
+        mgd.OutputFile(args['mix']),
         mgd.TempInputFile('model'),
         mgd.TempInputFile('experiment'),
         mgd.TempInputFile('h_table.tsv'))
@@ -327,7 +331,7 @@ else:
 
 
     def infer_cn(cn_table_filename, brk_cn_table_filename, experiment_plot_filename,
-                 model_filename, experiment_filename, h_table_filename):
+            mix_filename, model_filename, experiment_filename, h_table_filename):
 
         with open(experiment_filename, 'r') as experiment_file:
             exp = pickle.load(experiment_file)
@@ -338,6 +342,9 @@ else:
         h_table = pd.read_csv(h_table_filename, sep='\t')
 
         h = h_table.sort('log_posterior', ascending=False).iloc[0][['h_{0}'.format(idx) for idx in xrange(3)]].values.astype(float)
+
+        with open(mix_filename, 'w') as mix_file:
+            mix_file.write('\t'.join(list(h / h.sum())))
 
         model.e_step_method = 'genomegraph'
 
