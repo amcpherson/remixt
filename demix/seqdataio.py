@@ -141,11 +141,11 @@ def read_raw_allele_data(alleles_file, num_rows=None):
         yield df
 
 
-def read_seq_data(tar, record_type, chromosome=None, num_rows=None):
+def read_seq_data(seqdata_filename, record_type, chromosome=None, num_rows=None):
     """ Read sequence data from a tar archive
 
     Args:
-        tar (str): tar from which data will be read
+        seqdata_filename (str): name of seqdata tar file
         record_type (str): record type, can be 'alleles' or 'reads'
 
     KwArgs:
@@ -157,30 +157,32 @@ def read_seq_data(tar, record_type, chromosome=None, num_rows=None):
 
     """
 
-    for tarinfo in tar:
+    with tarfile.open(seqdata_filename, 'r:gz') as tar:
+        
+        for tarinfo in tar:
 
-        rectype, chrom = tarinfo.name.split('.')
+            rectype, chrom = tarinfo.name.split('.')
 
-        if chromosome is not None and chromosome != chrom:
-            continue
+            if chromosome is not None and chromosome != chrom:
+                continue
 
-        if record_type != rectype:
-            continue
+            if record_type != rectype:
+                continue
 
-        if rectype == 'reads':
-            for data in read_raw_read_data(tar.extractfile(tarinfo), num_rows=num_rows):
-                yield data
+            if rectype == 'reads':
+                for data in read_raw_read_data(tar.extractfile(tarinfo), num_rows=num_rows):
+                    yield data
 
-        elif rectype == 'alleles':
-            for data in read_raw_allele_data(tar.extractfile(tarinfo), num_rows=num_rows):
-                yield data
+            elif rectype == 'alleles':
+                for data in read_raw_allele_data(tar.extractfile(tarinfo), num_rows=num_rows):
+                    yield data
 
 
-def read_read_data(tar, chromosome=None, num_rows=None):
+def read_read_data(seqdata_filename, chromosome=None, num_rows=None):
     """ Read read data from gzipped tar of chromosome files
 
     Args:
-        tar (str): tar to which data will be written
+        seqdata_filename (str): name of seqdata tar file
 
     KwArgs:
         chromosome (str): select specific chromosome, None for all chromosomes
@@ -193,14 +195,14 @@ def read_read_data(tar, chromosome=None, num_rows=None):
 
     """
 
-    return read_seq_data(tar, 'reads', chromosome=chromosome, num_rows=num_rows)
+    return read_seq_data(seqdata_filename, 'reads', chromosome=chromosome, num_rows=num_rows)
 
 
-def read_allele_data(tar, chromosome=None, num_rows=None):
+def read_allele_data(seqdata_filename, chromosome=None, num_rows=None):
     """ Read allele data from gzipped tar of chromosome files
 
     Args:
-        tar (str): tar to which data will be written
+        seqdata_filename (str): name of seqdata tar file
 
     KwArgs:
         chromosome (str): select specific chromosome, None for all chromosomes
@@ -213,25 +215,27 @@ def read_allele_data(tar, chromosome=None, num_rows=None):
 
     """
 
-    return read_seq_data(tar, 'alleles', chromosome=chromosome, num_rows=num_rows)
+    return read_seq_data(seqdata_filename, 'alleles', chromosome=chromosome, num_rows=num_rows)
 
 
-def read_chromosomes(tar):
+def read_chromosomes(seqdata_filename):
     """ Read chromosomes in sequence data tar
 
     Args:
-        tar (str): tar from which data will be read
+        seqdata_filename (str): name of seqdata tar file
 
     Returns:
         list of chromsomes
 
     """
 
-    chromosomes = set()
-    for tarinfo in tar:
-        chromosomes.add(tarinfo.name.split('.')[1])
+    with tarfile.open(seqdata_filename, 'r:gz') as tar:
 
-    return chromosomes
+        chromosomes = set()
+        for tarinfo in tar:
+            chromosomes.add(tarinfo.name.split('.')[1])
+
+        return chromosomes
 
 
 def create_seqdata(seqdata_filename, reads_filenames, alleles_filenames):
