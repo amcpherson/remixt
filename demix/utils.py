@@ -1,3 +1,4 @@
+import csv
 import string
 import scipy
 import scipy.stats
@@ -36,22 +37,23 @@ def filled_density_weighted(ax, data, weights, c, a, xmim, xmax, cov):
     filled_density(ax, samples, c, a, xmim, xmax, cov)
 
 
-def read_sequences(fasta):
-    seq_id = None
-    sequences = []
-    for line in fasta:
-        line = line.rstrip()
-        if len(line) == 0:
-            continue
-        if line[0] == '>':
-            if seq_id is not None:
-                yield (seq_id, ''.join(sequences))
-            seq_id = line[1:].split()[0]
-            sequences = []
-        else:
-            sequences.append(line)
-    if seq_id is not None:
-        yield (seq_id, ''.join(sequences))
+def read_sequences(fasta_filename):
+    with open(fasta_filename, 'r') as fasta_file:
+        seq_id = None
+        sequences = []
+        for line in fasta_file:
+            line = line.rstrip()
+            if len(line) == 0:
+                continue
+            if line[0] == '>':
+                if seq_id is not None:
+                    yield (seq_id, ''.join(sequences))
+                seq_id = line[1:].split()[0]
+                sequences = []
+            else:
+                sequences.append(line)
+        if seq_id is not None:
+            yield (seq_id, ''.join(sequences))
 
 
 def write_sequence(fasta, seq_id, sequence):
@@ -68,5 +70,26 @@ def write_sequence(fasta, seq_id, sequence):
 
 def reverse_complement(sequence):
     return sequence[::-1].translate(string.maketrans('ACTGactg','TGACtgac'))
+
+
+def read_chromosome_lengths(genome_fai_filename):
+    chromosome_lengths = dict()
+    with open(genome_fai_filename, 'r') as genome_fai_file:
+        for row in csv.reader(genome_fai_file, delimiter='\t'):
+            chromosome = row[0]
+            length = int(row[1])
+            if chromosome.startswith('GL'):
+                continue
+            if chromosome == 'MT':
+                continue
+            chromosome_lengths[chromosome] = length
+    return chromosome_lengths
+
+
+def merge_files(output_filename, *input_filenames):
+    with open(output_filename, 'w') as output_file:
+        for input_filename in input_filenames:
+            with open(input_filename, 'r') as input_file:
+                shutil.copyfileobj(input_file, output_file)
 
 
