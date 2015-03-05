@@ -64,3 +64,7 @@ het_snp_call_threshold                      = 0.9
 shapeit_num_samples                         = 100
 shapeit_confidence_threshold                = 0.95
 
+# GC bias correction
+sample_gc_num_positions                     = 10000000
+sample_gc_offset                            = 4
+
