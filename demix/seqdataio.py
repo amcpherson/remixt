@@ -17,7 +17,7 @@ def addtotar(tar, filename):
 read_data_dtype = np.dtype([('start', np.uint32), ('length', np.uint16)])
 
 
-allele_data_dtype = np.dtype([('position', np.uint32), ('is_new_fragment', np.uint8), ('is_alt', np.uint8)])
+allele_data_dtype = np.dtype([('fragment_id', np.uint32), ('position', np.uint32), ('is_alt', np.uint8)])
 
 
 def write_read_data(tar, data):
@@ -61,8 +61,8 @@ def write_allele_data(tar, data):
 
         raw_chrom_data = np.zeros(len(chrom_data.index), dtype=allele_data_dtype)
 
+        raw_chrom_data['fragment_id'] = chrom_data['fragment_id']
         raw_chrom_data['position'] = chrom_data['position']
-        raw_chrom_data['is_new_fragment'] = chrom_data['fragment_id'].diff().fillna(1).astype(int)
         raw_chrom_data['is_alt'] = chrom_data['is_alt']
 
         filename = 'alleles.{0}'.format(chrom)
@@ -137,8 +137,6 @@ def read_raw_allele_data(alleles_file, num_rows=None):
         data = np.fromstring(raw_data, dtype=allele_data_dtype)
 
         df = pd.DataFrame(data)
-        df['fragment_id'] = df['is_new_fragment'].cumsum() - 1
-        df = df.drop('is_new_fragment', axis=1)
 
         yield df
 
@@ -234,4 +232,30 @@ def read_chromosomes(tar):
         chromosomes.add(tarinfo.name.split('.')[1])
 
     return chromosomes
+
+
+def create_seqdata(seqdata_filename, reads_filenames, alleles_filenames):
+    """ Create a seqdata tar object
+
+    Args:
+        seqdata_filename (str): path to output seqdata tar file
+        reads_filenames (dict): individual seqdata read tables keyed by chromosome name
+        alleles_filenames (dict): individual seqdata allele tables keyed by chromosome name
+
+    """
+
+    with tarfile.open(seqdata_filename, 'w') as output_tar:
+
+        prefixes = ('reads.', 'alleles.')
+        chrom_filenames = (reads_filenames, alleles_filenames)
+
+        for prefix, (chrom, filename) in zip(prefixes, chrom_filenames.iteritems()):
+
+            name = prefix+chrom
+            tarinfo = tarfile.TarInfo(name=name)
+
+            with open(filename, 'rb') as f:
+
+                output_tar.addfile(tarinfo=tarinfo, fileobj=f)
+
 
