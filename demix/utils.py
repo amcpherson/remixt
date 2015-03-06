@@ -1,5 +1,6 @@
 import csv
 import string
+import shutil
 import scipy
 import scipy.stats
 import itertools
