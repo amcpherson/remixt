@@ -171,3 +171,62 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
     haps.to_csv(haps_filename, sep='\t', header=True, index=False)
 
 
+def create_allele_counts(allele_counts_filename, seqdata_filename, segments_filename, haps_filename, chromosome):
+    """ Calculate read counts for haplotype alleles within segments
+
+    Args:
+        allele_counts_filename (str): output allele counts file
+        seqdata_filename (str): input sequence data file
+        segments_filename (str): input genomic segments
+        haps_filename (str): input haplotype data file
+        chromosome (str): id of chromosome for which counts will be calculated
+
+    The output allele counts file will contain read counts for haplotype blocks within each segment.
+    The file will be TSV format with the following columns:
+
+        'segment_id': id of the segment
+        'hap_label': label of the haplotype block
+        'allele_id': binary indicator of the haplotype allele
+        'count': number of reads specific to haplotype block allele
+
+    """
+    
+    # Read segment data for selected chromosome
+    segments = pd.read_csv(segments_filename, sep='\t', converters={'chromosome':str})
+    segments = segments[segments['chromosome'] == chromosome]
+
+    # Read haplotype block data for selected chromosome
+    haps = pd.read_csv(haps_filename, sep='\t')
+    haps = haps[haps['chromosome'] == chromosome]
+
+    # Merge haplotype information into read alleles table
+    alleles = list()
+    for alleles_chunk in demix.seqdataio.read_allele_data(seqdata_filename, chromosome=chromosome, num_rows=10000):
+        alleles_chunk = alleles_chunk.merge(haps, left_on=['position', 'is_alt'], right_on=['position', 'allele'], how='inner')
+        alleles.append(alleles_chunk)
+    alleles = pd.concat(alleles, ignore_index=True)
+
+    # Arbitrarily assign a haplotype/allele label to each read
+    alleles.drop_duplicates('fragment_id', inplace=True)
+
+    # Create a mapping between regions and snp positions
+    snp_region = pd.DataFrame({'position':haps['position'].unique()})
+    snp_region['segment_idx'] = demix.segalg.find_contained(regions[['start', 'end']].values, snp_region['position'].values)
+    snp_region = snp_region.dropna()
+    snp_region['segment_idx'] = snp_region['segment_idx'].astype(int)
+
+    # Add annotation of which region each snp is contained within
+    alleles = alleles.merge(snp_region, left_on='position', right_on='position')
+
+    # Count reads for each allele
+    alleles.set_index(['segment_idx', 'hap_label', 'allele_id'], inplace=True)
+    allele_counts = alleles.groupby(level=[0, 1, 2]).size().reset_index().rename(columns={0:'count'})
+
+    # Create region id as chromosome _ index
+    allele_counts['segment_id'] = chromosome + '_'
+    allele_counts['segment_id'] += allele_counts['segment_idx'].astype(str)
+
+    # Write out allele counts
+    allele_counts.to_csv(allele_counts_filename, sep='\t', cols=['segment_id', 'hap_label', 'allele_id', 'count'], index=False, header=False)
+
+
