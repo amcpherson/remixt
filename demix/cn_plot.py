@@ -61,11 +61,11 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', min
 
     """
 
-    cnv = cnv[['chrom', 'start', 'end', 'length', major_col, minor_col]].copy()
+    cnv = cnv[['chromosome', 'start', 'end', 'length', major_col, minor_col]].copy()
 
-    chromosomes = cnv['chrom'].unique()
+    chromosomes = cnv['chromosome'].unique()
 
-    chromosome_length = cnv.groupby('chrom')['end'].max()
+    chromosome_length = cnv.groupby('chromosome')['end'].max()
     chromosome_length.sort(ascending=False)
 
     chromosomes = chromosome_length.index.values
@@ -74,7 +74,7 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', min
     chromosome_start = chromosome_end - chromosome_length
     chromosome_mid = (chromosome_start + chromosome_end) / 2.
 
-    cnv.set_index('chrom', inplace=True)
+    cnv.set_index('chromosome', inplace=True)
     cnv['chromosome_start'] = chromosome_start
     cnv.reset_index(inplace=True)
 
@@ -90,7 +90,7 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', min
     
     ax.set_ylim((-0.05*maxcopies, maxcopies+.6))
     ax.set_xlim((-0.5, chromosome_end.max()))
-    ax.set_xlabel('chrom')
+    ax.set_xlabel('chromosome')
     ax.set_xticks([0] + list(chromosome_end.values))
     ax.set_xticklabels([])
     ax.set_yticks(range(0, maxcopies+1))
