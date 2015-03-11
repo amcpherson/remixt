@@ -18,7 +18,7 @@ def create_cn_table(experiment, cn, h, p):
     """
 
     data = pd.DataFrame({
-            'chrom':experiment.segment_chromosome_id,
+            'chromosome':experiment.segment_chromosome_id,
             'start':experiment.segment_start,
             'end':experiment.segment_end,
             'length':experiment.l,
