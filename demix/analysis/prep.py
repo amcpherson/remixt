@@ -144,8 +144,8 @@ def create_experiment(experiment_filename, count_filename, breakpoint_filename, 
         n_1 = row['index']['1']
         n_2 = row['index']['2']
 
-        side_1 = int(row['segment_side']['1']) - 1
-        side_2 = int(row['segment_side']['2']) - 1
+        side_1 = row['segment_side']['1']
+        side_2 = row['segment_side']['2']
 
         # Remove small events that look like wild type adjacencies
         if (n_1, n_2) in adjacencies and side_1 == 1 and side_2 == 0:
