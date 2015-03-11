@@ -19,8 +19,9 @@ default_config_filename = os.path.join(demix_directory, 'defaultconfig.py')
 
 sys.path.append(demix_directory)
 
-import demix.cn_model as cn_model
-import demix.cn_plot as cn_plot
+import demix.cn_model
+import demix.cn_plot
+import demix.analysis.experiment
 
 
 if __name__ == '__main__':
@@ -265,7 +266,7 @@ else:
         with open(experiment_filename, 'r') as experiment_file:
             exp = pickle.load(experiment_file)
 
-        model = cn_model.CopyNumberModel(3, exp.adjacencies, exp.breakpoints)
+        model = demix.cn_model.CopyNumberModel(3, exp.adjacencies, exp.breakpoints)
         model.emission_model = 'negbin'
         model.e_step_method = 'forwardbackward'
         model.total_cn = True
@@ -350,21 +351,13 @@ else:
 
         cn, brk_cn = model.decode(exp.x, exp.l, h)
 
-        fig = cn_plot.experiment_plot(exp, cn, h, model.p)
-
-        fig.savefig(experiment_plot_filename, format='pdf', bbox_inches='tight')
-
-        cn_table = pd.DataFrame({
-            'chromosome':exp.segment_chromosome_id,
-            'start':exp.segment_start,
-            'end':exp.segment_end,
-        })
-
-        for m in xrange(1, model.M):
-            for l in xrange(2):
-                cn_table['cn_{0}_{1}'.format(m, l)] = cn[:,m,l]
+        cn_table = demix.analysis.experiment.create_cn_table(exp, cn, h, model.p)
 
         cn_table.to_csv(cn_table_filename, sep='\t', index=False, header=True)
+
+        fig = demix.cn_plot.cn_mix_plot(cn_table)
+
+        fig.savefig(experiment_plot_filename, format='pdf', bbox_inches='tight')
 
         brk_cn_table = list()
 
