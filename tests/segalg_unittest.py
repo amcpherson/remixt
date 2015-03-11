@@ -41,6 +41,13 @@ if __name__ == '__main__':
             return segments
 
 
+        def random_positions(self, n=10000, high=1000):
+
+            positions = np.sort(np.random.randint(high, size=n))
+
+            return positions
+
+
         def test_contained_counts_opt(self):
 
             X = self.random_non_overlapping()
@@ -48,6 +55,17 @@ if __name__ == '__main__':
 
             unopt_result = segalg.contained_counts_unopt(X, Y)
             opt_result = segalg.contained_counts(X, Y)
+
+            self.assertTrue(np.all(unopt_result == opt_result))
+
+
+        def test_find_contained_opt(self):
+
+            X = self.random_non_overlapping()
+            Y = self.random_positions()
+
+            unopt_result = segalg.find_contained_unopt(X, Y)
+            opt_result = segalg.find_contained(X, Y)
 
             self.assertTrue(np.all(unopt_result == opt_result))
 

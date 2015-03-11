@@ -10,8 +10,8 @@ def contained_counts_unopt(X, Y):
     """ Find counts of overlapping segments fully contained in non-overlapping segments (unopt)
 
     Args:
-        X (numpy.array): start and end of overlapping segments with shape (N,2) for N segments
-        Y (numpy.array): start and end of non-overlapping segments with shape (M,2) for M segments
+        X (numpy.array): start and end of non-overlapping segments with shape (N,2) for N segments
+        Y (numpy.array): start and end of overlapping segments with shape (M,2) for M segments
 
     Returns:
         numpy.array: N length array of counts of Y countained in X
@@ -36,8 +36,8 @@ def contained_counts(X, Y):
     """ Find counts of overlapping segments fully contained in non-overlapping segments
 
     Args:
-        X (numpy.array): start and end of overlapping segments with shape (N,2) for N segments
-        Y (numpy.array): start and end of non-overlapping segments with shape (M,2) for M segments
+        X (numpy.array): start and end of non-overlapping segments with shape (N,2) for N segments
+        Y (numpy.array): start and end of overlapping segments with shape (M,2) for M segments
 
     Returns:
         numpy.array: N length array of counts of Y countained in X
@@ -46,7 +46,7 @@ def contained_counts(X, Y):
 
     """
 
-    idx = np.searchsorted(X[:,1], Y[:,0], )
+    idx = np.searchsorted(X[:,1], Y[:,0])
     end_idx = np.searchsorted(X[:,1], Y[:,1])
 
     # Mask Y segments outside last X segment
@@ -83,11 +83,21 @@ def overlapping_counts(X, Y):
     return C
 
 
-def find_contained(X, Y):
-    """ Find mapping of positions in Y contained within segments in X
-    X and Y are assume sorted, X by starting position, Y by position
-    X is a set of non-overlapping segments
+def find_contained_unopt(X, Y):
+    """ Find mapping of positions contained within non-overlapping segments (unopt)
+
+    Args:
+        X (numpy.array): start and end of non-overlapping segments with shape (N,2) for N segments
+        Y (numpy.array): positions with shape (M,) for M positions
+
+    Returns:
+        numpy.array: M length array of indices into X containing elements in Y
+
+    X is assumed to be ordered by start position.
+    Y is assumed sorted.
+
     """
+
     M = [None]*Y.shape[0]
     y_idx = 0
     for x_idx, x in enumerate(X):
@@ -96,5 +106,33 @@ def find_contained(X, Y):
                 M[y_idx] = x_idx
             y_idx += 1
     return M
+
+
+def find_contained(X, Y):
+    """ Find mapping of positions contained within non-overlapping segments
+
+    Args:
+        X (numpy.array): start and end of non-overlapping segments with shape (N,2) for N segments
+        Y (numpy.array): positions with shape (M,) for M positions
+
+    Returns:
+        numpy.array: M length array of indices into X containing elements in Y
+
+    X is assumed to be ordered by start position.
+    Y is assumed sorted.
+
+    """
+
+    # Positions less than segment end point
+    idx = np.searchsorted(X[:,1], Y)
+
+    # Mask positions outside greatest endpoint
+    mask = idx < X.shape[0]
+    idx[~mask] = 0
+
+    # Mask positions that are not fully contained within a segment
+    mask = mask & (Y >= X[idx,0]) & (Y <= X[idx,1])
+
+    return np.ma.array(idx, mask=~mask, fill_value=None)
 
 
