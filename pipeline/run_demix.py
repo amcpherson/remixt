@@ -344,8 +344,10 @@ else:
 
         h = h_table.sort('log_posterior', ascending=False).iloc[0][['h_{0}'.format(idx) for idx in xrange(3)]].values.astype(float)
 
+        mix = h / h.sum()
+
         with open(mix_filename, 'w') as mix_file:
-            mix_file.write('\t'.join(list(h / h.sum())))
+            mix_file.write('\t'.join([str(a) for a in mix]))
 
         model.e_step_method = 'genomegraph'
 
