@@ -5,6 +5,8 @@ import scipy
 import scipy.stats
 import itertools
 import numpy as np
+import pandas as pd
+
 
 class gaussian_kde_set_covariance(scipy.stats.gaussian_kde):
     def __init__(self, dataset, covariance):
@@ -25,10 +27,14 @@ def filled_density(ax, data, c, a, xmin, xmax, cov):
     ax.fill(xs, ys, color=c, alpha=a)
 
 
-def weighted_resample(data, weights, num_samples):
-    weights = weights.astype(float)
-    idx_counts = np.random.multinomial(num_samples, weights / weights.sum())
-    samples = np.array(list(itertools.chain(*[itertools.repeat(idx, cnt) for idx, cnt in enumerate(np.random.multinomial(10000, weights.astype(float) / weights.sum()))])))
+def weighted_resample(data, weights, num_samples=10000, randomize=False):
+    norm_weights = weights.astype(float) / float(weights.sum())
+    if randomize:
+        counts = np.random.multinomial(num_samples, norm_weights)
+    else:
+        counts = np.round(norm_weights * float(num_samples)).astype(int)
+    samples = np.repeat(data, counts)
+    return samples
 
 
 def filled_density_weighted(ax, data, weights, c, a, xmim, xmax, cov):
@@ -92,5 +98,11 @@ def merge_files(output_filename, *input_filenames):
         for input_filename in input_filenames:
             with open(input_filename, 'r') as input_file:
                 shutil.copyfileobj(input_file, output_file)
+
+
+def merge_tables(output_filename, *input_filenames):
+    input_data = [pd.read_csv(fname, sep='\t', dtype=str) for fname in input_filenames]
+    pd.concat(input_data).to_csv(output_filename, sep='\t', index=False)
+
 
 

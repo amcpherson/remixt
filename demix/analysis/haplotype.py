@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 
+import demix.seqdataio
+
 def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, config):
     """ Infer haplotype blocks for a chromosome using shapeit
 
@@ -168,7 +170,7 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
 
     haps = haps[['chromosome', 'position', 'allele', 'hap_label', 'allele_id']]
 
-    haps.to_csv(haps_filename, sep='\t', header=True, index=False)
+    haps.to_csv(haps_filename, sep='\t', index=False)
 
 
 def create_allele_counts(allele_counts_filename, seqdata_filename, segments_filename, haps_filename, chromosome):
@@ -184,10 +186,12 @@ def create_allele_counts(allele_counts_filename, seqdata_filename, segments_file
     The output allele counts file will contain read counts for haplotype blocks within each segment.
     The file will be TSV format with the following columns:
 
-        'segment_id': id of the segment
+        'chromosome': chromosome of the segment
+        'start': start of the segment
+        'end': end of the segment
         'hap_label': label of the haplotype block
         'allele_id': binary indicator of the haplotype allele
-        'count': number of reads specific to haplotype block allele
+        'readcount': number of reads specific to haplotype block allele
 
     """
     
@@ -196,7 +200,7 @@ def create_allele_counts(allele_counts_filename, seqdata_filename, segments_file
     segments = segments[segments['chromosome'] == chromosome]
 
     # Read haplotype block data for selected chromosome
-    haps = pd.read_csv(haps_filename, sep='\t')
+    haps = pd.read_csv(haps_filename, sep='\t', converters={'chromosome':str})
     haps = haps[haps['chromosome'] == chromosome]
 
     # Merge haplotype information into read alleles table
@@ -209,30 +213,35 @@ def create_allele_counts(allele_counts_filename, seqdata_filename, segments_file
     # Arbitrarily assign a haplotype/allele label to each read
     alleles.drop_duplicates('fragment_id', inplace=True)
 
-    # Create a mapping between segments and snp positions
-    snp_segment = pd.DataFrame({'position':haps['position'].unique()})
+    # Sort in preparation for search
+    segments.sort('start', inplace=True)
+    alleles.sort('position', inplace=True)
 
-    snp_segment['segment_idx'] = demix.segalg.find_contained(
+    # Annotate segment for each allele
+    alleles['segment_idx'] = demix.segalg.find_contained(
         segments[['start', 'end']].values,
-        snp_segment['position'].values
+        alleles['position'].values
     )
 
-    snp_segment = snp_segment.dropna()
-    snp_segment['segment_idx'] = snp_segment['segment_idx'].astype(int)
-
-    # Add annotation of which segment each snp is contained within
-    alleles = alleles.merge(snp_segment, left_on='position', right_on='position')
+    # Merge segment start end, key for each segment (for given chromosome)
+    alleles = alleles.merge(segments[['start', 'end']], left_on='segment_idx', right_index=True)
 
     # Count reads for each allele
-    alleles.set_index(['segment_idx', 'hap_label', 'allele_id'], inplace=True)
-    allele_counts = alleles.groupby(level=[0, 1, 2]).size().reset_index().rename(columns={0:'count'})
+    allele_counts = (alleles
+        .set_index(['start', 'end', 'hap_label', 'allele_id'])
+        .groupby(level=[0, 1, 2, 3])
+        .size()
+        .reset_index()
+        .rename(columns={0:'readcount'})
+    )
 
-    # Create segment id as chromosome _ index
-    allele_counts['segment_id'] = chromosome + '_'
-    allele_counts['segment_id'] += allele_counts['segment_idx'].astype(str)
+    # Add chromosome to output
+    allele_counts['chromosome'] = chromosome
 
     # Write out allele counts
-    allele_counts.to_csv(allele_counts_filename, sep='\t', cols=['segment_id', 'hap_label', 'allele_id', 'count'], index=False, header=False)
+    allele_counts.to_csv(allele_counts_filename, sep='\t', 
+        columns=['chromosome', 'start', 'end', 'hap_label', 'allele_id', 'readcount'],
+        index=False)
 
 
 def phase_segments(*args):
@@ -248,7 +257,7 @@ def phase_segments(*args):
         'segment_id': id of the segment
         'hap_label': label of the haplotype block
         'allele_id': binary indicator of the haplotype allele
-        'count': number of reads specific to haplotype block allele
+        'readcount': number of reads specific to haplotype block allele
         'is_allele_a': indicator, is allele 'a' (1), is allele 'b' (0)
 
     """
@@ -261,10 +270,10 @@ def phase_segments(*args):
 
     for idx, input_alleles_filename in enumerate(input_alleles_filenames):
 
-        allele_data = pd.read_csv(input_alleles_filename, sep='\t', header=None, names=['segment_id', 'hap_label', 'allele_id', 'readcount'])
+        allele_data = pd.read_csv(input_alleles_filename, sep='\t')
         
         # Allele readcount table
-        allele_data = allele_data.set_index(['segment_id', 'hap_label', 'allele_id'])['readcount'].unstack().fillna(0.0)
+        allele_data = allele_data.set_index(['chromosome', 'start', 'end', 'hap_label', 'allele_id'])['readcount'].unstack().fillna(0.0)
         allele_data = allele_data.astype(float)
         
         # Create major allele call
@@ -281,7 +290,7 @@ def phase_segments(*args):
         allele_data['total_readcount'] = allele_data['major_readcount'] + allele_data['minor_readcount']
 
         # Calculate normalized major and minor read counts difference per segment
-        allele_diff = allele_data.groupby(level=[0])[['diff_readcount', 'total_readcount']].sum()
+        allele_diff = allele_data.groupby(level=[0, 1, 2])[['diff_readcount', 'total_readcount']].sum()
         allele_diff['norm_diff_readcount'] = allele_diff['diff_readcount'] / allele_diff['total_readcount']
         allele_diff = allele_diff[['norm_diff_readcount']]
 
@@ -298,23 +307,23 @@ def phase_segments(*args):
         return df['library_idx'].values[largest_idx]
 
     # For each segment, select the library with the largest difference between major and minor
-    segment_library = allele_diffs.set_index('segment_id').groupby(level=0).apply(select_largest_diff)
+    segment_library = allele_diffs.set_index(['chromosome', 'start', 'end']).groupby(level=[0, 1, 2]).apply(select_largest_diff)
     segment_library.name = 'library_idx'
     segment_library = segment_library.reset_index()
 
     # For each haplotype block in each segment, take the major allele call of the library
     # with the largest major minor difference and call it allele 'a'
-    allele_phases = allele_phases.merge(segment_library, left_on=['segment_id', 'library_idx'], right_on=['segment_id', 'library_idx'], how='right')
-    allele_phases = allele_phases[['segment_id', 'hap_label', 'major_allele_id']].rename(columns={'major_allele_id': 'allele_a_id'})
+    allele_phases = allele_phases.merge(segment_library, left_on=['chromosome', 'start', 'end', 'library_idx'], right_on=['chromosome', 'start', 'end', 'library_idx'], how='right')
+    allele_phases = allele_phases[['chromosome', 'start', 'end', 'hap_label', 'major_allele_id']].rename(columns={'major_allele_id': 'allele_a_id'})
 
     for idx, (input_alleles_filename, output_allele_filename) in enumerate(zip(input_alleles_filenames, output_alleles_filenames)):
 
-        allele_data = pd.read_csv(input_alleles_filename, sep='\t', header=None, names=['segment_id', 'hap_label', 'allele_id', 'readcount'])
-        
-        # Add a boolean column denoting which allele is allele 'a'
-        allele_data = allele_data.merge(allele_phases, left_on=['segment_id', 'hap_label'], right_on=['segment_id', 'hap_label'])
-        allele_data['is_allele_a'] = (allele_data['allele_id'] == allele_data['allele_a_id']) * 1
-        allele_data = allele_data[['segment_id', 'hap_label', 'allele_id', 'readcount', 'is_allele_a']]
+        allele_data = pd.read_csv(input_alleles_filename, sep='\t')
 
-        allele_data.to_csv(output_allele_filename, sep='\t', header=False, index=False)
+        # Add a boolean column denoting which allele is allele 'a'
+        allele_data = allele_data.merge(allele_phases, left_on=['chromosome', 'start', 'end', 'hap_label'], right_on=['chromosome', 'start', 'end', 'hap_label'])
+        allele_data['is_allele_a'] = (allele_data['allele_id'] == allele_data['allele_a_id']) * 1
+        allele_data = allele_data[['chromosome', 'start', 'end', 'hap_label', 'allele_id', 'readcount', 'is_allele_a']]
+
+        allele_data.to_csv(output_allele_filename, sep='\t', index=False)
 

@@ -1,3 +1,7 @@
+import pickle
+import numpy as np
+import pandas as pd
+
 
 def optimize_h(model_filename, experiment_filename, h_init):
 

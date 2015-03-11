@@ -1,4 +1,11 @@
 import collections
+import itertools
+import pickle
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+import demix.cn_model
 
 
 Experiment = collections.namedtuple('Experiment', [
@@ -23,13 +30,23 @@ def find_closest_segment_end(segment_data, breakpoint_data):
     break_ends.columns = pd.MultiIndex.from_tuples([tuple(c.split('_')) for c in break_ends.columns])
     break_ends = break_ends.stack()
 
-    segment_end = segment_data[['segment_id',
-                                'chromosome_1', 'strand_1', 'position_1',
-                                'chromosome_2', 'strand_2', 'position_2']]
-
-    segment_end.set_index('segment_id', inplace=True)
-    segment_end.columns = pd.MultiIndex.from_tuples([tuple(c.split('_')) for c in segment_end.columns])
-    segment_end = segment_end.stack()
+    segment_end = pd.concat([
+        pd.DataFrame({
+            'segment_id':segment_data['segment_id'],
+            'segment_side':0,
+            'chromosome':segment_data['chromosome'],
+            'strand':'-',
+            'position':segment_data['start']
+        }),
+        pd.DataFrame({
+            'segment_id':segment_data['segment_id'],
+            'segment_side':1,
+            'chromosome':segment_data['chromosome'],
+            'strand':'+',
+            'position':segment_data['end']
+        }),
+    ])
+    segment_end.set_index(['segment_id', 'segment_side'], inplace=True)
 
     chromosomes = list(segment_end['chromosome'].unique())
     strands = ('+', '-')
@@ -80,14 +97,15 @@ def find_closest_segment_end(segment_data, breakpoint_data):
 def create_experiment(experiment_filename, count_filename, breakpoint_filename, min_length=100000, min_brk_dist=2000):
 
     count_data = pd.read_csv(count_filename, sep='\t')
+    count_data = count_data.reset_index().rename(columns={'index':'segment_id'})
 
     breakpoint_data = pd.read_csv(breakpoint_filename, sep='\t')
 
     count_data = count_data[count_data['length'] > min_length]
 
-    count_data = count_data.sort(['chromosome_1', 'strand_1', 'position_1'])
+    count_data = count_data.sort(['chromosome', 'start'])
 
-    chromosomes = count_data['chromosome_1'].unique()
+    chromosomes = count_data['chromosome'].unique()
 
     # Filter breakpoints between chromosomes with no count data
     breakpoint_data = breakpoint_data[(
@@ -101,7 +119,7 @@ def create_experiment(experiment_filename, count_filename, breakpoint_filename, 
     # Adjacent segments in the same chromosome
     adjacencies = set()
     for idx in xrange(len(count_data.index) - 1):
-        if count_data.iloc[idx]['chromosome_1'] == count_data.iloc[idx+1]['chromosome_1']:
+        if count_data.iloc[idx]['chromosome'] == count_data.iloc[idx+1]['chromosome']:
             adjacencies.add((idx, idx+1))
 
     # Table of segments closest to breakpoints
@@ -145,9 +163,9 @@ def create_experiment(experiment_filename, count_filename, breakpoint_filename, 
     l = count_data['length'].values
 
     exp = Experiment(
-        count_data['chromosome_1'].values,
-        count_data['position_1'].values,
-        count_data['position_2'].values,
+        count_data['chromosome'].values,
+        count_data['start'].values,
+        count_data['end'].values,
         x,
         l,
         adjacencies,
@@ -164,7 +182,7 @@ def create_model(model_filename, experiment_filename):
     with open(experiment_filename, 'r') as experiment_file:
         exp = pickle.load(experiment_file)
 
-    model = cn_model.CopyNumberModel(3, exp.adjacencies, exp.breakpoints)
+    model = demix.cn_model.CopyNumberModel(3, exp.adjacencies, exp.breakpoints)
     model.emission_model = 'negbin'
     model.e_step_method = 'forwardbackward'
     model.total_cn = True
