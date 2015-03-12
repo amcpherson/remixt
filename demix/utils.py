@@ -101,8 +101,18 @@ def merge_files(output_filename, *input_filenames):
 
 
 def merge_tables(output_filename, *input_filenames):
+    if isinstance(input_filenames, dict):
+        input_filenames = input_filenames.values()
     input_data = [pd.read_csv(fname, sep='\t', dtype=str) for fname in input_filenames]
     pd.concat(input_data).to_csv(output_filename, sep='\t', index=False)
+
+
+def link_file(target_filename, link_filename):
+    try:
+        os.remove(link_filename)
+    except OSError:
+        pass
+    os.symlink(os.path.abspath(target_filename), link_filename)
 
 
 

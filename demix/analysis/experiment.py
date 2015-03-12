@@ -1,3 +1,5 @@
+import collections
+import itertools
 import numpy as np
 import pandas as pd
 
@@ -90,7 +92,7 @@ def find_closest_segment_end(segment_data, breakpoint_data):
     return break_segment_table
 
 
-def create_experiment(experiment_filename, count_filename, breakpoint_filename, min_length=100000, min_brk_dist=2000):
+def create_experiment(count_filename, breakpoint_filename, min_length=100000, min_brk_dist=2000):
 
     count_data = pd.read_csv(count_filename, sep='\t')
     count_data = count_data.reset_index().rename(columns={'index':'segment_id'})
@@ -159,7 +161,7 @@ def create_experiment(experiment_filename, count_filename, breakpoint_filename, 
     x = count_data[['major_readcount', 'minor_readcount', 'readcount']].values
     l = count_data['length'].values
 
-    exp = Experiment(
+    experiment = Experiment(
         count_data['chromosome'].values,
         count_data['start'].values,
         count_data['end'].values,
@@ -170,8 +172,7 @@ def create_experiment(experiment_filename, count_filename, breakpoint_filename, 
         breakpoint_ids,
     )
 
-    with open(experiment_filename, 'w') as experiment_file:
-        pickle.dump(exp, experiment_file)
+    return experiment
 
 
 def create_cn_table(experiment, cn, h, p):

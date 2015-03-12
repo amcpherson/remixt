@@ -26,6 +26,8 @@ import demix
 import demix.seqdataio
 import demix.segalg
 import demix.utils
+import demix.analysis.haplotype
+import demix.analysis.segment
 
 
 if __name__ == '__main__':
@@ -39,17 +41,14 @@ if __name__ == '__main__':
     argparser.add_argument('ref_data_dir',
                            help='Reference dataset directory')
 
-    argparser.add_argument('changepoints',
-                           help='Input changepoints file')
+    argparser.add_argument('segment_file',
+                           help='Input segments file')
 
     argparser.add_argument('normal_file',
                            help='Input normal sequence data filename')
 
     argparser.add_argument('--tumour_files', nargs='+', required=True,
                            help='Input tumour sequence data filenames')
-
-    argparser.add_argument('--tumour_ids', nargs='+', required=True,
-                           help='Input ids for respective tumour filenames')
 
     argparser.add_argument('--count_files', nargs='+', required=True,
                            help='Output count TSV filenames')
@@ -59,16 +58,8 @@ if __name__ == '__main__':
 
     args = vars(argparser.parse_args())
 
-    if len(args['tumour_files']) != len(args['tumour_ids']):
-        raise Exception('--tumour_ids must correspond one to one with --tumour_files')
-
     if len(args['tumour_files']) != len(args['count_files']):
         raise Exception('--count_files must correspond one to one with --tumour_files')
-
-    normal_id = 'normal'
-
-    if normal_id in args['tumour_ids']:
-        raise Exception('do not specifiy normal with --tumour_files/--tumour_ids')
 
     config = {'ref_data_directory':args['ref_data_dir']}
     execfile(default_config_filename, {}, config)
@@ -78,111 +69,124 @@ if __name__ == '__main__':
 
     config.update(args)
 
-    pyp = pypeliner.app.Pypeline([prepare_counts], config)
+    pyp = pypeliner.app.Pypeline([demix, prepare_counts], config)
 
-    ctx_general = {'mem':16, 'ncpus':1}
+    tumour_info = zip(args['tumour_files'], args['count_files'])
+    tumour_info = [prepare_counts.TumourInfo(*a) for a in tumour_info]
 
-    for tumour_id, tumour_filename in zip(args['tumour_ids'], args['tumour_files']):
+    pyp.sch.setobj(pyp.sch.TempInputObj('tumour_info', 'bytumour'), tumour_info)
 
-        pyp.sch.transform('calc_fragment_stats_{0}'.format(tumour_id), (), ctx_general,
-            prepare_counts.calculate_fragment_stats,
-            mgd.TempOutputObj('fragstats.{0}'.format(tumour_id)),
-            mgd.InputFile(tumour_filename))
+    sch.transform('link_tumour_files', ('bytumour',), {'local':True},
+        demix.utils.link_libraries,
+        None,
+        mgd.TempInputObj('tumour_info', 'bytumour').prop('tumour_file'),
+        mgd.TempOutputFile('tumour_file', 'bytumour'),
+    )
 
-    for chromosome in config['chromosomes']:
+    sch.transform('link_count_files', ('bytumour',), {'local':True},
+        demix.utils.link_libraries,
+        None,
+        mgd.TempInputObj('tumour_info', 'bytumour').prop('count_file'),
+        mgd.TempOutputFile('count_file', 'bytumour'),
+    )
 
-        pyp.sch.transform('infer_haps_{0}'.format(chromosome), (), ctx_general,
-            prepare_counts.infer_haps,
-            None,
-            config,
-            pyp.sch.temps_dir,
-            normal_id,
-            chromosome,
-            config['snp_positions'],
-            mgd.InputFile(args['normal_file']),
-            mgd.TempOutputFile('haps.{0}'.format(chromosome)))
+    pyp.sch.transform('calc_fragment_stats', ('bytumour',), {'mem':16},
+        prepare_counts.calculate_fragment_stats,
+        mgd.TempOutputObj('fragstats', 'bytumour'),
+        mgd.TempInputFile('tumour_file', 'bytumour'),
+    )
 
-    for tumour_id, tumour_filename in zip(args['tumour_ids'], args['tumour_files']):
+    pyp.sch.setobj(pyp.sch.OutputChunks('bychromosome'), config['chromosomes'])
 
-        for chromosome in config['chromosomes']:
+    pyp.sch.transform('infer_haps', ('bychromosome'), {'mem':16},
+        demix.analysis.haplotype.infer_haps,
+        None,
+        mgd.TempOutputFile('haps.tsv', 'bychromosome'),
+        mgd.InputFile(args['normal_file']),
+        mgd.InputInstance('bychromosome'),
+        pyp.sch.TempFile('haplotyping'),
+        config,
+    )
 
-            pyp.sch.transform('create_readcounts_{0}_{1}'.format(chromosome, tumour_id), (), ctx_general,
-                prepare_counts.create_counts,
-                None,
-                chromosome, 
-                mgd.InputFile(tumour_filename),
-                mgd.InputFile(config['changepoints']),
-                mgd.TempInputFile('haps.{0}'.format(chromosome)),
-                mgd.TempOutputFile('segment.readcounts.{0}.{1}'.format(chromosome, tumour_id)),
-                mgd.TempOutputFile('alleles.readcounts.{0}.{1}'.format(chromosome, tumour_id)),
-                mgd.InputFile(config['genome_fai']))
+    pyp.sch.transform('merge_haps', (), {'mem':16},
+        demix.utils.merge_tables,
+        None,
+        mgd.TempOutputFile('haps.tsv', 'bychromosome'),
+        mgd.TempInputFile('haps.tsv'),
+    )
 
-    for chromosome in config['chromosomes']:
+    pyp.sch.transform('create_readcounts', ('bytumour',), {'mem':16},
+        prepare_counts.create_counts,
+        None,
+        mgd.TempOutputFile('segment_counts.tsv', 'bytumour'),
+        mgd.TempOutputFile('allele_counts.tsv', 'bytumour'),
+        mgd.InputFile(args['segment_file']),
+        mgd.TempInputFile('tumour_file', 'bytumour'),
+        mgd.TempInputFile('haps.tsv'),
+    )
 
-        pyp.sch.transform('phase_segments_{0}'.format(chromosome), (), ctx_general,
-            prepare_counts.phase_segments,
-            None,
-            *([mgd.TempInputFile('alleles.readcounts.{0}.{1}'.format(chromosome, tumour_id)) for tumour_id in args['tumour_ids']] + 
-              [mgd.TempOutputFile('alleles.readcounts.phased.{0}.{1}'.format(chromosome, tumour_id)) for tumour_id in args['tumour_ids']]))
+    pyp.sch.transform('phase_segments', (), {'mem':16},
+        prepare_counts.phase_segments,
+        None,
+        mgd.TempInputFile('allele_counts.tsv', 'bytumour'),
+        mgd.TempInputFile('phased_allele_counts.tsv', 'bytumour2'),
+    )
 
-    for tumour_id, tumour_filename in zip(args['tumour_ids'], args['tumour_files']):
+    pyp.sch.changeaxis('phased_axis', (), 'phased_allele_counts.tsv', 'bytumour2', 'bytumour')
 
-        pyp.sch.transform('merge_segment_readcounts_{0}'.format(tumour_id), (), ctx_general,
-            demix.utils.merge_files,
-            None,
-            mgd.TempOutputFile('segment.readcounts.{0}'.format(tumour_id)),
-            *[mgd.TempInputFile('segment.readcounts.{0}.{1}'.format(chromosome, tumour_id)) for chromosome in config['chromosomes']])
+    pyp.sch.transform('sample_gc', ('bytumour',), {'mem':16},
+        prepare_counts.sample_gc,
+        None,
+        mgd.TempOutputFile('gcsamples.tsv', 'bytumour'),
+        mgd.InputFile(tumour_filename),
+        mgd.TempInputObj('fragstats', 'bytumour').prop('fragment_mean'),
+        config,
+    )
 
-        pyp.sch.transform('merge_allele_readcounts_{0}'.format(tumour_id), (), ctx_general,
-            demix.utils.merge_files,
-            None,
-            mgd.TempOutputFile('alleles.readcounts.phased.{0}'.format(tumour_id)),
-            *[mgd.TempInputFile('alleles.readcounts.phased.{0}.{1}'.format(chromosome, tumour_id)) for chromosome in config['chromosomes']])
+    pyp.sch.transform('gc_lowess', ('bytumour',), {'mem':16},
+        prepare_counts.gc_lowess,
+        None,
+        mgd.TempInputFile('gcsamples.tsv', 'bytumour'),
+        mgd.TempOutputFile('gcloess.tsv', 'bytumour'),
+        mgd.TempOutputFile('gcplots.pdf', 'bytumour'),
+    )
 
-        pyp.sch.transform('sample_gc_{0}'.format(tumour_id), (), ctx_general,
-            prepare_counts.sample_gc,
-            None,
-            mgd.TempOutputFile('gcsamples.{0}'.format(tumour_id)),
-            mgd.InputFile(tumour_filename),
-            mgd.TempInputObj('fragstats.{0}'.format(tumour_id)).prop('fragment_mean'),
-            config)
+    pyp.sch.commandline('gc_segment', ('bytumour',), {'mem':16},
+        os.path.join(bin_directory, 'estimategc'),
+        '-m', config['mappability_filename'],
+        '-g', config['genome_fasta'],
+        '-c', mgd.TempInputFile('segment_counts.tsv', 'bytumour'),
+        '-i',
+        '-o', '4',
+        '-u', mgd.TempInputObj('fragstats', 'bytumour').prop('fragment_mean'),
+        '-s', mgd.TempInputObj('fragstats', 'bytumour').prop('fragment_stddev'),
+        '-a', config['mappability_length'],
+        '-l', mgd.TempInputFile('gcloess', 'bytumour'),
+        '>', mgd.TempOutputFile('segment_counts_lengths.tsv', 'bytumour'),
+    )
 
-        pyp.sch.transform('gc_lowess_{0}'.format(tumour_id), (), ctx_general,
-            prepare_counts.gc_lowess,
-            None,
-            mgd.TempInputFile('gcsamples.{0}'.format(tumour_id)),
-            mgd.TempOutputFile('gcloess.{0}'.format(tumour_id)),
-            mgd.TempOutputFile('gcplots.{0}.pdf'.format(tumour_id)))
-
-        pyp.sch.commandline('gc_segment_{0}'.format(tumour_id), (), ctx_general,
-            os.path.join(bin_directory, 'estimategc'),
-            '-m', config['mappability_filename'],
-            '-g', config['genome_fasta'],
-            '-c', mgd.TempInputFile('segment.readcounts.{0}'.format(tumour_id)),
-            '-i',
-            '-o', '4',
-            '-u', mgd.TempInputObj('fragstats.{0}'.format(tumour_id)).prop('fragment_mean'),
-            '-s', mgd.TempInputObj('fragstats.{0}'.format(tumour_id)).prop('fragment_stddev'),
-            '-a', config['mappability_length'],
-            '-l', mgd.TempInputFile('gcloess.{0}'.format(tumour_id)),
-            '>', mgd.TempOutputFile('segment.readcounts.lengths.{0}'.format(tumour_id)))
-
-    for tumour_id, count_filename in zip(args['tumour_ids'], args['count_files']):
-
-        pyp.sch.transform('prepare_counts_{0}'.format(tumour_id), (), ctx_general,
-            prepare_counts.prepare_counts,
-            None,
-            mgd.TempInputFile('segment.readcounts.lengths.{0}'.format(tumour_id)),
-            mgd.TempInputFile('alleles.readcounts.phased.{0}'.format(tumour_id)),
-            mgd.OutputFile(count_filename))
+    pyp.sch.transform('prepare_counts', ('bytumour',), {'mem':16},
+        prepare_counts.prepare_counts,
+        None,
+        mgd.TempInputFile('segment_counts_lengths.tsv', 'bytumour'),
+        mgd.TempInputFile('phased_allele_counts.tsv', 'bytumour2'),
+        mgd.OutputFile(count_filename),
+    )
 
     pyp.run()
+
+
+TumourInfo = collections.namedtuple('TumourInfo', [
+    'tumour_file',
+    'count_file',
+])
 
 
 FragmentStats = collections.namedtuple('FragmentStats', [
     'fragment_mean',
     'fragment_stddev',
 ])
+
 
 def calculate_fragment_stats(seqdata_filename):
 
@@ -210,302 +214,39 @@ def calculate_fragment_stats(seqdata_filename):
     return FragmentStats(mean, stdev)
 
 
-def create_counts(chromosome, seqdata_filename, changepoints_filename, haps_filename,
-                  segment_filename, allele_counts_filename, genome_fai_filename):
-    
-    # Read changepoint data
-    changepoints = pd.read_csv(changepoints_filename, sep='\t', header=None,
-                               converters={'chromosome':str}, 
-                               names=['chromosome', 'position'])
-    haps = pd.read_csv(haps_filename, sep='\t')
-    reads = next(demix.seqdataio.read_read_data(seqdata_filename, chromosome=chromosome))
-    reads.sort('start', inplace=True)
-    
-    # Create a list of regions between changepoints
-    changepoints = changepoints[changepoints['chromosome'] == chromosome]
-    changepoints = changepoints.append({'chromosome':chromosome, 'position':1}, ignore_index=True)
-    changepoints = changepoints.append({'chromosome':chromosome, 'position':demix.utils.read_chromosome_lengths(genome_fai_filename)[chromosome]}, ignore_index=True)
-    changepoints.drop_duplicates(inplace=True)
-    changepoints.sort('position', inplace=True)
-    regions = pd.DataFrame(data=np.array([changepoints['position'].values[:-1],
-                                          changepoints['position'].values[1:]]).T,
-                           columns=['start', 'end'])
-    regions.drop_duplicates(inplace=True)
-    regions.sort('start', inplace=True)
-    
-    # Create an index that matches the sort order
-    regions.index = xrange(len(regions))
+def create_counts(segment_counts_filename, allele_counts_filename, segment_filename, seqdata_filename, haps_filename):
 
-     # Count segment reads
-    segment_counts = demix.segalg.contained_counts(regions[['start', 'end']].values, reads[['start', 'end']].values)
+    segments = pd.read_csv(segment_filename, sep='\t', converters={'chromosome':str})
 
-    del reads
+    segment_counts = demix.analysis.segment.create_segment_counts(
+        segments,
+        tumour_filename,
+    )
 
-    # Create segment data
-    segment_data = pd.DataFrame({'start':regions['start'].values, 'end':regions['end'].values, 'counts':segment_counts})
+    segment_counts.to_csv(segment_counts_filename, sep='\t', index=False)
 
-    # Write segment data to a file
-    segment_data['id'] = chromosome + '_'
-    segment_data['id'] += segment_data.index.values.astype(str)
-    segment_data['counts'] = segment_data['counts'].astype(int)
-    segment_data['chromosome_1'] = chromosome
-    segment_data['strand_1'] = '-'
-    segment_data['chromosome_2'] = chromosome
-    segment_data['strand_2'] = '+'
-    segment_data = segment_data[['id', 'chromosome_1', 'start', 'strand_1', 'chromosome_2', 'end', 'strand_2', 'counts']]
-    segment_data.to_csv(segment_filename, sep='\t', index=False, header=False)
+    allele_counts = demix.analysis.haplotype.create_allele_counts(
+        segments,
+        tumour_filename,
+        haplotype_filename,
+    )
 
-    # Merge haplotype information into read alleles table
-    alleles = list()
-    for alleles_chunk in demix.seqdataio.read_allele_data(seqdata_filename, chromosome=chromosome, num_rows=10000):
-        alleles_chunk = alleles_chunk.merge(haps, left_on=['position', 'is_alt'], right_on=['position', 'allele'], how='inner')
-        alleles.append(alleles_chunk)
-    alleles = pd.concat(alleles, ignore_index=True)
-
-    # Arbitrarily assign a haplotype/allele label to each read
-    alleles.drop_duplicates('fragment_id', inplace=True)
-
-    # Create a mapping between regions and snp positions
-    snp_region = pd.DataFrame({'position':haps['position'].unique()})
-    snp_region['region_idx'] = demix.segalg.find_contained(regions[['start', 'end']].values, snp_region['position'].values)
-    snp_region = snp_region.dropna()
-    snp_region['region_idx'] = snp_region['region_idx'].astype(int)
-
-    # Add annotation of which region each snp is contained within
-    alleles = alleles.merge(snp_region, left_on='position', right_on='position')
-
-    # Count reads for each allele
-    alleles.set_index(['region_idx', 'hap_label', 'allele_id'], inplace=True)
-    allele_counts = alleles.groupby(level=[0, 1, 2]).size().reset_index().rename(columns={0:'count'})
-
-    # Create region id as chromosome _ index
-    allele_counts['region_id'] = chromosome + '_'
-    allele_counts['region_id'] += allele_counts['region_idx'].astype(str)
-
-    # Write out allele counts
-    allele_counts.to_csv(allele_counts_filename, sep='\t', cols=['region_id', 'hap_label', 'allele_id', 'count'], index=False, header=False)
+    allele_counts.to_csv(allele_counts_filename, sep='\t', index=False)
 
 
-def infer_haps(config, temps_directory, library, chromosome, snps_filename, seqdata_filename, haps_filename):
-    
-    def write_null():
-        with open(hets_filename, 'w') as hets_file:
-            pass
-        with open(haps_filename, 'w') as haps_file:
-            haps_file.write('pos\tallele\tchangepoint_confidence\thap_label\tallele_id\tallele_label\n')
+def phase_segments(allele_counts_filenames, phased_allele_counts_filename_callback):
 
-    accepted_chromosomes = [str(a) for a in range(1, 23)] + ['X']
-    if str(chromosome) not in accepted_chromosomes:
-        write_null()
-        return
-    
-    # Temporary directory for impute2 files
-    haps_temp_directory = os.path.join(os.path.join(temps_directory, library), chromosome)
-    try:
-        os.makedirs(haps_temp_directory)
-    except OSError:
-        pass
+    tumour_ids = allele_counts_filenames.keys()
 
-    # Impute 2 files for thousand genomes data by chromosome
-    phased_chromosome = chromosome
-    if chromosome == 'X':
-        phased_chromosome = config['phased_chromosome_x']
-    genetic_map_filename = config['genetic_map_template'].format(phased_chromosome)
-    hap_filename = config['haplotypes_template'].format(phased_chromosome)
-    legend_filename = config['legend_template'].format(phased_chromosome)
+    allele_count_tables = list()
+    for allele_counts_filename in allele_counts_filenames.itervalues():
+        allele_count_tables.append(pd.read_csv(allele_counts_filename, sep='\t', converters={'chromosome':str}))
 
-    # Call snps based on reference and alternate read counts from normal
-    snp_counts_df = list()
-    for alleles_chunk in demix.seqdataio.read_allele_data(seqdata_filename, chromosome=chromosome, num_rows=10000):
-        snp_counts_chunk = alleles_chunk.groupby(['position', 'is_alt']).size().unstack().fillna(0)
-        snp_counts_chunk = snp_counts_chunk.rename(columns=lambda a: {0:'ref_count', 1:'alt_count'}[a])
-        snp_counts_chunk = snp_counts_chunk.astype(float)
-        snp_counts_df.append(snp_counts_chunk)
-    snp_counts_df = pd.concat(snp_counts_df)
-    snp_counts_df = snp_counts_df.groupby(level=0).sum()
-    snp_counts_df.sort_index(inplace=True)
+    phased_allele_counts_tables = demix.analysis.haplotype.phase_segments(allele_count_tables)
 
-    if len(snp_counts_df) == 0:
-        write_null()
-        return
-
-    snp_counts_df['total_count'] = snp_counts_df['ref_count'] + snp_counts_df['alt_count']
-
-    snp_counts_df['likelihood_AA'] = scipy.stats.binom.pmf(snp_counts_df['alt_count'], snp_counts_df['total_count'], float(config['sequencing_base_call_error']))
-    snp_counts_df['likelihood_AB'] = scipy.stats.binom.pmf(snp_counts_df['alt_count'], snp_counts_df['total_count'], 0.5)
-    snp_counts_df['likelihood_BB'] = scipy.stats.binom.pmf(snp_counts_df['ref_count'], snp_counts_df['total_count'], float(config['sequencing_base_call_error']))
-    snp_counts_df['evidence'] = snp_counts_df['likelihood_AA'] + snp_counts_df['likelihood_AB'] + snp_counts_df['likelihood_BB']
-
-    snp_counts_df['posterior_AA'] = snp_counts_df['likelihood_AA'] / snp_counts_df['evidence']
-    snp_counts_df['posterior_AB'] = snp_counts_df['likelihood_AB'] / snp_counts_df['evidence']
-    snp_counts_df['posterior_BB'] = snp_counts_df['likelihood_BB'] / snp_counts_df['evidence']
-
-    snp_counts_df['AA'] = (snp_counts_df['posterior_AA'] >= float(config['het_snp_call_threshold'])) * 1
-    snp_counts_df['AB'] = (snp_counts_df['posterior_AB'] >= float(config['het_snp_call_threshold'])) * 1
-    snp_counts_df['BB'] = (snp_counts_df['posterior_BB'] >= float(config['het_snp_call_threshold'])) * 1
-
-    snp_counts_df = snp_counts_df[(snp_counts_df['AA'] == 1) | (snp_counts_df['AB'] == 1) | (snp_counts_df['BB'] == 1)]
-
-    snps_df_iter = pd.read_csv(snps_filename, sep='\t', names=['chr', 'position', 'ref', 'alt'], converters={'chr':str}, iterator=True, chunksize=10000)
-    snps_df = pd.concat([chunk[chunk['chr'] == chromosome] for chunk in snps_df_iter])
-    snps_df.drop('chr', axis=1)
-    snps_df.set_index('position', inplace=True)
-
-    snp_counts_df = snp_counts_df.merge(snps_df, left_index=True, right_index=True)
-
-    # Create genotype file required by impute2
-    temp_gen_filename = os.path.join(haps_temp_directory, 'snps.gen')
-    snp_counts_df.reset_index(inplace=True)
-    snp_counts_df['chr'] = chromosome
-    snp_counts_df['chr_pos'] = snp_counts_df['chr'].astype(str) + ':' + snp_counts_df['position'].astype(str)
-    snp_counts_df.to_csv(temp_gen_filename, sep=' ', cols=['chr', 'chr_pos', 'position', 'ref', 'alt', 'AA', 'AB', 'BB'], index=False, header=False)
-
-    # Create single sample file required by impute2
-    temp_sample_filename = os.path.join(haps_temp_directory, 'snps.sample')
-    with open(temp_sample_filename, 'w') as temp_sample_file:
-        temp_sample_file.write('ID_1 ID_2 missing sex\n0 0 0 0\nUNR1 UNR1 0 2\n')
-
-    # Run shapeit to create phased haplotype graph
-    hgraph_filename = os.path.join(haps_temp_directory, 'phased.hgraph')
-    hgraph_logs_prefix = hgraph_filename + '.log'
-    chr_x_flag = ''
-    if chromosome == 'X':
-        chr_x_flag = '--chrX'
-    pypeliner.commandline.execute('shapeit', '-M', genetic_map_filename, '-R', hap_filename, legend_filename, config['sample_filename'],
-                                  '-G', temp_gen_filename, temp_sample_filename, '--output-graph', hgraph_filename, chr_x_flag,
-                                  '--no-mcmc', '-L', hgraph_logs_prefix)
-
-    # Run shapeit to sample from phased haplotype graph
-    sample_template = os.path.join(haps_temp_directory, 'sampled.{0}')
-    averaged_changepoints = None
-    for s in range(int(config['shapeit_num_samples'])):
-        sample_prefix = sample_template.format(s)
-        sample_log_filename = sample_prefix + '.log'
-        sample_haps_filename = sample_prefix + '.haps'
-        sample_sample_filename = sample_prefix + '.sample'
-        pypeliner.commandline.execute('shapeit', '-convert', '--input-graph', hgraph_filename, '--output-sample', 
-                                      sample_prefix, '--seed', str(s), '-L', sample_log_filename)
-        sample_haps = pd.read_csv(sample_haps_filename, sep=' ', header=None, 
-                                  names=['id', 'id2', 'position', 'ref', 'alt', 'allele1', 'allele2'],
-                                  usecols=['position', 'allele1', 'allele2'])
-        sample_haps = sample_haps[sample_haps['allele1'] != sample_haps['allele2']]
-        sample_haps['allele'] = sample_haps['allele1']
-        sample_haps = sample_haps.drop(['allele1', 'allele2'], axis=1)
-        sample_haps.set_index('position', inplace=True)
-        sample_changepoints = sample_haps['allele'].diff().abs().astype(float).fillna(0.0)
-        if averaged_changepoints is None:
-            averaged_changepoints = sample_changepoints
-        else:
-            averaged_changepoints += sample_changepoints
-        os.remove(sample_log_filename)
-        os.remove(sample_haps_filename)
-        os.remove(sample_sample_filename)
-    averaged_changepoints /= float(config['shapeit_num_samples'])
-    last_sample_haps = sample_haps
-
-    # Identify changepoints recurrent across samples
-    changepoint_confidence = np.maximum(averaged_changepoints, 1.0 - averaged_changepoints)
-
-    # Create a list of labels for haplotypes between recurrent changepoints
-    current_hap_label = 0
-    hap_label = list()
-    for x in changepoint_confidence:
-        if x < float(config['shapeit_confidence_threshold']):
-            current_hap_label += 1
-        hap_label.append(current_hap_label)
-
-    # Create the list of haplotypes
-    haps = last_sample_haps
-    haps['changepoint_confidence'] = changepoint_confidence
-    haps['hap_label'] = hap_label
-
-    haps.reset_index(inplace=True)
-
-    haps['allele_id'] = 0
-
-    haps_allele2 = haps.copy()
-    haps_allele2['allele_id'] = 1
-    haps_allele2['allele'] = 1 - haps_allele2['allele']
-
-    haps = pd.concat([haps, haps_allele2], ignore_index=True)
-    haps.sort(['position', 'allele_id'], inplace=True)
-
-    haps.set_index(['hap_label', 'allele_id'], inplace=True)
-    hap_label_counter = itertools.count()
-    haps['allele_label'] = haps.groupby(level=[0, 1]).apply(lambda a: next(hap_label_counter))
-    haps.reset_index(inplace=True)
-
-    haps = haps[['position', 'allele', 'changepoint_confidence', 'hap_label', 'allele_id', 'allele_label']]
-
-    haps.to_csv(haps_filename, sep='\t', header=True, index=False)
-
-
-def phase_segments(*args):
-
-    input_alleles_filenames = args[:len(args)/2]
-    output_alleles_filenames = args[len(args)/2:]
-
-    allele_phases = list()
-    allele_diffs = list()
-
-    for idx, input_alleles_filename in enumerate(input_alleles_filenames):
-
-        allele_data = pd.read_csv(input_alleles_filename, sep='\t', header=None, names=['segment_id', 'hap_label', 'allele_id', 'readcount'])
-        
-        # Allele readcount table
-        allele_data = allele_data.set_index(['segment_id', 'hap_label', 'allele_id'])['readcount'].unstack().fillna(0.0)
-        allele_data = allele_data.astype(float)
-        
-        # Create major allele call
-        allele_phase = allele_data.apply(np.argmax, axis=1)
-        allele_phase.name = 'major_allele_id'
-        allele_phase = allele_phase.reset_index()
-        allele_phase['library_idx'] = idx
-        allele_phases.append(allele_phase)
-
-        # Calculate major minor allele read counts, and diff between them
-        allele_data['major_readcount'] = allele_data.apply(np.max, axis=1)
-        allele_data['minor_readcount'] = allele_data.apply(np.min, axis=1)
-        allele_data['diff_readcount'] = allele_data['major_readcount'] - allele_data['minor_readcount']
-        allele_data['total_readcount'] = allele_data['major_readcount'] + allele_data['minor_readcount']
-
-        # Calculate normalized major and minor read counts difference per segment
-        allele_diff = allele_data.groupby(level=[0])[['diff_readcount', 'total_readcount']].sum()
-        allele_diff['norm_diff_readcount'] = allele_diff['diff_readcount'] / allele_diff['total_readcount']
-        allele_diff = allele_diff[['norm_diff_readcount']]
-
-        # Add to table for all librarys
-        allele_diff.reset_index(inplace=True)
-        allele_diff['library_idx'] = idx
-        allele_diffs.append(allele_diff)
-
-    allele_phases = pd.concat(allele_phases, ignore_index=True)
-    allele_diffs = pd.concat(allele_diffs, ignore_index=True)
-
-    def select_largest_diff(df):
-        largest_idx = np.argmax(df['norm_diff_readcount'].values)
-        return df['library_idx'].values[largest_idx]
-
-    # For each segment, select the library with the largest difference between major and minor
-    segment_library = allele_diffs.set_index('segment_id').groupby(level=0).apply(select_largest_diff)
-    segment_library.name = 'library_idx'
-    segment_library = segment_library.reset_index()
-
-    # For each haplotype block in each segment, take the major allele call of the library
-    # with the largest major minor difference and call it allele 'a'
-    allele_phases = allele_phases.merge(segment_library, left_on=['segment_id', 'library_idx'], right_on=['segment_id', 'library_idx'], how='right')
-    allele_phases = allele_phases[['segment_id', 'hap_label', 'major_allele_id']].rename(columns={'major_allele_id': 'allele_a_id'})
-
-    for idx, (input_alleles_filename, output_allele_filename) in enumerate(zip(input_alleles_filenames, output_alleles_filenames)):
-
-        allele_data = pd.read_csv(input_alleles_filename, sep='\t', header=None, names=['segment_id', 'hap_label', 'allele_id', 'readcount'])
-        
-        # Add a boolean column denoting which allele is allele 'a'
-        allele_data = allele_data.merge(allele_phases, left_on=['segment_id', 'hap_label'], right_on=['segment_id', 'hap_label'])
-        allele_data['is_allele_a'] = (allele_data['allele_id'] == allele_data['allele_a_id']) * 1
-        allele_data = allele_data[['segment_id', 'hap_label', 'allele_id', 'readcount', 'is_allele_a']]
-
-        allele_data.to_csv(output_allele_filename, sep='\t', header=False, index=False)
+    for tumour_id, phased_allele_counts in zip(tumour_ids, phased_allele_counts_tables):
+        phased_allele_counts_filename = phased_allele_counts_filename_callback(tumour_id)
+        phased_allele_counts.to_csv(phased_allele_counts_filename, sep='\t', index=False)
 
 
 def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
@@ -657,30 +398,12 @@ def gc_lowess(gc_samples_filename, gc_dist_filename, plot_filename, gc_resolutio
 
 def prepare_counts(segments_filename, alleles_filename, count_filename):
 
-    segment_data = pd.read_csv(segments_filename, sep='\t', header=None,
-                                converters={'segment_id':str, 'chromosome_1':str, 'chromosome_2':str},
-                                names=['segment_id', 'chromosome_1', 'position_1', 'strand_1',
-                                       'chromosome_2', 'position_2', 'strand_2',
-                                       'readcount', 'length'])
+    segment_data = pd.read_csv(segments_filename, sep='\t', converters={'chromosome':str})
+    allele_data = pd.read_csv(alleles_filename, sep='\t', converters={'chromosome':str})
 
-    allele_data = pd.read_csv(alleles_filename, sep='\t', header=None,
-                              names=['segment_id', 'hap_label', 'allele_id', 'readcount', 'is_allele_a'])
+    segment_allele_counts = demix.analysis.segment.create_segment_allele_counts(segment_data, allele_data)
 
-    # Calculate allele a/b readcounts
-    allele_data = allele_data.set_index(['segment_id', 'hap_label', 'is_allele_a'])['readcount'].unstack().fillna(0.0)
-    allele_data = allele_data.astype(int)
-    allele_data = allele_data.rename(columns={0:'allele_b_readcount', 1:'allele_a_readcount'})
+    segment_allele_counts.to_csv(count_filename, sep='\t', index=False)
 
-    # Merge haplotype blocks contained within the same segment
-    allele_data = allele_data.groupby(level=[0])[['allele_a_readcount', 'allele_b_readcount']].sum()
 
-    # Calculate major and minor readcounts, and relationship to allele a/b
-    allele_data['major_readcount'] = allele_data[['allele_a_readcount', 'allele_b_readcount']].apply(max, axis=1)
-    allele_data['minor_readcount'] = allele_data[['allele_a_readcount', 'allele_b_readcount']].apply(min, axis=1)
-    allele_data['major_is_allele_a'] = (allele_data['major_readcount'] == allele_data['allele_a_readcount']) * 1
-
-    # Merge allele data with segment data
-    segment_data = segment_data.merge(allele_data, left_on='segment_id', right_index=True)
-
-    segment_data.to_csv(count_filename, sep='\t', index=False, header=True)
 
