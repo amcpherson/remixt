@@ -101,7 +101,8 @@ def create_experiment(experiment_filename, count_filename, breakpoint_filename, 
 
     breakpoint_data = pd.read_csv(breakpoint_filename, sep='\t')
 
-    count_data = count_data[count_data['length'] > min_length]
+    if min_length is not None:
+        count_data = count_data[count_data['length'] > min_length]
 
     count_data = count_data.sort(['chromosome', 'start'])
 
