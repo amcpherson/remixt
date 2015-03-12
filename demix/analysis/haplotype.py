@@ -1,3 +1,4 @@
+import sys
 import pandas as pd
 import numpy as np
 
@@ -205,23 +206,41 @@ def create_allele_counts(allele_counts_filename, seqdata_filename, segments_file
 
     # Merge haplotype information into read alleles table
     alleles = list()
-    for alleles_chunk in demix.seqdataio.read_allele_data(seqdata_filename, chromosome=chromosome, num_rows=10000):
+    for alleles_chunk in demix.seqdataio.read_allele_data(seqdata_filename, chromosome=chromosome, num_rows=1000000):
         alleles_chunk = alleles_chunk.merge(haps, left_on=['position', 'is_alt'], right_on=['position', 'allele'], how='inner')
         alleles.append(alleles_chunk)
     alleles = pd.concat(alleles, ignore_index=True)
+
+    # Merge read start and end into read alleles table
+    reads = next(demix.seqdataio.read_read_data(seqdata_filename, chromosome=chromosome))
+    alleles = alleles.merge(reads, left_on='fragment_id', right_index=True)
 
     # Arbitrarily assign a haplotype/allele label to each read
     alleles.drop_duplicates('fragment_id', inplace=True)
 
     # Sort in preparation for search
     segments.sort('start', inplace=True)
-    alleles.sort('position', inplace=True)
 
-    # Annotate segment for each allele
+    # Annotate segment for start and end of each read
+    alleles.sort('start', inplace=True)
     alleles['segment_idx'] = demix.segalg.find_contained(
         segments[['start', 'end']].values,
-        alleles['position'].values
+        alleles['start'].values
     )
+    alleles.sort('end', inplace=True)
+    alleles['end_segment_idx'] = demix.segalg.find_contained(
+        segments[['start', 'end']].values,
+        alleles['end'].values
+    )
+
+    # Remove rows outside of the given segments
+    alleles.dropna(subset=['segment_idx', 'end_segment_idx'], inplace=True)
+
+    # Remove reads not contained within the same segment
+    alleles = alleles[alleles['segment_idx'] == alleles['end_segment_idx']]
+
+    # Drop unecessary columns
+    alleles.drop(['start', 'end', 'end_segment_idx'], axis=1, inplace=True)
 
     # Merge segment start end, key for each segment (for given chromosome)
     alleles = alleles.merge(segments[['start', 'end']], left_on='segment_idx', right_index=True)
