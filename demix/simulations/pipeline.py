@@ -150,7 +150,7 @@ def merge_tables(output_filename, input_filenames):
     output_table = list()
 
     for input_filename in input_filenames.values():
-        output_table.append(pd.read_csv(input_filename, sep='\t'))
+        output_table.append(pd.read_csv(input_filename, sep='\t', dtype=str))
 
     output_table = pd.concat(output_table, ignore_index=True)
 
