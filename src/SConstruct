@@ -60,19 +60,6 @@ env.Program(target='bamconcordantreads', source=common_sources+bamtools_sources+
 env.Install(install_dir, 'bamconcordantreads')
 
 sources = """
-    bamstats.cpp
-""".split()
-env.Program(target='bamstats', source=common_sources+bamtools_sources+sources)
-env.Install(install_dir, 'bamstats')
-
-sources = """
-    Sequences.cpp
-    samplegc.cpp
-""".split()
-env.Program(target='samplegc', source=common_sources+bamtools_sources+sources)
-env.Install(install_dir, 'samplegc')
-
-sources = """
     Sequences.cpp
     estimategc.cpp
 """.split()
