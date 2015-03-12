@@ -174,18 +174,18 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
     haps.to_csv(haps_filename, sep='\t', index=False)
 
 
-def create_allele_counts(allele_counts_filename, seqdata_filename, segments_filename, haps_filename, chromosome):
-    """ Calculate read counts for haplotype alleles within segments
+def count_allele_reads(seqdata_filename, haps_filename, chromosome, segments):
+    """ Count reads for each allele of haplotype blocks for a given chromosome
 
     Args:
-        allele_counts_filename (str): output allele counts file
         seqdata_filename (str): input sequence data file
-        segments_filename (str): input genomic segments
         haps_filename (str): input haplotype data file
+        segments_filename (str): input genomic segments
         chromosome (str): id of chromosome for which counts will be calculated
 
-    The output allele counts file will contain read counts for haplotype blocks within each segment.
-    The file will be TSV format with the following columns:
+    Input segments should have columns 'start', 'end'.  The table should be sorted by 'start'.
+
+    The output allele counts table will contain read counts for haplotype blocks within each segment.
 
         'chromosome': chromosome of the segment
         'start': start of the segment
@@ -195,10 +195,6 @@ def create_allele_counts(allele_counts_filename, seqdata_filename, segments_file
         'readcount': number of reads specific to haplotype block allele
 
     """
-    
-    # Read segment data for selected chromosome
-    segments = pd.read_csv(segments_filename, sep='\t', converters={'chromosome':str})
-    segments = segments[segments['chromosome'] == chromosome]
 
     # Read haplotype block data for selected chromosome
     haps = pd.read_csv(haps_filename, sep='\t', converters={'chromosome':str})
@@ -217,9 +213,6 @@ def create_allele_counts(allele_counts_filename, seqdata_filename, segments_file
 
     # Arbitrarily assign a haplotype/allele label to each read
     alleles.drop_duplicates('fragment_id', inplace=True)
-
-    # Sort in preparation for search
-    segments.sort('start', inplace=True)
 
     # Annotate segment for start and end of each read
     alleles.sort('start', inplace=True)
@@ -246,7 +239,8 @@ def create_allele_counts(allele_counts_filename, seqdata_filename, segments_file
     alleles = alleles.merge(segments[['start', 'end']], left_on='segment_idx', right_index=True)
 
     # Count reads for each allele
-    allele_counts = (alleles
+    allele_counts = (
+        alleles
         .set_index(['start', 'end', 'hap_label', 'allele_id'])
         .groupby(level=[0, 1, 2, 3])
         .size()
@@ -257,39 +251,65 @@ def create_allele_counts(allele_counts_filename, seqdata_filename, segments_file
     # Add chromosome to output
     allele_counts['chromosome'] = chromosome
 
-    # Write out allele counts
-    allele_counts.to_csv(allele_counts_filename, sep='\t', 
-        columns=['chromosome', 'start', 'end', 'hap_label', 'allele_id', 'readcount'],
-        index=False)
+    return allele_counts
 
 
-def phase_segments(*args):
-    """ Phase haplotype blocks within segments
+def create_allele_counts(segments, seqdata_filename, haps_filename):
+    """ Create a table of read counts for alleles
 
-    Takes 2n arguments for n tumours.  The first n arguments are input allele count files,
-    the last n arguments are output phased allele count files.
+    Args:
+        segments (pandas.DataFrame): input segment data
+        seqdata_filename (str): input sequence data file
+        haps_filename (str): input haplotype data file
 
-    The output phased allele count file will contain read counts for haplotype blocks within
-    each segment, and phasing information inferred for each block.  The file will be TSV
-    format with the following columns:
+    Input segments should have columns 'chromosome', 'start', 'end'.
 
-        'segment_id': id of the segment
+    The output allele counts table will contain read counts for haplotype blocks within each segment.
+
+        'chromosome': chromosome of the segment
+        'start': start of the segment
+        'end': end of the segment
         'hap_label': label of the haplotype block
         'allele_id': binary indicator of the haplotype allele
         'readcount': number of reads specific to haplotype block allele
+
+    """
+
+    # Sort in preparation for search
+    segments.sort(['chromosome', 'start'], inplace=True)
+
+    # Count separately for each chromosome, ensuring order is preserved for groups
+    gp = segments.groupby('chromosome', sort=False)
+
+    # Table of allele counts, calculated for each group
+    counts = [count_allele_reads(seqdata_filename, haps_filename, *a) for a in gp]
+    counts = pd.concat(counts, ignore_index=True)
+
+    return counts
+
+
+def phase_segments(*allele_counts_tables):
+    """ Phase haplotype blocks within segments
+
+    Args:
+        allele_counts_tables (list of pandas.DataFrame): input allele counts to be phased
+
+    Returns:
+        list of pandas.DataFrame: corresponding list of phased alelle counts
+
+    The input allele counts table should contain columns 'chromosome', 'start', 'end', 
+    'hap_label', 'allele_id', 'readcount'.
+
+    The output phased allele count table will contain an additional column:
+
         'is_allele_a': indicator, is allele 'a' (1), is allele 'b' (0)
 
     """
 
-    input_alleles_filenames = args[:len(args)/2]
-    output_alleles_filenames = args[len(args)/2:]
-
     allele_phases = list()
     allele_diffs = list()
 
-    for idx, input_alleles_filename in enumerate(input_alleles_filenames):
-
-        allele_data = pd.read_csv(input_alleles_filename, sep='\t')
+    for idx, allele_data in enumerate(allele_counts_tables):
         
         # Allele readcount table
         allele_data = allele_data.set_index(['chromosome', 'start', 'end', 'hap_label', 'allele_id'])['readcount'].unstack().fillna(0.0)
@@ -335,14 +355,16 @@ def phase_segments(*args):
     allele_phases = allele_phases.merge(segment_library, left_on=['chromosome', 'start', 'end', 'library_idx'], right_on=['chromosome', 'start', 'end', 'library_idx'], how='right')
     allele_phases = allele_phases[['chromosome', 'start', 'end', 'hap_label', 'major_allele_id']].rename(columns={'major_allele_id': 'allele_a_id'})
 
-    for idx, (input_alleles_filename, output_allele_filename) in enumerate(zip(input_alleles_filenames, output_alleles_filenames)):
-
-        allele_data = pd.read_csv(input_alleles_filename, sep='\t')
+    # Create a list of phased allele count tables correspoinding to input tables
+    phased_allele_counts = list()
+    for allele_data in allele_counts_tables:
 
         # Add a boolean column denoting which allele is allele 'a'
         allele_data = allele_data.merge(allele_phases, left_on=['chromosome', 'start', 'end', 'hap_label'], right_on=['chromosome', 'start', 'end', 'hap_label'])
         allele_data['is_allele_a'] = (allele_data['allele_id'] == allele_data['allele_a_id']) * 1
         allele_data = allele_data[['chromosome', 'start', 'end', 'hap_label', 'allele_id', 'readcount', 'is_allele_a']]
 
-        allele_data.to_csv(output_allele_filename, sep='\t', index=False)
+        phased_allele_counts.append(allele_data)
+
+    return phased_allele_counts
 
