@@ -2,6 +2,9 @@ import pickle
 import numpy as np
 import pandas as pd
 
+import demix.cn_plot
+import demix.analysis.experiment
+
 
 def optimize_h(model_filename, experiment_filename, h_init):
 
@@ -20,15 +23,15 @@ def tabulate_h(h_table_filename, h_opt):
 
     h_table = list()
 
-    for idx, (h, log_posterior, converged) in h_opt.iteritems():
+    for idx, info in h_opt.iteritems():
 
         h_row = dict()
 
         h_row['idx'] = idx
-        h_row['log_posterior'] = log_posterior
-        h_row['converged'] = converged
+        h_row['log_posterior'] = info['log_posterior']
+        h_row['converged'] = info['converged']
 
-        for h_idx, h_value in enumerate(h):
+        for h_idx, h_value in enumerate(info['h']):
             h_row['h_{}'.format(h_idx)] = h_value
 
         h_table.append(h_row)
@@ -51,28 +54,22 @@ def infer_cn(cn_table_filename, brk_cn_table_filename, experiment_plot_filename,
 
     h = h_table.sort('log_posterior', ascending=False).iloc[0][['h_{0}'.format(idx) for idx in xrange(3)]].values.astype(float)
 
+    mix = h / h.sum()
+
     with open(mix_filename, 'w') as mix_file:
-        mix_file.write('\t'.join(list(h / h.sum())))
+        mix_file.write('\t'.join([str(a) for a in mix]))
 
     model.e_step_method = 'genomegraph'
 
     cn, brk_cn = model.decode(exp.x, exp.l, h)
 
-    fig = cn_plot.experiment_plot(exp, cn, h, model.p)
-
-    fig.savefig(experiment_plot_filename, format='pdf', bbox_inches='tight')
-
-    cn_table = pd.DataFrame({
-        'chromosome':exp.segment_chromosome_id,
-        'start':exp.segment_start,
-        'end':exp.segment_end,
-    })
-
-    for m in xrange(1, model.M):
-        for l in xrange(2):
-            cn_table['cn_{0}_{1}'.format(m, l)] = cn[:,m,l]
+    cn_table = demix.analysis.experiment.create_cn_table(exp, cn, h, model.p)
 
     cn_table.to_csv(cn_table_filename, sep='\t', index=False, header=True)
+
+    fig = demix.cn_plot.cn_mix_plot(cn_table)
+
+    fig.savefig(experiment_plot_filename, format='pdf', bbox_inches='tight')
 
     brk_cn_table = list()
 
