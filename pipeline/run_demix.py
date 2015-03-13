@@ -58,7 +58,7 @@ if __name__ == '__main__':
     )
 
     pyp.sch.transform('learn_h', ('byh',), {'mem':8},
-        demix.analysis.pipeline.optimize_h,
+        demix.analysis.pipeline.learn_h,
         mgd.TempOutputObj('h_opt', 'byh'),
         mgd.TempInputFile('experiment_learn.pickle'),
         mgd.TempInputFile('model_learn.pickle'),
