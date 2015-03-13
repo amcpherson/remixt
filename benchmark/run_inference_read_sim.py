@@ -12,6 +12,7 @@ import pypeliner.managed as mgd
 import demix.simulations.pipeline
 import demix.analysis.haplotype
 import demix.wrappers
+import demix.utils
 
 
 demix_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
@@ -56,7 +57,8 @@ if __name__ == '__main__':
     pyp.sch.transform('read_sim_defs', (), {'mem':1,'local':True},
         run_inference_read_sim.read_sim_defs,
         mgd.TempOutputObj('sim_defs'),
-        mgd.InputFile(args['sim_defs']))
+        mgd.InputFile(args['sim_defs']),
+        config)
 
     pyp.sch.transform('simulate_genomes', (), {'mem':4},
         demix.simulations.pipeline.simulate_genomes,
@@ -179,12 +181,16 @@ if __name__ == '__main__':
 
 else:
 
-    def read_sim_defs(sim_defs_filename):
+    def read_sim_defs(params_filename, config):
 
-        sim_defs = dict()
-        execfile(sim_defs_filename, {}, sim_defs)
+        params = dict()
+        execfile(params_filename, {}, params)
 
-        return sim_defs
+        params['chromosome_lengths'] = dict()
+        for seq_id, sequence in demix.utils.read_sequences(config['genome_fasta']):
+            params['chromosome_lengths'][seq_id] = len(sequence)
+
+        return params
 
 
     def set_chromosomes(sim_defs):
