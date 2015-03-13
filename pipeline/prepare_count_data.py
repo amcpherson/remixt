@@ -45,25 +45,25 @@ if __name__ == '__main__':
     pypeliner.app.add_arguments(argparser)
 
     argparser.add_argument('ref_data_dir',
-                           help='Reference dataset directory')
+        help='Reference dataset directory')
 
     argparser.add_argument('changepoints',
-                           help='Input changepoints file')
+        help='Input changepoints file')
 
     argparser.add_argument('normal_bam_file',
-                           help='Input normal bam filename')
+        help='Input normal bam filename')
 
     argparser.add_argument('--bam_files', nargs='+', required=True,
-                           help='Input bam filenames')
+        help='Input bam filenames')
 
     argparser.add_argument('--lib_ids', nargs='+', required=True,
-                           help='Input ids for respective bam filenames')
+        help='Input ids for respective bam filenames')
 
     argparser.add_argument('--count_files', nargs='+', required=True,
-                           help='Output count TSV filenames')
+        help='Output count TSV filenames')
 
     argparser.add_argument('--config', required=False,
-                           help='Configuration Filename')
+        help='Configuration Filename')
 
     args = vars(argparser.parse_args())
 

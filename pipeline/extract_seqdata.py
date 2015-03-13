@@ -9,14 +9,11 @@ import tarfile
 import pypeliner
 import pypeliner.managed as mgd
 
+import demix.seqdataio as seqdataio
+
 
 demix_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
-
 bin_directory = os.path.join(demix_directory, 'bin')
-
-sys.path.append(demix_directory)
-
-import demix.seqdataio as seqdataio
 
 
 if __name__ == '__main__':
@@ -28,16 +25,16 @@ if __name__ == '__main__':
     pypeliner.app.add_arguments(argparser)
 
     argparser.add_argument('bam_file',
-                           help='Input bam filename')
+        help='Input bam filename')
 
     argparser.add_argument('snp_positions',
-                           help='Input SNP positions filename')
+        help='Input SNP positions filename')
 
     argparser.add_argument('seqdata_file',
-                           help='Output sequence data filenames')
+        help='Output sequence data filenames')
 
     argparser.add_argument('--chromosomes', nargs='+', required=True,
-                           help='Chromosomes to extract')
+        help='Chromosomes to extract')
 
     args = vars(argparser.parse_args())
 

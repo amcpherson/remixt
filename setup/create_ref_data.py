@@ -44,10 +44,10 @@ if __name__ == '__main__':
     argparser = argparse.ArgumentParser()
 
     argparser.add_argument('ref_data_dir',
-                           help='Reference dataset directory')
+        help='Reference dataset directory')
 
     argparser.add_argument('-c', '--config',
-                           help='Configuration filename')
+        help='Configuration filename')
 
     args = argparser.parse_args()
 

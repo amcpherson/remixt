@@ -14,20 +14,17 @@ import matplotlib.pyplot as plt
 import pypeliner
 import pypeliner.managed as mgd
 
-
-demix_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
-
-bin_directory = os.path.join(demix_directory, 'bin')
-default_config_filename = os.path.join(demix_directory, 'defaultconfig.py')
-
-sys.path.append(demix_directory)
-
 import demix
 import demix.seqdataio
 import demix.segalg
 import demix.utils
 import demix.analysis.haplotype
 import demix.analysis.segment
+
+
+demix_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
+bin_directory = os.path.join(demix_directory, 'bin')
+default_config_filename = os.path.join(demix_directory, 'defaultconfig.py')
 
 
 if __name__ == '__main__':
@@ -39,22 +36,22 @@ if __name__ == '__main__':
     pypeliner.app.add_arguments(argparser)
 
     argparser.add_argument('ref_data_dir',
-                           help='Reference dataset directory')
+        help='Reference dataset directory')
 
     argparser.add_argument('segment_file',
-                           help='Input segments file')
+        help='Input segments file')
 
     argparser.add_argument('normal_file',
-                           help='Input normal sequence data filename')
+        help='Input normal sequence data filename')
 
     argparser.add_argument('--tumour_files', nargs='+', required=True,
-                           help='Input tumour sequence data filenames')
+        help='Input tumour sequence data filenames')
 
     argparser.add_argument('--count_files', nargs='+', required=True,
-                           help='Output count TSV filenames')
+        help='Output count TSV filenames')
 
     argparser.add_argument('--config', required=False,
-                           help='Configuration Filename')
+        help='Configuration Filename')
 
     args = vars(argparser.parse_args())
 
@@ -74,7 +71,7 @@ if __name__ == '__main__':
     tumour_info = zip(args['tumour_files'], args['count_files'])
     tumour_info = [prepare_counts.TumourInfo(*a) for a in tumour_info]
 
-    pyp.sch.setobj(pyp.sch.TempInputObj('tumour_info', 'bytumour'), tumour_info)
+    pyp.sch.setobj(mgd.TempInputObj('tumour_info', 'bytumour'), tumour_info)
 
     sch.transform('link_tumour_files', ('bytumour',), {'local':True},
         demix.utils.link_libraries,
@@ -96,23 +93,23 @@ if __name__ == '__main__':
         mgd.TempInputFile('tumour_file', 'bytumour'),
     )
 
-    pyp.sch.setobj(pyp.sch.OutputChunks('bychromosome'), config['chromosomes'])
+    pyp.sch.setobj(mgd.OutputChunks('bychromosome'), config['chromosomes'])
 
-    pyp.sch.transform('infer_haps', ('bychromosome'), {'mem':16},
+    pyp.sch.transform('infer_haps', ('bychromosome',), {'mem':16},
         demix.analysis.haplotype.infer_haps,
         None,
         mgd.TempOutputFile('haps.tsv', 'bychromosome'),
         mgd.InputFile(args['normal_file']),
         mgd.InputInstance('bychromosome'),
-        pyp.sch.TempFile('haplotyping'),
+        mgd.TempFile('haplotyping'),
         config,
     )
 
     pyp.sch.transform('merge_haps', (), {'mem':16},
         demix.utils.merge_tables,
         None,
-        mgd.TempOutputFile('haps.tsv', 'bychromosome'),
-        mgd.TempInputFile('haps.tsv'),
+        mgd.TempOutputFile('haps.tsv'),
+        mgd.TempInputFile('haps.tsv', 'bychromosome'),
     )
 
     pyp.sch.transform('create_readcounts', ('bytumour',), {'mem':16},

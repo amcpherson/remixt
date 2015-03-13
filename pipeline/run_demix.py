@@ -12,13 +12,6 @@ import matplotlib.pyplot as plt
 import pypeliner
 import pypeliner.managed as mgd
 
-
-demix_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
-
-default_config_filename = os.path.join(demix_directory, 'defaultconfig.py')
-
-sys.path.append(demix_directory)
-
 import demix
 import demix.analysis.pipeline
 
@@ -30,22 +23,22 @@ if __name__ == '__main__':
     pypeliner.app.add_arguments(argparser)
 
     argparser.add_argument('counts',
-                           help='Input segment counts filename')
+        help='Input segment counts filename')
 
     argparser.add_argument('breakpoints',
-                           help='Input breakpoints filename')
+        help='Input breakpoints filename')
 
     argparser.add_argument('cn',
-                           help='Output segment copy number filename')
+        help='Output segment copy number filename')
 
     argparser.add_argument('brk_cn',
-                           help='Output breakpoint copy number filename')
+        help='Output breakpoint copy number filename')
 
     argparser.add_argument('cn_plot',
-                           help='Output segment copy number plot pdf filename')
+        help='Output segment copy number plot pdf filename')
 
     argparser.add_argument('mix',
-                           help='Output mixture filename')
+        help='Output mixture filename')
 
     args = vars(argparser.parse_args())
 
