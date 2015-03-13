@@ -4,10 +4,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-import demix_paths
-import demix.simulations.experiment as sim_experiment
-import demix.cn_model as cn_model
-import demix.cn_plot as cn_plot
+import demix.simulations.experiment
+import demix.simulations.haplotype
+import demix.cn_plot
+import demix.simulations.seqread
 
 
 def read_sim_defs(sim_defs_filename):
@@ -70,8 +70,8 @@ def read_sim_defs(sim_defs_filename):
 
 def simulate_genomes(genomes_filename, params):
 
-    rh_sampler = sim_experiment.RearrangementHistorySampler(params)
-    gc_sampler = sim_experiment.GenomeCollectionSampler(rh_sampler, params)
+    rh_sampler = demix.simulations.experiment.RearrangementHistorySampler(params)
+    gc_sampler = demix.simulations.experiment.GenomeCollectionSampler(rh_sampler, params)
 
     np.random.seed(params['random_seed'])
 
@@ -83,7 +83,7 @@ def simulate_genomes(genomes_filename, params):
 
 def simulate_mixture(mixture_filename, genomes_filename, params):
 
-    gm_sampler = sim_experiment.GenomeMixtureSampler(params)
+    gm_sampler = demix.simulations.experiment.GenomeMixtureSampler(params)
 
     with open(genomes_filename, 'r') as genomes_file:
         gc = pickle.load(genomes_file)
@@ -98,7 +98,7 @@ def simulate_mixture(mixture_filename, genomes_filename, params):
 
 def simulate_experiment(experiment_filename, mixture_filename, params):
 
-    exp_sampler = sim_experiment.ExperimentSampler(params)
+    exp_sampler = demix.simulations.experiment.ExperimentSampler(params)
 
     with open(mixture_filename, 'r') as mixture_file:
         gm = pickle.load(mixture_file)
@@ -109,6 +109,54 @@ def simulate_experiment(experiment_filename, mixture_filename, params):
 
     with open(experiment_filename, 'w') as experiment_file:
         pickle.dump(exp, experiment_file)
+
+
+def simulate_germline_alleles(germline_alleles_filename, params, config):
+
+    chromosomes = params['chromosomes']
+    
+    haplotypes_template = config['haplotypes_template']
+    legend_template = config['legend_template']
+
+    np.random.seed(params['random_seed'])
+
+    alleles_table = demix.simulations.haplotype.create_sim_alleles(haplotypes_template, legend_template, chromosomes)
+
+    alleles_table.to_csv(germline_alleles_filename, sep='\t', index=False, header=True)
+
+
+def simulate_normal_data(read_data_filename, mixture_filename, germline_alleles_filename, params):
+
+    with open(mixture_filename, 'r') as mixture_file:
+        gm = pickle.load(mixture_file)
+
+    germline_alleles = pd.read_csv(germline_alleles_filename, sep='\t', converters={'chromosome':str})
+
+    np.random.seed(params['random_seed'])
+
+    demix.simulations.seqread.simulate_mixture_read_data(
+        read_data_filename,
+        [gm.genome_collection.genomes[0]],
+        [params['h_total']],
+        germline_alleles,
+        params)
+
+
+def simulate_tumour_data(read_data_filename, mixture_filename, germline_alleles_filename, params):
+
+    with open(mixture_filename, 'r') as mixture_file:
+        gm = pickle.load(mixture_file)
+
+    germline_alleles = pd.read_csv(germline_alleles_filename, sep='\t', converters={'chromosome':str})
+
+    np.random.seed(params['random_seed'])
+
+    demix.simulations.seqread.simulate_mixture_read_data(
+        read_data_filename,
+        gm.genome_collection.genomes,
+        gm.frac * params['h_total'],
+        germline_alleles,
+        params)
 
 
 def tabulate_experiment(exp_table_filename, sim_id, experiment_filename):
@@ -140,7 +188,7 @@ def plot_experiment(experiment_plot_filename, experiment_filename):
     with open(experiment_filename, 'r') as experiment_file:
         exp = pickle.load(experiment_file)
 
-    fig = cn_plot.experiment_plot(exp, exp.cn, exp.h, exp.p)
+    fig = demix.cn_plot.experiment_plot(exp, exp.cn, exp.h, exp.p)
 
     fig.savefig(experiment_plot_filename, format='pdf', bbox_inches='tight', dpi=300)
 
@@ -170,6 +218,77 @@ def tabulate_results(results_table_filename, settings, stats_table_filename, exp
     results_table.to_csv(results_table_filename, sep='\t', index=False)
 
 
+def write_segments(segment_filename, genomes_filename):
+
+    with open(genomes_filename, 'r') as genomes_file:
+        gc = pickle.load(genomes_file)
+
+    segment_data = pd.DataFrame({
+        'chromosome':gc.segment_chromosome_id,
+        'start':gc.segment_start,
+        'end':gc.segment_end,
+    })
+
+    segment_data.to_csv(segment_filename, sep='\t', index=False, header=True)
 
 
+def write_perfect_segments(segment_filename, genomes_filename):
+
+    with open(genomes_filename, 'r') as genomes_file:
+        gc = pickle.load(genomes_file)
+
+    is_diff_next = (np.abs(np.diff(gc.cn, axis=0)).sum(axis=(1,2)) > 0) * 1
+    is_new_seg = np.concatenate(([1], is_diff_next))
+    seg_id = is_new_seg.cumsum() - 1
+
+    segment_data = pd.DataFrame({
+        'chromosome':gc.segment_chromosome_id,
+        'start':gc.segment_start,
+        'end':gc.segment_end,
+        'seg_id':seg_id,
+    })
+
+    segment_data = (
+        segment_data
+        .groupby(['chromosome', 'seg_id'])
+        .agg({'start':np.min, 'end':np.max})
+        .reset_index()
+        .drop('seg_id', axis=1)
+    )
+
+    segment_data.to_csv(segment_filename, sep='\t', index=False, header=True)
+
+
+def write_breakpoints(breakpoint_filename, genomes_filename):
+
+    with open(genomes_filename, 'r') as genomes_file:
+        gc = pickle.load(genomes_file)
+
+    breakpoint_table = list()
+
+    for breakpoint in gc.breakpoints:
+
+        breakpoint_row = dict()
+
+        for idx, breakend in enumerate(breakpoint):
+
+            n, side = breakend
+            chromosome = gc.segment_chromosome_id[n]
+            if side == 0:
+                strand = '-'
+                position = gc.segment_start[n]
+            elif side == 1:
+                strand = '+'
+                position = gc.segment_end[n]
+
+            breakpoint_row['chromosome_{0}'.format(idx+1)] = chromosome
+            breakpoint_row['strand_{0}'.format(idx+1)] = strand
+            breakpoint_row['position_{0}'.format(idx+1)] = position
+
+        breakpoint_table.append(breakpoint_row)
+
+    breakpoint_table = pd.DataFrame(breakpoint_table)
+    breakpoint_table['prediction_id'] = xrange(len(breakpoint_table.index))
+
+    breakpoint_table.to_csv(breakpoint_filename, sep='\t', header=True, index=False)
 
