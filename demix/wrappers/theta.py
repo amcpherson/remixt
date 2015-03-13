@@ -110,7 +110,8 @@ count_cols = [
 ]
 
 
-class ThetaWrapper(object):
+
+class ThetaTool(object):
 
     def __init__(self, install_directory):
 
@@ -122,10 +123,6 @@ class ThetaWrapper(object):
         self.theta_bin = os.path.join(self.bin_directory, 'RunTHetA')
 
         self.max_copynumber = 6
-
-
-    def get_analysis_filename(self, *names):
-        return os.path.realpath(os.path.join(self.analysis_directory, *names))
 
 
     def install(self, **kwargs):
@@ -149,11 +146,24 @@ class ThetaWrapper(object):
                     subprocess.check_call('cp matlab/runBAFGaussianModel.m bin', shell=True)
 
 
-    def init(self, analysis_directory, normal_filename, tumour_filename, perfect_segment_filename=None, **kwargs):
+    def create_analysis(self, analysis_directory):
+        return ThetaAnalysis(self, analysis_directory)
 
+
+
+class ThetaAnalysis(object):
+
+    def __init__(self, tool, analysis_directory):
+        self.tool = tool
         self.analysis_directory = analysis_directory
-
         utils.makedirs(self.analysis_directory)
+
+
+    def get_analysis_filename(self, *names):
+        return os.path.realpath(os.path.join(self.analysis_directory, *names))
+
+
+    def prepare(self, normal_filename, tumour_filename, perfect_segment_filename=None, **kwargs):
 
         segments = pd.read_csv(perfect_segment_filename, sep='\t', converters={'chromosome':str})
 
@@ -182,7 +192,7 @@ class ThetaWrapper(object):
         count_data = count_data.reset_index().rename(columns={'index':'segment_id'})
 
         # Add upper and lower bound
-        count_data['upper_bound'] = self.max_copynumber
+        count_data['upper_bound'] = self.tool.max_copynumber
         count_data['lower_bound'] = 0
 
         # Reorder columns and output
@@ -205,7 +215,7 @@ class ThetaWrapper(object):
         write_theta_format_alleles(tumour_allele_filename, tumour_allele_count)
 
 
-    def run(self, analysis_directory, init_param_idx):
+    def run(self, init_param_idx):
 
         if init_param_idx != 0:
             raise utils.InvalidInitParam()
@@ -220,7 +230,7 @@ class ThetaWrapper(object):
 
         # Run theta
         theta_cmd = [
-            self.theta_bin,
+            self.tool.theta_bin,
             count_data_filename,
             '--FORCE',
             '--OUTPUT_PREFIX', theta_prefix
@@ -247,7 +257,7 @@ class ThetaWrapper(object):
         ]
 
         octave_eval = (
-            'cd ' + self.bin_directory + '; ' +
+            'cd ' + self.tool.bin_directory + '; ' +
             'runBAFGaussianModel(' + ','.join(run_baf_args) + ')'
         )
 
@@ -256,7 +266,7 @@ class ThetaWrapper(object):
         subprocess.check_call(octave_cmd, shell=True)
 
 
-    def report(self, analysis_directory, output_cn_filename, output_mix_filename):
+    def report(self, output_cn_filename, output_mix_filename):
 
         self.analysis_directory = analysis_directory
 
@@ -300,7 +310,7 @@ class ThetaWrapper(object):
 
 if __name__ == '__main__':
 
-    cmdline.interface(ThetaWrapper)
+    cmdline.interface(ThetaTool)
 
 
 

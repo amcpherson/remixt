@@ -4,7 +4,7 @@ import itertools
 import utils
 
 
-def interface(Wrapper):
+def interface(Tool):
 
     parser = argparse.ArgumentParser()
 
@@ -58,16 +58,17 @@ def interface(Wrapper):
 
     args = parser.parse_args()
 
-    wrapper = Wrapper(args.install_directory)
+    tool = Tool(args.install_directory)
 
     if args.command == 'install':
 
-        wrapper.install()
+        tool.install()
 
-    if args.command == 'init':
+    elif args.command == 'prepare':
 
-        init_params = wrapper.init(
-            args.analysis_directory,
+        analysis = tool.create_analysis(args.analysis_directory)
+
+        num_init = analysis.prepare(
             args.normal_filename,
             args.tumour_filename,
             segment_filename=args.segment_filename,
@@ -76,35 +77,26 @@ def interface(Wrapper):
             haplotype_filename=args.haplotype_filename,
         )
 
-        print init_params
+        print 'Number of initializations = {0}'.format(num_init)
 
     elif args.command == 'run':
 
+        analysis = tool.create_analysis(args.analysis_directory)
+
         if args.init_param_idx is None:
-
             for init_param_idx in itertools.count():
-
                 try:
-
-                    wrapper.run(
-                        args.analysis_directory,
-                        init_param_idx,
-                    )
-
+                    analysis.run(init_param_idx)
                 except utils.InvalidInitParam:
                     break
-
         else:
-
-            wrapper.run(
-                args.analysis_directory,
-                args.init_param_idx,
-            )
+            analysis.run(args.init_param_idx)
 
     elif args.command == 'report':
 
-        wrapper.report(
-            args.analysis_directory,
+        analysis = tool.create_analysis(args.analysis_directory)
+
+        analysis.report(
             args.output_cn_filename,
             args.output_mix_filename,
         )

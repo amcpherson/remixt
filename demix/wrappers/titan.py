@@ -150,7 +150,8 @@ def read_titan_params(params_filename):
     return params
 
 
-class TitanWrapper(object):
+
+class TitanTool(object):
 
     def __init__(self, install_directory):
 
@@ -211,15 +212,30 @@ class TitanWrapper(object):
                     subprocess.check_call('wget ftp://hgdownload.cse.ucsc.edu/goldenPath/hg19/database/chromInfo.txt.gz', shell=True)
 
 
-    def init(self, analysis_directory, normal_filename, tumour_filename, **kwargs):
+    def create_analysis(self, analysis_directory):
+        return TitanAnalysis(self, analysis_directory)
+
+
+
+class TitanAnalysis(object):
+
+    def __init__(self, tool, analysis_directory):
+        self.tool = tool
+        self.analysis_directory = analysis_directory
+        utils.makedirs(self.analysis_directory)
+
+
+    def get_analysis_filename(self, *names):
+        return os.path.realpath(os.path.join(self.analysis_directory, *names))
+
+
+    def prepare(self, normal_filename, tumour_filename, **kwargs):
         """ Initialize analysis
         """
 
-        self.analysis_directory = analysis_directory
-
         utils.makedirs(self.analysis_directory)
 
-        chromosome_lengths = read_chromosome_lengths(self.chrom_info_filename)
+        chromosome_lengths = read_chromosome_lengths(self.tool.chrom_info_filename)
 
         normal_wig_filename = self.get_analysis_filename('normal.wig')
         tumour_wig_filename = self.get_analysis_filename('tumour.wig')
@@ -267,12 +283,10 @@ class TitanWrapper(object):
         return init_params
 
 
-    def run(self, analysis_directory, init_param_idx):
+    def run(self, init_param_idx):
         """ Run the analysis with specific initialization parameters
 
         """
-
-        self.analysis_directory = analysis_directory
 
         init_params_filename = self.get_analysis_filename('init_params.tsv')
         init_params = pd.read_csv(init_params_filename, sep='\t')
@@ -286,7 +300,7 @@ class TitanWrapper(object):
 
         titan_cmd = [
             'Rscript',
-            self.run_titan_script,
+            self.tool.run_titan_script,
             self.get_analysis_filename('alleles.tsv'),
             self.get_analysis_filename('normal.wig'),
             self.get_analysis_filename('tumour.wig'),
@@ -295,7 +309,7 @@ class TitanWrapper(object):
             '--estimate_clonal_prevalence',
             '--estimate_normal_contamination',
             '--estimate_ploidy',
-            '--max_copy_number', str(self.max_copy_number),
+            '--max_copy_number', str(self.tool.max_copy_number),
             '--normal_contamination', str(init_params['normal_contamination'].loc[init_param_idx]),
             '--num_clusters', str(init_params['num_clusters'].loc[init_param_idx]),
             '--ploidy', str(init_params['ploidy'].loc[init_param_idx]),
@@ -304,12 +318,10 @@ class TitanWrapper(object):
         subprocess.check_call(titan_cmd, shell=False)
 
 
-    def report(self, analysis_directory, output_cn_filename, output_mix_filename):
+    def report(self, output_cn_filename, output_mix_filename):
         """ Report optimal copy number and mixture
 
         """
-
-        self.analysis_directory = analysis_directory
 
         init_params_filename = self.get_analysis_filename('init_params.tsv')
         init_params = pd.read_csv(init_params_filename, sep='\t')
@@ -345,10 +357,10 @@ class TitanWrapper(object):
 
         subprocess.check_call([
             'python',
-            self.parse_segments_script,
+            self.tool.parse_segments_script,
             self.get_analysis_filename('init_{0}'.format(best_idx), 'cn.tsv'),
             output_cn_filename,
-            '--max_copy_number', '{0}'.format(self.max_copy_number),
+            '--max_copy_number', '{0}'.format(self.tool.max_copy_number),
         ])
 
 

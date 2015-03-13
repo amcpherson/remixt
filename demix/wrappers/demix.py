@@ -20,7 +20,8 @@ import demix.analysis.pipeline
 import demix.utils
 
 
-class DemixWrapper(object):
+
+class DemixTool(object):
 
     def __init__(self, install_directory):
 
@@ -30,20 +31,27 @@ class DemixWrapper(object):
         self.ref_data_directory = os.path.join(self.install_directory, 'ref_data')
 
 
+    def install(self, **kwargs):
+        pass
+
+    def create_analysis(self, analysis_directory):
+        return DemixAnalysis(self, analysis_directory)
+
+
+
+class DemixAnalysis(object):
+
+    def __init__(self, tool, analysis_directory):
+        self.tool = tool
+        self.analysis_directory = analysis_directory
+        utils.makedirs(self.analysis_directory)
+
+
     def get_analysis_filename(self, *names):
         return os.path.realpath(os.path.join(self.analysis_directory, *names))
 
 
-    def install(self, **kwargs):
-
-        pass
-
-
-    def init(self, analysis_directory, normal_filename, tumour_filename, segment_filename=None, breakpoint_filename=None, haplotype_filename=None, **kwargs):
-
-        self.analysis_directory = analysis_directory
-
-        utils.makedirs(self.analysis_directory)
+    def prepare(self, normal_filename, tumour_filename, segment_filename=None, breakpoint_filename=None, haplotype_filename=None, **kwargs):
 
         segments = pd.read_csv(segment_filename, sep='\t', converters={'chromosome':str})
 
@@ -91,9 +99,7 @@ class DemixWrapper(object):
         return len(h_idxs)
 
 
-    def run(self, analysis_directory, init_param_idx):
-
-        self.analysis_directory = analysis_directory
+    def run(self, init_param_idx):
 
         with open(self.get_analysis_filename('h_idxs.pickle'), 'r') as f:
             h_idxs = pickle.load(f)
@@ -109,9 +115,7 @@ class DemixWrapper(object):
         )
 
 
-    def report(self, analysis_directory, output_cn_filename, output_mix_filename):
-
-        self.analysis_directory = analysis_directory
+    def report(self, output_cn_filename, output_mix_filename):
 
         with open(self.get_analysis_filename('h_idxs.pickle'), 'r') as f:
             h_idxs = pickle.load(f)
@@ -135,7 +139,7 @@ class DemixWrapper(object):
 
 if __name__ == '__main__':
 
-    cmdline.interface(DemixWrapper)
+    cmdline.interface(DemixTool)
 
 
 
