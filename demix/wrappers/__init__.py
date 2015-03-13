@@ -1,9 +1,9 @@
-import demix.wrappers.wrapdemix
-import demix.wrappers.wraptitan
-import demix.wrappers.wraptheta
+import wrapdemix
+import wraptitan
+import wraptheta
 
 catalog = dict()
-catalog['demix'] = demix.wrappers.wrapdemix.DemixTool
-catalog['titan'] = demix.wrappers.wraptitan.TitanTool
-catalog['theta'] = demix.wrappers.wraptheta.ThetaTool
+catalog['demix'] = wrapdemix.DemixTool
+catalog['titan'] = wraptitan.TitanTool
+catalog['theta'] = wraptheta.ThetaTool
 
