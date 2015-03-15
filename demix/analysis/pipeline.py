@@ -160,7 +160,7 @@ def infer_cn(
 
     cn_table.to_csv(cn_table_filename, sep='\t', index=False, header=True)
 
-    fig = demix.cn_plot.cn_mix_plot(cn_table)
+    fig = demix.cn_plot.experiment_plot(cn_table)
 
     fig.savefig(experiment_plot_filename, format='pdf', bbox_inches='tight')
 

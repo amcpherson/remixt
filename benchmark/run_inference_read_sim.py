@@ -73,6 +73,12 @@ if __name__ == '__main__':
         mgd.TempInputFile('genomes'),
         mgd.TempInputObj('sim_defs'))
 
+    pyp.sch.transform('plot_mixture', (), {'mem':1},
+        demix.simulations.pipeline.plot_mixture,
+        None,
+        mgd.TempOutputFile('mixture_plot.pdf'),
+        mgd.TempInputFile('mixture'))
+
     pyp.sch.transform('simulate_germline_alleles', (), {'mem':1},
         demix.simulations.pipeline.simulate_germline_alleles,
         None,

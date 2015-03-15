@@ -195,6 +195,16 @@ def plot_experiment(experiment_plot_filename, experiment_filename):
     fig.savefig(experiment_plot_filename, format='pdf', bbox_inches='tight', dpi=300)
 
 
+def plot_mixture(mixture_plot_filename, mixture_filename):
+
+    with open(mixture_filename, 'r') as mixture_file:
+        mixture = pickle.load(mixture_file)
+
+    fig = demix.cn_plot.mixture_plot(mixture)
+
+    fig.savefig(mixture_plot_filename, format='pdf', bbox_inches='tight', dpi=300)
+
+
 def merge_tables(output_filename, input_filenames):
 
     output_table = list()

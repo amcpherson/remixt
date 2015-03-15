@@ -102,8 +102,8 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', min
     ax.yaxis.grid(True, which='major', linestyle=':')
 
 
-def cn_mix_plot(data):
-    """ Plot a genome mixture
+def experiment_plot(data):
+    """ Plot a sequencing experiment
 
     Args:
         data (pandas.DataFrame): dataframe with specific copy number columns for plotting
@@ -153,5 +153,71 @@ def cn_mix_plot(data):
     plt.tight_layout()
 
     return fig
+
+
+def mixture_plot(mixture):
+    """ Plot a genome mixture
+
+    Args:
+        mixture (GenomeMixture): information about the genomes and their proportions
+
+    Returns:
+        matplotlib.Figure: figure object of plots
+
+    """
+
+    data = pd.DataFrame({
+            'chromosome':mixture.segment_chromosome_id,
+            'start':mixture.segment_start,
+            'end':mixture.segment_end,
+            'length':mixture.l,
+    })
+
+    tumour_frac = mixture.frac[1:] / mixture.frac[1:].sum()
+
+    data['major_expected'] = np.einsum('ij,j->i', mixture.cn[:,1:,0], tumour_frac)
+    data['minor_expected'] = np.einsum('ij,j->i', mixture.cn[:,1:,1], tumour_frac)
+
+    for m in xrange(1, mixture.cn.shape[1]):
+        data['major_{0}'.format(m)] = mixture.cn[:,m,0]
+        data['minor_{0}'.format(m)] = mixture.cn[:,m,1]
+
+    data['major_diff'] = np.absolute(data['major_1'] - data['major_2'])
+    data['minor_diff'] = np.absolute(data['minor_1'] - data['minor_2'])
+
+    fig = plt.figure(figsize=(20, 10))
+
+    ax = plt.subplot(4, 1, 1)
+
+    plot_cnv_genome(ax, data, maxcopies=4, major_col='major_expected', minor_col='minor_expected')
+
+    ax.set_xlabel('')
+    ax.set_ylabel('expected')
+
+    ax = plt.subplot(4, 1, 2)
+
+    plot_cnv_genome(ax, data, maxcopies=4, major_col='major_1', minor_col='minor_1')
+
+    ax.set_xlabel('')
+    ax.set_ylabel('clone 1')
+
+    ax = plt.subplot(4, 1, 3)
+
+    plot_cnv_genome(ax, data, maxcopies=4, major_col='major_2', minor_col='minor_2')
+
+    ax.set_xlabel('')
+    ax.set_ylabel('clone 2')
+
+    ax = plt.subplot(4, 1, 4)
+
+    plot_cnv_genome(ax, data, maxcopies=2, major_col='major_diff', minor_col='minor_diff')
+
+    ax.set_xlabel('chromosome')
+    ax.set_ylabel('clone diff')
+
+    plt.tight_layout()
+
+    return fig
+
 
 
