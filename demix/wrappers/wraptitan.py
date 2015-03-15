@@ -363,7 +363,7 @@ class TitanAnalysis(object):
 
 if __name__ == '__main__':
 
-    cmdline.interface(TitanWrapper)
+    cmdline.interface(TitanTool)
 
 
 
