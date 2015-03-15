@@ -86,6 +86,7 @@ if __name__ == '__main__':
         mgd.TempOutputFile('normal'),
         mgd.TempInputFile('mixture'),
         mgd.TempInputFile('germline_alleles'),
+        mgd.TempFile('normal_tmp'),
         mgd.TempInputObj('sim_defs'))
 
     pyp.sch.transform('simulate_tumour_data', (), {'mem':1},
@@ -94,12 +95,13 @@ if __name__ == '__main__':
         mgd.TempOutputFile('tumour'),
         mgd.TempInputFile('mixture'),
         mgd.TempInputFile('germline_alleles'),
+        mgd.TempFile('tumour_tmp'),
         mgd.TempInputObj('sim_defs'))
 
     pyp.sch.transform('write_segments', (), {'mem':1},
         demix.simulations.pipeline.write_segments,
         None,
-        mgd.OutputFile('segment.tsv'),
+        mgd.TempOutputFile('segment.tsv'),
         mgd.TempInputFile('genomes'))
 
     pyp.sch.transform('write_perfect_segments', (), {'mem':1},
@@ -159,23 +161,23 @@ if __name__ == '__main__':
     pyp.sch.transform('tool_run', ('bytool', 'byinit'), {'mem':1},
         run_inference_read_sim.tool_run,
         mgd.TempOutputObj('run_result', 'bytool', 'byinit'),
-        mgd.TempFile('tool_tmp', 'bytool'),
+        mgd.TempInputObj('tool_analysis', 'bytool'),
         mgd.TempInputObj('init_idx', 'bytool', 'byinit'))
 
     pyp.sch.transform('tool_report', ('bytool',), {'mem':1},
         run_inference_read_sim.tool_report,
         None,
-        mgd.TempFile('tool_tmp', 'bytool'),
-        mgd.TempOutputObj('cn.tsv', 'bytool'),
-        mgd.TempOutputObj('mix.tsv', 'bytool'),
-        mgd.TempInputObj('run_result', 'bytool', 'byinit'))
+        mgd.TempInputObj('tool_analysis', 'bytool'),
+        mgd.TempInputObj('run_result', 'bytool', 'byinit'),
+        mgd.TempOutputFile('cn.tsv', 'bytool'),
+        mgd.TempOutputFile('mix.tsv', 'bytool'))
 
     pyp.sch.transform('tabulate_results', (), {'mem':1},
         run_inference_read_sim.tabulate_results,
         None,
         mgd.OutputFile(args['results_table']),
-        mgd.TempInputObj('cn.tsv', 'bytool'),
-        mgd.TempInputObj('mix.tsv', 'bytool'))
+        mgd.TempInputFile('cn.tsv', 'bytool'),
+        mgd.TempInputFile('mix.tsv', 'bytool'))
 
     pyp.run()
 
@@ -220,7 +222,7 @@ else:
             segment_filename=segment_filename,
             perfect_segment_filename=perfect_segment_filename,
             breakpoint_filename=breakpoint_filename,
-            haplotype_filename=haplotype_filename
+            haplotype_filename=haps_filename
         )
 
         return dict(zip(xrange(num_inits), xrange(num_inits)))
@@ -233,11 +235,9 @@ else:
         return True
 
 
-    def tool_report(tool_analysis, cn_filename, mix_filename):
+    def tool_report(tool_analysis, run_results, cn_filename, mix_filename):
 
         tool_analysis.report(cn_filename, mix_filename)
-        
-        return True
 
 
     def tabulate_results(table_filename, cn_filenames, mix_filenames):

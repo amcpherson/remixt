@@ -4,12 +4,12 @@ import pandas as pd
 import demix.seqdataio
 
 
-def simulate_fragment_intervals(genome_length, read_depth, read_length, fragment_mean, fragment_stddev):
+def simulate_fragment_intervals(genome_length, num_fragments, read_length, fragment_mean, fragment_stddev):
     """ Simulate sequenced fragments as intervals of a genome with given length
 
     Args:
         genome_length (int): genome length
-        read_depth (float): reads per nucleotide
+        num_fragments (float): approximate number of fragments to create
         read_length (int): length of paired reads
         fragment_mean (float): mean of fragment length distribution
         fragment_stddev (float): standard deviation of fragment length distribution
@@ -25,9 +25,6 @@ def simulate_fragment_intervals(genome_length, read_depth, read_length, fragment
 
     """
 
-    # Approximate number of fragments, some may be filtered
-    num_fragments = int(genome_length * read_depth)
-
     # Uniformly random start and normally distributed length
     start = np.random.randint(0, high=genome_length, size=num_fragments)
     length = fragment_stddev * np.random.randn(num_fragments) + fragment_mean
@@ -39,7 +36,6 @@ def simulate_fragment_intervals(genome_length, read_depth, read_length, fragment
     start = start[~is_filtered]
     end = end[~is_filtered]
 
-    # Calculate end positions after filtering and sorting
     return pd.DataFrame({'start':start, 'end':end})
 
 
@@ -123,7 +119,7 @@ def read_snp_overlap(data, snps, read_length):
     Input `snps` dataframe has columns `chromosome`, `position`, `is_alt_0`, `is_alt_1`.
 
     Output dataframe has columns `chromosome`, `position`, `fragment_id`, `is_alt`.
-    The `fragment_id` is unique within a chromosome.
+    The `fragment_id` column is a foreign key indexing entries in the input data dataframe.
 
     No sorting assumptions are made.
 
@@ -131,10 +127,10 @@ def read_snp_overlap(data, snps, read_length):
 
     allele_data = list()
 
-    for chromosome in snps['chromosome'].unique():
+    for chromosome, chrom_fragments in data.groupby('chromosome'):
 
-        # Fragment interval data as a new dataframe
-        chrom_fragments = data.loc[data['chromosome'] == chromosome].reset_index(drop=True)
+        # Fragment interval data, with original index as 'index' column
+        chrom_fragments = chrom_fragments.reset_index(drop=False)
 
         # Postion data, must be sorted
         snp_cols = ['position', 'is_alt_0', 'is_alt_1']
@@ -148,10 +144,10 @@ def read_snp_overlap(data, snps, read_length):
 
         # Create fragment snp table
         fragment_snps = pd.DataFrame({
-            'fragment_id':fragment_idx,
+            'fragment_idx':fragment_idx,
             'snp_idx':snp_idx
         })
-        fragment_snps = fragment_snps.merge(chrom_fragments, left_on='fragment_id', right_index=True)
+        fragment_snps = fragment_snps.merge(chrom_fragments, left_on='fragment_idx', right_index=True)
         fragment_snps = fragment_snps.merge(chrom_snps, left_on='snp_idx', right_index=True)
 
         # Keep only snps falling within reads
@@ -166,6 +162,9 @@ def read_snp_overlap(data, snps, read_length):
             fragment_snps['is_alt_0'],
             fragment_snps['is_alt_1'],
         )
+
+        # Original index as foreign key
+        fragment_snps.rename(columns={'index':'fragment_id'}, inplace=True)
 
         allele_data.append(fragment_snps[['chromosome', 'position', 'fragment_id', 'is_alt']])
 
@@ -214,7 +213,7 @@ def segment_remap(segments, positions):
     return pos_seg_idx, remap_pos
 
 
-def simulate_mixture_read_data(read_data_filename, genomes, read_depths, snps, params):
+def simulate_mixture_read_data(read_data_filename, genomes, read_depths, snps, temp_dir, params):
     """ Simulate read data from a mixture of genomes.
 
     Args:
@@ -222,136 +221,141 @@ def simulate_mixture_read_data(read_data_filename, genomes, read_depths, snps, p
         genomes (list of RearrangedGenome): rearranged genomes in mixture
         read_depths (list of float): read depths of rearranged genomes
         snps (pandas.DataFrame): snp position data
+        temp_dir (str): location to write temporary files
         params (dict): dictionary of simulation parameters
 
     Input `snps` dataframe has columns `chromosome`, `position`, `is_alt_0`, `is_alt_1`.
 
     """
 
-    data = list()
+    with demix.seqdataio.Writer(read_data_filename, temp_dir) as w:
 
-    for genome, read_depth in zip(genomes, read_depths):
+        for genome, read_depth in zip(genomes, read_depths):
 
-        # Create a table of segment info
-        segment_data = list()
+            # Create a table of segment info
+            segment_data = list()
 
-        for tmr_chrom_idx, tmr_chrom in enumerate(genome.chromosomes):
+            for tmr_chrom_idx, tmr_chrom in enumerate(genome.chromosomes):
 
-            for (segment_idx, allele_id), orientation in tmr_chrom:
+                for (segment_idx, allele_id), orientation in tmr_chrom:
 
-                chrom_id = genome.segment_chromosome_id[segment_idx]
-                start = genome.segment_start[segment_idx]
-                end = genome.segment_end[segment_idx]
-                length = int(genome.l[segment_idx])
+                    chrom_id = genome.segment_chromosome_id[segment_idx]
+                    start = genome.segment_start[segment_idx]
+                    end = genome.segment_end[segment_idx]
+                    length = int(genome.l[segment_idx])
 
-                segment_data.append((
-                    tmr_chrom_idx,
-                    chrom_id,
-                    start,
-                    end,
-                    allele_id,
-                    orientation,
-                    length,
-                ))
+                    segment_data.append((
+                        tmr_chrom_idx,
+                        chrom_id,
+                        start,
+                        end,
+                        allele_id,
+                        orientation,
+                        length,
+                    ))
 
-        segment_data_cols = [
-            'tmr_chrom',
-            'chromosome',
-            'start',
-            'end',
-            'allele',
-            'orientation',
-            'length',
-        ]
+            segment_data_cols = [
+                'tmr_chrom',
+                'chromosome',
+                'start',
+                'end',
+                'allele',
+                'orientation',
+                'length',
+            ]
 
-        segment_data = pd.DataFrame(segment_data, columns=segment_data_cols)
+            segment_data = pd.DataFrame(segment_data, columns=segment_data_cols)
 
-        # Calculate concatenated tumour genome segment start and end
-        segment_data['tmr_end'] = segment_data['length'].cumsum()
-        segment_data['tmr_start'] = segment_data['tmr_end'] - segment_data['length']
+            # Calculate concatenated tumour genome segment start and end
+            segment_data['tmr_end'] = segment_data['length'].cumsum()
+            segment_data['tmr_start'] = segment_data['tmr_end'] - segment_data['length']
 
-        # Negate and flip remapped start and end for reverse orientation segments
-        rev_mask = segment_data['orientation'] != 1
-        rev_cols = ['start', 'end']
-        segment_data.loc[rev_mask,rev_cols] = -segment_data.loc[rev_mask,rev_cols[::-1]].values
+            # Negate and flip remapped start and end for reverse orientation segments
+            rev_mask = segment_data['orientation'] != 1
+            rev_cols = ['start', 'end']
+            segment_data.loc[rev_mask,rev_cols] = -segment_data.loc[rev_mask,rev_cols[::-1]].values
 
-        # Sample fragment intervals from concatenated tumour genome
-        tumour_genome_length = segment_data['length'].sum()
-        fragment_data = simulate_fragment_intervals(
-            tumour_genome_length,
-            read_depth,
-            params['read_length'],
-            params['fragment_mean'],
-            params['fragment_stddev'],
-        )
+            # Calculate number of reads from this genome
+            genome_length = segment_data['length'].sum()
+            num_fragments = int(genome_length * read_depth)
 
-        # Required for segment lookup
-        segment_data.sort('tmr_end', inplace=True)
-        segment_data.reset_index(drop=True, inplace=True)
+            # Create chunks of fragments to reduce memory usage
+            num_fragments_created = 0
+            fragments_per_chunk = 1000000
+            while num_fragments_created < num_fragments:
 
-        # Remap start to reference genome
-        start_segment_idx, start_remap = segment_remap(
-            segment_data[['start', 'end']].values,
-            fragment_data['start'].values
-        )
+                # Sample fragment intervals from concatenated tumour genome
+                fragment_data = simulate_fragment_intervals(
+                    genome_length,
+                    min(fragments_per_chunk, num_fragments - num_fragments_created),
+                    params['read_length'],
+                    params['fragment_mean'],
+                    params['fragment_stddev'],
+                )
 
-        # Remap end to reference genome
-        end_segment_idx, end_remap = segment_remap(
-            segment_data[['start', 'end']].values,
-            fragment_data['end'].values
-        )
+                # Required for segment lookup
+                segment_data.sort('tmr_end', inplace=True)
+                segment_data.reset_index(drop=True, inplace=True)
 
-        # Fragment data mapped to concatenated reference genome
-        # Drop null entries outside of chromosome bounds
-        remapped_data = pd.DataFrame({
-            'segment_idx':start_segment_idx,
-            'start':start_remap,
-            'end':end_remap,
-        }).dropna()
+                # Remap start to reference genome
+                start_segment_idx, start_remap = segment_remap(
+                    segment_data[['start', 'end']].values,
+                    fragment_data['start'].values
+                )
 
-        # Add length for discordance check
-        remapped_data['length'] = fragment_data['end'] - fragment_data['start']
+                # Remap end to reference genome
+                end_segment_idx, end_remap = segment_remap(
+                    segment_data[['start', 'end']].values,
+                    fragment_data['end'].values
+                )
 
-        # Filter discordant
-        remapped_data = remapped_data[((remapped_data['end'] - remapped_data['start']) == remapped_data['length'])]
+                # Fragment data mapped to concatenated reference genome
+                # Drop null entries outside of chromosome bounds
+                remapped_data = pd.DataFrame({
+                    'segment_idx':start_segment_idx,
+                    'start':start_remap,
+                    'end':end_remap,
+                }).dropna()
 
-        # Drop length, no longer necessary
-        remapped_data = remapped_data.drop('length', axis=1)
+                # Add length for discordance check
+                remapped_data['length'] = fragment_data['end'] - fragment_data['start']
 
-        # Negate and flip start and end for reversed fragments
-        rev_mask = (remapped_data['start'] < 0) & (remapped_data['end'] < 0)
-        rev_cols = ['start', 'end']
-        remapped_data.loc[rev_mask,rev_cols] = -remapped_data.loc[rev_mask,rev_cols[::-1]].values
-        assert not np.any(remapped_data[['start', 'end']].values < 0)
+                # Filter discordant
+                remapped_data = remapped_data[((remapped_data['end'] - remapped_data['start']) == remapped_data['length'])]
 
-        # Merge chromosome, allele
-        remapped_data = remapped_data.merge(
-            segment_data[['chromosome', 'allele']],
-            left_on='segment_idx',
-            right_index=True,
-        )
+                # Drop length, no longer necessary
+                remapped_data = remapped_data.drop('length', axis=1)
 
-        # Drop segment_idx, no longer necessary
-        remapped_data = remapped_data.drop('segment_idx', axis=1)
+                # Negate and flip start and end for reversed fragments
+                rev_mask = (remapped_data['start'] < 0) & (remapped_data['end'] < 0)
+                rev_cols = ['start', 'end']
+                remapped_data.loc[rev_mask,rev_cols] = -remapped_data.loc[rev_mask,rev_cols[::-1]].values
+                assert not np.any(remapped_data[['start', 'end']].values < 0)
 
-        data.append(remapped_data)
+                # Merge chromosome, allele
+                remapped_data = remapped_data.merge(
+                    segment_data[['chromosome', 'allele']],
+                    left_on='segment_idx',
+                    right_index=True,
+                )
 
-    # Create genome mixture
-    data = pd.concat(data, ignore_index=True)
+                # Drop segment_idx, no longer necessary
+                remapped_data = remapped_data.drop('segment_idx', axis=1)
 
-    # Create table of read pairs overlapping snp positions
-    allele_data = read_snp_overlap(data, snps, params['read_length'])
+                # Create table of read pairs overlapping snp positions
+                allele_data = read_snp_overlap(remapped_data, snps, params['read_length'])
 
-    # Random base calling errors at snp positions
-    base_call_error = np.random.choice(
-        [True, False],
-        size=len(allele_data.index),
-        p=[params['base_call_error'], 1. - params['base_call_error']]
-    )
-    allele_data['is_alt'] = np.where(base_call_error, 1-allele_data['is_alt'], allele_data['is_alt'])
+                # Random base calling errors at snp positions
+                base_call_error = np.random.choice(
+                    [True, False],
+                    size=len(allele_data.index),
+                    p=[params['base_call_error'], 1. - params['base_call_error']]
+                )
+                allele_data['is_alt'] = np.where(base_call_error, 1-allele_data['is_alt'], allele_data['is_alt'])
 
-    # Write out data
-    with tarfile.open(read_data_filename, 'w:gz') as tar:
-        demix.seqio.write_read_data(tar, data)
-        demix.seqio.write_allele_data(tar, allele_data)
+                # Write out a chunk of data
+                w.write(remapped_data, allele_data)
+
+                num_fragments_created += len(remapped_data.index)
+
 

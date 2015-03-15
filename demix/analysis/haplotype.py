@@ -1,6 +1,10 @@
+import os
 import sys
 import pandas as pd
 import numpy as np
+import scipy
+import scipy.stats
+import pypeliner
 
 import demix.seqdataio
 
@@ -41,7 +45,7 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
         pass
 
     # Thousand genomes snps
-    snps_filename = config['snps_filename']
+    snps_filename = config['snp_positions']
 
     # Impute 2 files for thousand genomes data by chromosome
     phased_chromosome = chromosome
@@ -95,7 +99,8 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
     snp_counts_df.reset_index(inplace=True)
     snp_counts_df['chr'] = chromosome
     snp_counts_df['chr_pos'] = snp_counts_df['chr'].astype(str) + ':' + snp_counts_df['position'].astype(str)
-    snp_counts_df.to_csv(temp_gen_filename, sep=' ', cols=['chr', 'chr_pos', 'position', 'ref', 'alt', 'AA', 'AB', 'BB'], index=False, header=False)
+
+    snp_counts_df.to_csv(temp_gen_filename, sep=' ', columns=['chr', 'chr_pos', 'position', 'ref', 'alt', 'AA', 'AB', 'BB'], index=False, header=False)
 
     # Create single sample file required by shapeit
     temp_sample_filename = os.path.join(temp_directory, 'snps.sample')

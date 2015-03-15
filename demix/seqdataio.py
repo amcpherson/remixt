@@ -1,17 +1,8 @@
+import os
 import contextlib
 import tarfile
 import numpy as np
 import pandas as pd
-
-
-@contextlib.contextmanager
-def addtotar(tar, filename):
-    data = io.BytesIO()
-    yield data
-    info = tarfile.TarInfo(name=filename)
-    info.size = data.tell()
-    data.seek(0)
-    tar.addfile(tarinfo=info, fileobj=data)
 
 
 read_data_dtype = np.dtype([('start', np.uint32), ('length', np.uint16)])
@@ -20,55 +11,128 @@ read_data_dtype = np.dtype([('start', np.uint32), ('length', np.uint16)])
 allele_data_dtype = np.dtype([('fragment_id', np.uint32), ('position', np.uint32), ('is_alt', np.uint8)])
 
 
-def write_read_data(tar, data):
-    """ Write read data to gzipped tar of chromosome files
+def write_read_data(reads_file, read_data):
+    """ Write read data for a specific chromosome to a file
 
     Args:
-        tar (str): tar to which data will be written
-        data (pandas.DataFrame): read data
+        reads_file (str): tar to which data will be written
+        read_data (pandas.DataFrame): read data
 
-    Input `data` dataframe has columns `chromosome`, `start`, `end`.
+    Input `read_data` dataframe has columns `start`, `end`.
 
     """
 
-    for chrom, chrom_data in data.groupby('chromosome'):
+    raw_data = np.zeros(len(read_data.index), dtype=read_data_dtype)
 
-        raw_chrom_data = np.zeros(len(chrom_data.index), dtype=read_data_dtype)
+    raw_data['start'] = read_data['start']
+    raw_data['length'] = read_data['end'] - read_data['start']
 
-        raw_chrom_data['start'] = chrom_data['start']
-        raw_chrom_data['length'] = chrom_data['end'] - chrom_data['start']
-
-        filename = 'reads.{0}'.format(chrom)
-
-        with addtotar(tar, filename) as f:
-            f.write(raw_chrom_data.tostring())
+    raw_data.tofile(reads_file)
 
 
-def write_allele_data(tar, data):
-    """ Write allele data to gzipped tar of chromosome files
+def write_allele_data(alleles_file, allele_data):
+    """ Write allele data for a specific chromosome to a file
 
     Args:
-        tar (str): tar to which data will be written
-        data (pandas.DataFrame): allele data
+        alleles_file (str): tar to which data will be written
+        allele_data (pandas.DataFrame): allele data
 
-    Input `data` dataframe has columns `chromosome`, `position`, `fragment_id`, `is_alt`.
+    Input `allele_data` dataframe has columns `position`, `fragment_id`, `is_alt`.
 
     """
 
-    for chrom, chrom_data in data.groupby('chromosome'):
+    raw_data = np.zeros(len(allele_data.index), dtype=allele_data_dtype)
 
-        chrom_data = chrom_data.sort('fragment_id')
+    raw_data['fragment_id'] = allele_data['fragment_id']
+    raw_data['position'] = allele_data['position']
+    raw_data['is_alt'] = allele_data['is_alt']
 
-        raw_chrom_data = np.zeros(len(chrom_data.index), dtype=allele_data_dtype)
+    raw_data.tofile(alleles_file)
 
-        raw_chrom_data['fragment_id'] = chrom_data['fragment_id']
-        raw_chrom_data['position'] = chrom_data['position']
-        raw_chrom_data['is_alt'] = chrom_data['is_alt']
 
-        filename = 'alleles.{0}'.format(chrom)
+class Writer(object):
+    def __init__(self, seqdata_filename, temp_dir):
+        """ Streaming writer of seq data files 
 
-        with addtotar(tar, filename) as f:
-            f.write(raw_chrom_data.tostring())
+        Args:
+            seqdata_filename (str): name of seqdata tar file
+            temp_dir (str): temporary directory to write to
+
+        """
+
+        self.seqdata_filename = seqdata_filename
+        self.temp_dir = temp_dir
+
+        self.fragment_id_offset = dict()
+        self.reads_filenames = dict()
+        self.alleles_filenames = dict()
+
+        try:
+            os.makedirs(self.temp_dir)
+        except OSError as e:
+            if e.errno != 17:
+                raise
+
+    def get_reads_filename(self, chromosome):
+        return os.path.join(self.temp_dir, 'reads.{0}'.format(chromosome))
+
+    def get_alleles_filename(self, chromosome):
+        return os.path.join(self.temp_dir, 'alleles.{0}'.format(chromosome))
+
+    def write(self, read_data, allele_data):
+        """ Write a chunk of reads and alleles data
+
+        Args:
+            read_data (pandas.DataFrame): read data
+            allele_data (pandas.DataFrame): allele data
+
+        Input `read_data` dataframe has columns `chromosome`, `start`, `end`.
+        Input `allele_data` dataframe has columns `chromosome`, `position`, `fragment_id`, `is_alt`.
+
+        """
+
+        for chromosome in read_data['chromosome'].unique():
+
+            if chromosome not in self.fragment_id_offset:
+
+                with open(self.get_reads_filename(chromosome), 'w'):
+                    pass
+
+                with open(self.get_alleles_filename(chromosome), 'w'):
+                    pass
+
+                self.reads_filenames[chromosome] = self.get_reads_filename(chromosome)
+                self.alleles_filenames[chromosome] = self.get_alleles_filename(chromosome)
+
+                self.fragment_id_offset[chromosome] = 0
+
+            chrom_read_data = read_data[read_data['chromosome'] == chromosome]
+            chrom_allele_data = allele_data[allele_data['chromosome'] == chromosome]
+
+            # Remap fragment ids
+            fragment_id_remap = pd.DataFrame({'fragment_id':chrom_read_data.index.values})
+            fragment_id_remap['remap_id'] = fragment_id_remap.index.values + self.fragment_id_offset[chromosome]
+
+            chrom_allele_data = (
+                chrom_allele_data
+                .merge(fragment_id_remap, on='fragment_id')
+                .drop('fragment_id', axis=1)
+                .rename(columns={'remap_id':'fragment_id'})
+            )
+
+            with open(self.get_reads_filename(chromosome), 'ab') as f:
+                write_read_data(f, chrom_read_data)
+
+            with open(self.get_alleles_filename(chromosome), 'ab') as f:
+                write_allele_data(f, chrom_allele_data)
+
+            self.fragment_id_offset[chromosome] += len(chrom_read_data.index)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        create_seqdata(self.seqdata_filename, self.reads_filenames, self.alleles_filenames)
 
 
 def read_raw_read_data(reads_file, num_rows=None):
@@ -248,18 +312,18 @@ def create_seqdata(seqdata_filename, reads_filenames, alleles_filenames):
 
     """
 
-    with tarfile.open(seqdata_filename, 'w') as output_tar:
+    with tarfile.open(seqdata_filename, 'w:gz') as tar:
 
         prefixes = ('reads.', 'alleles.')
-        chrom_filenames = (reads_filenames, alleles_filenames)
+        filenames = (reads_filenames, alleles_filenames)
 
-        for prefix, (chrom, filename) in zip(prefixes, chrom_filenames.iteritems()):
+        for prefix, chrom_filenames in zip(prefixes, filenames):
 
-            name = prefix+chrom
-            tarinfo = tarfile.TarInfo(name=name)
+            for chromosome, filename in chrom_filenames.iteritems():
 
-            with open(filename, 'rb') as f:
+                name = prefix+chromosome
+                tarinfo = tarfile.TarInfo(name=name)
 
-                output_tar.addfile(tarinfo=tarinfo, fileobj=f)
+                tar.add(filename, arcname=name)
 
 

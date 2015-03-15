@@ -101,8 +101,8 @@ def merge_files(output_filename, *input_filenames):
 
 
 def merge_tables(output_filename, *input_filenames):
-    if isinstance(input_filenames, dict):
-        input_filenames = input_filenames.values()
+    if len(input_filenames) == 1 and isinstance(input_filenames[0], dict):
+        input_filenames = input_filenames[0].values()
     input_data = [pd.read_csv(fname, sep='\t', dtype=str) for fname in input_filenames]
     pd.concat(input_data).to_csv(output_filename, sep='\t', index=False)
 
