@@ -96,7 +96,7 @@ class CopyNumberModel(object):
         self.graph = None
 
         self.num_em_iter = 100
-        self.mix_frac_resolution = 10
+        self.mix_frac_resolution = 20
 
         self.p = None
         self.r = None
