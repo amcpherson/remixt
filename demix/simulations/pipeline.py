@@ -117,10 +117,11 @@ def simulate_germline_alleles(germline_alleles_filename, params, config):
     
     haplotypes_template = config['haplotypes_template']
     legend_template = config['legend_template']
+    phased_chromosome_x = config['phased_chromosome_x']
 
     np.random.seed(params['random_seed'])
 
-    alleles_table = demix.simulations.haplotype.create_sim_alleles(haplotypes_template, legend_template, chromosomes)
+    alleles_table = demix.simulations.haplotype.create_sim_alleles(haplotypes_template, legend_template, chromosomes, phased_chromosome_x)
 
     alleles_table.to_csv(germline_alleles_filename, sep='\t', index=False, header=True)
 
