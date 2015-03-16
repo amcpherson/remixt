@@ -73,20 +73,20 @@ if __name__ == '__main__':
         mgd.TempInputFile('genomes'),
         mgd.TempInputObj('sim_defs'))
 
-    pyp.sch.transform('plot_mixture', (), {'mem':1},
+    pyp.sch.transform('plot_mixture', (), {'mem':4},
         demix.simulations.pipeline.plot_mixture,
         None,
         mgd.TempOutputFile('mixture_plot.pdf'),
         mgd.TempInputFile('mixture'))
 
-    pyp.sch.transform('simulate_germline_alleles', (), {'mem':1},
+    pyp.sch.transform('simulate_germline_alleles', (), {'mem':8},
         demix.simulations.pipeline.simulate_germline_alleles,
         None,
         mgd.TempOutputFile('germline_alleles'),
         mgd.TempInputObj('sim_defs'),
         config)
 
-    pyp.sch.transform('simulate_normal_data', (), {'mem':1},
+    pyp.sch.transform('simulate_normal_data', (), {'mem':4},
         demix.simulations.pipeline.simulate_normal_data,
         None,
         mgd.TempOutputFile('normal'),
@@ -95,7 +95,7 @@ if __name__ == '__main__':
         mgd.TempFile('normal_tmp'),
         mgd.TempInputObj('sim_defs'))
 
-    pyp.sch.transform('simulate_tumour_data', (), {'mem':1},
+    pyp.sch.transform('simulate_tumour_data', (), {'mem':4},
         demix.simulations.pipeline.simulate_tumour_data,
         None,
         mgd.TempOutputFile('tumour'),
@@ -153,7 +153,7 @@ if __name__ == '__main__':
         mgd.TempInputObj('tool', 'bytool'),
         mgd.TempFile('tool_tmp', 'bytool'))
 
-    pyp.sch.transform('tool_prepare', ('bytool',), {'mem':1},
+    pyp.sch.transform('tool_prepare', ('bytool',), {'mem':8},
         run_inference_read_sim.tool_prepare,
         mgd.TempOutputObj('init_idx', 'bytool', 'byinit'),
         mgd.TempInputObj('tool_analysis', 'bytool'),
@@ -164,13 +164,13 @@ if __name__ == '__main__':
         mgd.TempInputFile('breakpoint.tsv'),
         mgd.TempInputFile('haps.tsv'))
 
-    pyp.sch.transform('tool_run', ('bytool', 'byinit'), {'mem':1},
+    pyp.sch.transform('tool_run', ('bytool', 'byinit'), {'mem':8},
         run_inference_read_sim.tool_run,
         mgd.TempOutputObj('run_result', 'bytool', 'byinit'),
         mgd.TempInputObj('tool_analysis', 'bytool'),
         mgd.TempInputObj('init_idx', 'bytool', 'byinit'))
 
-    pyp.sch.transform('tool_report', ('bytool',), {'mem':1},
+    pyp.sch.transform('tool_report', ('bytool',), {'mem':4},
         run_inference_read_sim.tool_report,
         None,
         mgd.TempInputObj('tool_analysis', 'bytool'),
@@ -196,6 +196,8 @@ else:
 
         params['chromosome_lengths'] = dict()
         for seq_id, sequence in demix.utils.read_sequences(config['genome_fasta']):
+            if seq_id not in params['chromosomes']:
+                continue
             params['chromosome_lengths'][seq_id] = len(sequence)
 
         return params
