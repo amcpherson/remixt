@@ -7,7 +7,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.colors import colorConverter
 
-import cn_model
+import demix.analysis.experiment
 
 
 def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor'):
@@ -102,16 +102,21 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', min
     ax.yaxis.grid(True, which='major', linestyle=':')
 
 
-def experiment_plot(data):
+def experiment_plot(experiment, cn, h, p):
     """ Plot a sequencing experiment
 
     Args:
-        data (pandas.DataFrame): dataframe with specific copy number columns for plotting
+        experiment (Experiment): experiment object containing simulation information
+        cn (numpy.array): segment copy number
+        h (numpy.array): haploid depths
+        p (numpy.array): measurable read proportion
 
     Returns:
         matplotlib.Figure: figure object of plots
 
     """
+
+    data = demix.analysis.experiment.create_cn_table(experiment, cn, h, p)
 
     fig = plt.figure(figsize=(20, 10))
 
