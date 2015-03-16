@@ -5,7 +5,6 @@ import sys
 import subprocess
 import tarfile
 import argparse
-import vcf
 import itertools
 import pickle
 import numpy as np
