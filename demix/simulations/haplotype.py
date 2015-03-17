@@ -1,4 +1,4 @@
-from collections import *
+import itertools
 import os
 import pandas as pd
 import numpy as np
@@ -34,7 +34,7 @@ def create_sim_alleles(haplotypes_template, legend_template, chromosomes, recomb
 
         chromosome_length = data['position'].max() + 1000
 
-        num_recombinations = np.ceil(recomb_rate * chromosome_length)
+        num_recombinations = int(np.ceil(recomb_rate * chromosome_length))
 
         # Randomly simulate recombinations
         recomb_positions = np.random.random_integers(1, chromosome_length - 1, num_recombinations)
@@ -48,24 +48,27 @@ def create_sim_alleles(haplotypes_template, legend_template, chromosomes, recomb
         recomb_end = np.array(list(recomb_positions) + [chromosome_length])
 
         # Add selected individual to legend table
-        data['individual'] = None
-        for start, end, individual in zip(recomb_start, recomb_end, recomb_individuals):
+        data['individual'] = -1
+        for start, end, individual in itertools.izip(recomb_start, recomb_end, recomb_individuals):
             data.loc[(data['position'] >= start) & (data['position'] < end), 'individual'] = individual
-        data['individual'] = data['individual'].astype(int)
-        assert not data['individual'].isnull().any()
+        assert np.all(data['individual'] >= 0)
+
+        # Columns to read from large haplotype matrix 
+        individual_cols = np.concatenate([
+            data['individual'].unique() * 2,
+            data['individual'].unique() * 2 + 1,
+        ])
+        individual_cols.sort()
+
+        # Columns of the in memory matrix which contains a subset of the original columns
+        individual_idx = np.searchsorted(np.sort(data['individual'].unique()), data['individual'])
+        individual_idx_0 = individual_idx * 2
+        individual_idx_1 = individual_idx * 2 + 1
 
         # Select nucleotide codes based on individual
-        recomb_nt_code = list()
-        with gzip.open(hap_filename, 'r') as hap_file:
-            for (idx, row), hap_line in zip(data.iterrows(), hap_file):
-                hap_data = hap_line.split()
-                individual_nt_code = hap_data[row['individual']*2:row['individual']*2+2]
-                individual_nt_code = np.array(individual_nt_code).astype(int)
-                recomb_nt_code.append(individual_nt_code)
-        recomb_nt_code = pd.DataFrame(recomb_nt_code, columns=['is_alt_0', 'is_alt_1'])
-
-        # Add nucleotide code columns
-        data = pd.concat([data, recomb_nt_code], axis=1)
+        hap_data = pd.read_csv(hap_filename, compression='gzip', sep=' ', dtype=np.uint8, header=None, names=xrange(num_1kg_individuals*2), usecols=individual_cols).values
+        data['is_alt_0'] = hap_data[data.index.values,individual_idx_0]
+        data['is_alt_1'] = hap_data[data.index.values,individual_idx_1]
 
         # Select nucleotides based on codes
         data['nt_0'] = np.where(data['is_alt_0'] == 0, data['a0'], data['a1'])
@@ -87,7 +90,5 @@ def create_sim_alleles(haplotypes_template, legend_template, chromosomes, recomb
         sim_alleles.append(data)
 
     sim_alleles = pd.concat(sim_alleles, ignore_index=True)
-    
-    return sim_alleles
 
-    
+    return sim_alleles

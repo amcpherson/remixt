@@ -73,33 +73,41 @@ if __name__ == '__main__':
         mgd.TempInputFile('genomes'),
         mgd.TempInputObj('sim_defs'))
 
-    pyp.sch.transform('simulate_germline_alleles', (), {'mem':1},
+    pyp.sch.transform('plot_mixture', (), {'mem':4},
+        demix.simulations.pipeline.plot_mixture,
+        None,
+        mgd.TempOutputFile('mixture_plot.pdf'),
+        mgd.TempInputFile('mixture'))
+
+    pyp.sch.transform('simulate_germline_alleles', (), {'mem':8},
         demix.simulations.pipeline.simulate_germline_alleles,
         None,
         mgd.TempOutputFile('germline_alleles'),
         mgd.TempInputObj('sim_defs'),
         config)
 
-    pyp.sch.transform('simulate_normal_data', (), {'mem':1},
+    pyp.sch.transform('simulate_normal_data', (), {'mem':16},
         demix.simulations.pipeline.simulate_normal_data,
         None,
         mgd.TempOutputFile('normal'),
         mgd.TempInputFile('mixture'),
         mgd.TempInputFile('germline_alleles'),
+        mgd.TempFile('normal_tmp'),
         mgd.TempInputObj('sim_defs'))
 
-    pyp.sch.transform('simulate_tumour_data', (), {'mem':1},
+    pyp.sch.transform('simulate_tumour_data', (), {'mem':16},
         demix.simulations.pipeline.simulate_tumour_data,
         None,
         mgd.TempOutputFile('tumour'),
         mgd.TempInputFile('mixture'),
         mgd.TempInputFile('germline_alleles'),
+        mgd.TempFile('tumour_tmp'),
         mgd.TempInputObj('sim_defs'))
 
     pyp.sch.transform('write_segments', (), {'mem':1},
         demix.simulations.pipeline.write_segments,
         None,
-        mgd.OutputFile('segment.tsv'),
+        mgd.TempOutputFile('segment.tsv'),
         mgd.TempInputFile('genomes'))
 
     pyp.sch.transform('write_perfect_segments', (), {'mem':1},
@@ -134,18 +142,18 @@ if __name__ == '__main__':
         mgd.TempOutputFile('haps.tsv'),
         mgd.TempInputFile('haps.tsv', 'bychromosome'))
 
-    pyp.sch.transform('create_tools', (), {'mem':1},
+    pyp.sch.transform('create_tools', (), {'local':True},
         run_inference_read_sim.create_tools,
         mgd.TempOutputObj('tool', 'bytool'),
         args['install_dir'])
 
-    pyp.sch.transform('create_analysis', ('bytool',), {'mem':1},
+    pyp.sch.transform('create_analysis', ('bytool',), {'local':True},
         run_inference_read_sim.create_analysis,
         mgd.TempOutputObj('tool_analysis', 'bytool'),
         mgd.TempInputObj('tool', 'bytool'),
         mgd.TempFile('tool_tmp', 'bytool'))
 
-    pyp.sch.transform('tool_prepare', ('bytool',), {'mem':1},
+    pyp.sch.transform('tool_prepare', ('bytool',), {'mem':8},
         run_inference_read_sim.tool_prepare,
         mgd.TempOutputObj('init_idx', 'bytool', 'byinit'),
         mgd.TempInputObj('tool_analysis', 'bytool'),
@@ -156,26 +164,26 @@ if __name__ == '__main__':
         mgd.TempInputFile('breakpoint.tsv'),
         mgd.TempInputFile('haps.tsv'))
 
-    pyp.sch.transform('tool_run', ('bytool', 'byinit'), {'mem':1},
+    pyp.sch.transform('tool_run', ('bytool', 'byinit'), {'mem':8},
         run_inference_read_sim.tool_run,
         mgd.TempOutputObj('run_result', 'bytool', 'byinit'),
-        mgd.TempFile('tool_tmp', 'bytool'),
+        mgd.TempInputObj('tool_analysis', 'bytool'),
         mgd.TempInputObj('init_idx', 'bytool', 'byinit'))
 
-    pyp.sch.transform('tool_report', ('bytool',), {'mem':1},
+    pyp.sch.transform('tool_report', ('bytool',), {'mem':4},
         run_inference_read_sim.tool_report,
         None,
-        mgd.TempFile('tool_tmp', 'bytool'),
-        mgd.TempOutputObj('cn.tsv', 'bytool'),
-        mgd.TempOutputObj('mix.tsv', 'bytool'),
-        mgd.TempInputObj('run_result', 'bytool', 'byinit'))
+        mgd.TempInputObj('tool_analysis', 'bytool'),
+        mgd.TempInputObj('run_result', 'bytool', 'byinit'),
+        mgd.TempOutputFile('cn.tsv', 'bytool'),
+        mgd.TempOutputFile('mix.tsv', 'bytool'))
 
     pyp.sch.transform('tabulate_results', (), {'mem':1},
         run_inference_read_sim.tabulate_results,
         None,
         mgd.OutputFile(args['results_table']),
-        mgd.TempInputObj('cn.tsv', 'bytool'),
-        mgd.TempInputObj('mix.tsv', 'bytool'))
+        mgd.TempInputFile('cn.tsv', 'bytool'),
+        mgd.TempInputFile('mix.tsv', 'bytool'))
 
     pyp.run()
 
@@ -188,6 +196,8 @@ else:
 
         params['chromosome_lengths'] = dict()
         for seq_id, sequence in demix.utils.read_sequences(config['genome_fasta']):
+            if seq_id not in params['chromosomes']:
+                continue
             params['chromosome_lengths'][seq_id] = len(sequence)
 
         return params
@@ -220,7 +230,7 @@ else:
             segment_filename=segment_filename,
             perfect_segment_filename=perfect_segment_filename,
             breakpoint_filename=breakpoint_filename,
-            haplotype_filename=haplotype_filename
+            haplotype_filename=haps_filename
         )
 
         return dict(zip(xrange(num_inits), xrange(num_inits)))
@@ -233,11 +243,9 @@ else:
         return True
 
 
-    def tool_report(tool_analysis, cn_filename, mix_filename):
+    def tool_report(tool_analysis, run_results, cn_filename, mix_filename):
 
         tool_analysis.report(cn_filename, mix_filename)
-        
-        return True
 
 
     def tabulate_results(table_filename, cn_filenames, mix_filenames):

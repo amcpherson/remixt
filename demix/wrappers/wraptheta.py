@@ -5,7 +5,6 @@ import sys
 import subprocess
 import tarfile
 import argparse
-import vcf
 import itertools
 import numpy as np
 import pandas as pd
@@ -21,25 +20,26 @@ def calculate_segment_counts(read_data_filename, segments):
 
     segment_counts = list()
     
-    with tarfile.open(read_data_filename, 'r:gz') as tar:
+    chromosomes = demix.seqdataio.read_chromosomes(read_data_filename)
 
-        chromosomes = demix.seqdataio.read_chromosomes(tar)
+    for chrom, chrom_segs in segments.groupby('chromosome'):
 
-        for chrom in chromosomes:
+        try:
+            chrom_reads = next(demix.seqdataio.read_read_data(read_data_filename, chromosome=chrom))
+        except StopIteration:
+            chrom_reads = pd.DataFrame(columns=['start', 'end'])
 
-            chrom_segs = segments[segments['chromosome'] == chrom]
-            chrom_reads = next(demix.seqdataio.read_read_data(tar, chromosome=chrom))
+        chrom_segs.sort('start', inplace=True)
+        chrom_reads.sort('start', inplace=True)
 
-            chrom_reads.sort('start', inplace=True)
+        chrom_segs['count'] = demix.segalg.contained_counts(
+            chrom_segs[['start', 'end']].values,
+            chrom_reads[['start', 'end']].values,
+        )
 
-            chrom_segs['count'] = demix.segalg.contained_counts(
-                chrom_segs[['start', 'end']].values,
-                chrom_reads[['start', 'end']].values,
-            )
+        chrom_segs['count'] = chrom_segs['count'].astype(int)
 
-            chrom_segs['count'] = chrom_segs['count'].astype(int)
-
-            segment_counts.append(chrom_segs)
+        segment_counts.append(chrom_segs)
 
     segment_counts = pd.concat(segment_counts, ignore_index=True)
 
@@ -50,28 +50,26 @@ def calculate_allele_counts(read_data_filename):
 
     allele_counts = list()
     
-    with tarfile.open(read_data_filename, 'r:gz') as tar:
+    chromosomes = demix.seqdataio.read_chromosomes(read_data_filename)
 
-        chromosomes = demix.seqdataio.read_chromosomes(tar)
+    for chrom in chromosomes:
 
-        for chrom in chromosomes:
+        chrom_alleles = next(demix.seqdataio.read_allele_data(read_data_filename, chromosome=chrom))
 
-            chrom_alleles = next(demix.seqdataio.read_allele_data(tar, chromosome=chrom))
+        chrom_allele_counts = (
+            chrom_alleles
+            .groupby(['position', 'is_alt'])['fragment_id']
+            .size()
+            .unstack()
+            .fillna(0)
+            .astype(int)
+            .rename(columns={0:'ref_count', 1:'alt_count'})
+            .reset_index()
+        )
 
-            chrom_allele_counts = (
-                chrom_alleles
-                .groupby(['position', 'is_alt'])['fragment_id']
-                .size()
-                .unstack()
-                .fillna(0)
-                .astype(int)
-                .rename(columns={0:'ref_count', 1:'alt_count'})
-                .reset_index()
-            )
+        chrom_allele_counts['chromosome'] = chrom
 
-            chrom_allele_counts['chromosome'] = chrom
-
-            allele_counts.append(chrom_allele_counts)
+        allele_counts.append(chrom_allele_counts)
 
     allele_counts = pd.concat(allele_counts, ignore_index=True)
 
@@ -214,13 +212,13 @@ class ThetaAnalysis(object):
         write_theta_format_alleles(normal_allele_filename, normal_allele_count)
         write_theta_format_alleles(tumour_allele_filename, tumour_allele_count)
 
+        return 1
+
 
     def run(self, init_param_idx):
 
         if init_param_idx != 0:
             raise utils.InvalidInitParam()
-
-        self.analysis_directory = analysis_directory
 
         chrom_idx_filename = self.get_analysis_filename('chrom_idx.tsv')
         chrom_idx = pd.read_csv(chrom_idx_filename, sep='\t')
@@ -267,8 +265,6 @@ class ThetaAnalysis(object):
 
 
     def report(self, output_cn_filename, output_mix_filename):
-
-        self.analysis_directory = analysis_directory
 
         theta2_results_filename = self.get_analysis_filename('theta2.BAF.NLL.results')
 

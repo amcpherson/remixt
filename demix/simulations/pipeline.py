@@ -125,12 +125,12 @@ def simulate_germline_alleles(germline_alleles_filename, params, config):
     alleles_table.to_csv(germline_alleles_filename, sep='\t', index=False, header=True)
 
 
-def simulate_normal_data(read_data_filename, mixture_filename, germline_alleles_filename, params):
+def simulate_normal_data(read_data_filename, mixture_filename, germline_alleles_filename, temp_dir, params):
 
     with open(mixture_filename, 'r') as mixture_file:
         gm = pickle.load(mixture_file)
 
-    germline_alleles = pd.read_csv(germline_alleles_filename, sep='\t', converters={'chromosome':str})
+    germline_alleles = pd.read_csv(germline_alleles_filename, sep='\t', usecols=['chromosome', 'position', 'is_alt_0', 'is_alt_1'], dtype={'chromosome':str, 'position':np.uint32, 'is_alt_0':np.uint8, 'is_alt_1':np.uint8})
 
     np.random.seed(params['random_seed'])
 
@@ -139,15 +139,16 @@ def simulate_normal_data(read_data_filename, mixture_filename, germline_alleles_
         [gm.genome_collection.genomes[0]],
         [params['h_total']],
         germline_alleles,
+        temp_dir,
         params)
 
 
-def simulate_tumour_data(read_data_filename, mixture_filename, germline_alleles_filename, params):
+def simulate_tumour_data(read_data_filename, mixture_filename, germline_alleles_filename, temp_dir, params):
 
     with open(mixture_filename, 'r') as mixture_file:
         gm = pickle.load(mixture_file)
 
-    germline_alleles = pd.read_csv(germline_alleles_filename, sep='\t', converters={'chromosome':str})
+    germline_alleles = pd.read_csv(germline_alleles_filename, sep='\t', usecols=['chromosome', 'position', 'is_alt_0', 'is_alt_1'], dtype={'chromosome':str, 'position':np.uint32, 'is_alt_0':np.uint8, 'is_alt_1':np.uint8})
 
     np.random.seed(params['random_seed'])
 
@@ -156,6 +157,7 @@ def simulate_tumour_data(read_data_filename, mixture_filename, germline_alleles_
         gm.genome_collection.genomes,
         gm.frac * params['h_total'],
         germline_alleles,
+        temp_dir,
         params)
 
 
@@ -191,6 +193,16 @@ def plot_experiment(experiment_plot_filename, experiment_filename):
     fig = demix.cn_plot.experiment_plot(exp, exp.cn, exp.h, exp.p)
 
     fig.savefig(experiment_plot_filename, format='pdf', bbox_inches='tight', dpi=300)
+
+
+def plot_mixture(mixture_plot_filename, mixture_filename):
+
+    with open(mixture_filename, 'r') as mixture_file:
+        mixture = pickle.load(mixture_file)
+
+    fig = demix.cn_plot.mixture_plot(mixture)
+
+    fig.savefig(mixture_plot_filename, format='pdf', bbox_inches='tight', dpi=300)
 
 
 def merge_tables(output_filename, input_filenames):

@@ -48,12 +48,12 @@ class CopyNumberModel(object):
             breakpoints (list of frozenset of tuple): list of pairs of segment/side pairs representing detected breakpoints
 
         Attributes:
-            wt_adj (list of `breakpoints`): list of `breakpoint` representing wild type adjacencies
-            tmr_adj (list of `breakpoints`): list of `breakpoint` representing detected tumour specific breakpoints
+            wt_adj (list of 'breakpoints'): list of 'breakpoint' representing wild type adjacencies
+            tmr_adj (list of 'breakpoints'): list of 'breakpoint' representing detected tumour specific breakpoints
 
-        A `breakend` is represented as the tuple ((`segment`, `allele`), `side`).
+        A 'breakend' is represented as the tuple (('segment', 'allele'), 'side').
 
-        A `breakpoint` is represented as the frozenset ([`breakend_1`, `breakend_2`]).
+        A 'breakpoint' is represented as the frozenset (['breakend_1', 'breakend_2']).
 
         """
 
@@ -96,7 +96,7 @@ class CopyNumberModel(object):
         self.graph = None
 
         self.num_em_iter = 100
-        self.mix_frac_resolution = 10
+        self.mix_frac_resolution = 20
 
         self.p = None
         self.r = None
