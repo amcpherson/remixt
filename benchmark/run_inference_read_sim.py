@@ -86,7 +86,7 @@ if __name__ == '__main__':
         mgd.TempInputObj('sim_defs'),
         config)
 
-    pyp.sch.transform('simulate_normal_data', (), {'mem':4},
+    pyp.sch.transform('simulate_normal_data', (), {'mem':16},
         demix.simulations.pipeline.simulate_normal_data,
         None,
         mgd.TempOutputFile('normal'),
@@ -95,7 +95,7 @@ if __name__ == '__main__':
         mgd.TempFile('normal_tmp'),
         mgd.TempInputObj('sim_defs'))
 
-    pyp.sch.transform('simulate_tumour_data', (), {'mem':4},
+    pyp.sch.transform('simulate_tumour_data', (), {'mem':16},
         demix.simulations.pipeline.simulate_tumour_data,
         None,
         mgd.TempOutputFile('tumour'),
