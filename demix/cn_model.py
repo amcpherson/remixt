@@ -779,7 +779,7 @@ class CopyNumberModel(object):
 
         # Calculate the dominant cn assuming no divergence
         dom_cn = (h_t - h[0]) / h[1:].sum()
-        dom_cn = dom_cn.round().astype(int)
+        dom_cn = np.clip(dom_cn.round().astype(int), 0, int(1e6))
 
         # Do not allow competition with HMM states
         dom_cn[np.all(dom_cn < self.cn_max, axis=1),:] += 100
