@@ -28,6 +28,9 @@ ucsc_genome_version                         = 'hg19'
 genome_fasta                                = ref_data_directory+'/Homo_sapiens.'+ensembl_genome_version+'.'+ensembl_version+'.dna.chromosomes.fa'
 genome_fai                                  = genome_fasta+'.fai'
 
+# Segment length for automatically generated segments
+segment_length                              = int(3e6)
+
 # Length of simulated reads used to calculate mappability
 mappability_length                          = 100
 
