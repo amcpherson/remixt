@@ -142,12 +142,12 @@ if __name__ == '__main__':
         mgd.TempOutputFile('haps.tsv'),
         mgd.TempInputFile('haps.tsv', 'bychromosome'))
 
-    pyp.sch.transform('create_tools', (), {'mem':1},
+    pyp.sch.transform('create_tools', (), {'local':True},
         run_inference_read_sim.create_tools,
         mgd.TempOutputObj('tool', 'bytool'),
         args['install_dir'])
 
-    pyp.sch.transform('create_analysis', ('bytool',), {'mem':1},
+    pyp.sch.transform('create_analysis', ('bytool',), {'local':True},
         run_inference_read_sim.create_analysis,
         mgd.TempOutputObj('tool_analysis', 'bytool'),
         mgd.TempInputObj('tool', 'bytool'),
