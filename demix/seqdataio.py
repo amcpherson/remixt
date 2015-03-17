@@ -18,7 +18,7 @@ def write_read_data(reads_file, read_data):
         reads_file (str): tar to which data will be written
         read_data (pandas.DataFrame): read data
 
-    Input `read_data` dataframe has columns `start`, `end`.
+    Input 'read_data' dataframe has columns 'start', 'end'.
 
     """
 
@@ -37,7 +37,7 @@ def write_allele_data(alleles_file, allele_data):
         alleles_file (str): tar to which data will be written
         allele_data (pandas.DataFrame): allele data
 
-    Input `allele_data` dataframe has columns `position`, `fragment_id`, `is_alt`.
+    Input 'allele_data' dataframe has columns 'position', 'fragment_id', 'is_alt'.
 
     """
 
@@ -86,8 +86,8 @@ class Writer(object):
             read_data (pandas.DataFrame): read data
             allele_data (pandas.DataFrame): allele data
 
-        Input `read_data` dataframe has columns `chromosome`, `start`, `end`.
-        Input `allele_data` dataframe has columns `chromosome`, `position`, `fragment_id`, `is_alt`.
+        Input 'read_data' dataframe has columns 'chromosome', 'start', 'end'.
+        Input 'allele_data' dataframe has columns 'chromosome', 'position', 'fragment_id', 'is_alt'.
 
         """
 
@@ -147,7 +147,7 @@ def read_raw_read_data(reads_file, num_rows=None):
     Yields:
         pandas.DataFrame
 
-    Returned dataframe has columns `start`, `end`
+    Returned dataframe has columns 'start', 'end'
 
     """
 
@@ -183,7 +183,7 @@ def read_raw_allele_data(alleles_file, num_rows=None):
     Yields:
         pandas.DataFrame
 
-    Returned dataframe has columns `position`, `is_alt`, `fragment_id`
+    Returned dataframe has columns 'position', 'is_alt', 'fragment_id'
 
     """
 
@@ -255,7 +255,7 @@ def read_read_data(seqdata_filename, chromosome=None, num_rows=None):
     Yields:
         pandas.DataFrame
 
-    Returned dataframe has columns `start`, `end`
+    Returned dataframe has columns 'start', 'end'
 
     """
 
@@ -275,7 +275,7 @@ def read_allele_data(seqdata_filename, chromosome=None, num_rows=None):
     Yields:
         pandas.DataFrame
 
-    Returned dataframe has columns `position`, `is_alt`, `fragment_id`
+    Returned dataframe has columns 'position', 'is_alt', 'fragment_id'
 
     """
 

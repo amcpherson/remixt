@@ -17,7 +17,7 @@ def simulate_fragment_intervals(genome_length, num_fragments, read_length, fragm
     Returns:
         pandas.DataFrame
 
-    Returned dataframe has columns: `start`, `end`
+    Returned dataframe has columns: 'start', 'end'
 
     Sample starting points uniformly across the genome, and sample lengths from a normal
     distribution with specified mean and standard deviation.  Filter fragments that are
@@ -114,12 +114,12 @@ def read_snp_overlap(data, snps, read_length):
     Returns:
         pandas.DataFrame
 
-    Input `fragments` dataframe has columns `chromosome`, `allele`, `start`, `end`.
+    Input 'fragments' dataframe has columns 'chromosome', 'allele', 'start', 'end'.
 
-    Input `snps` dataframe has columns `chromosome`, `position`, `is_alt_0`, `is_alt_1`.
+    Input 'snps' dataframe has columns 'chromosome', 'position', 'is_alt_0', 'is_alt_1'.
 
-    Output dataframe has columns `chromosome`, `position`, `fragment_id`, `is_alt`.
-    The `fragment_id` column is a foreign key indexing entries in the input data dataframe.
+    Output dataframe has columns 'chromosome', 'position', 'fragment_id', 'is_alt'.
+    The 'fragment_id' column is a foreign key indexing entries in the input data dataframe.
 
     No sorting assumptions are made.
 
@@ -224,7 +224,7 @@ def simulate_mixture_read_data(read_data_filename, genomes, read_depths, snps, t
         temp_dir (str): location to write temporary files
         params (dict): dictionary of simulation parameters
 
-    Input `snps` dataframe has columns `chromosome`, `position`, `is_alt_0`, `is_alt_1`.
+    Input 'snps' dataframe has columns 'chromosome', 'position', 'is_alt_0', 'is_alt_1'.
 
     """
 

@@ -82,13 +82,13 @@ class GenomeGraph(object):
             x (numpy.array): observed read counts
             l (numpy.array): observed lengths of segments
             cn_init (numpy.array): initial copy number matrix
-            wt_adj (list of `breakpoint`): list of wild type adjacencies
-            tmr_adj (list of `breakpoint`): list of tumour adjacencies
+            wt_adj (list of 'breakpoint'): list of wild type adjacencies
+            tmr_adj (list of 'breakpoint'): list of tumour adjacencies
             params (dict): parameters of the copy number model
 
-        A `breakpoint` is represented as the frozenset ([`breakend_1`, `breakend_2`])
+        A 'breakpoint' is represented as the frozenset (['breakend_1', 'breakend_2'])
 
-        A `breakend` is represented as the tuple ((`segment`, `allele`), `side`).
+        A 'breakend' is represented as the tuple (('segment', 'allele'), 'side').
 
         """
 

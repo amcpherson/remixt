@@ -17,18 +17,18 @@ class RearrangedGenome(object):
 
     Attributes:
         default_params (dict): dictionary of default simulation parameters
-        chromosomes (list of list of tuple): list of chromosome, each chromosome a list of `segment copy`
-        wt_adj (set): set of `breakpoints` representing wild type adjacencies
+        chromosomes (list of list of tuple): list of chromosome, each chromosome a list of 'segment copy'
+        wt_adj (set): set of 'breakpoints' representing wild type adjacencies
         init_params (dict): parameters for initializing chromosome structure.
         init_seed (int) seed for random initialization of chromosome structure.
         event_params (list of dict): list of parameters for randomly selected events.
         event_seeds (list of int): list of seeds used to generate randomly selected events.
 
-    A `segment copy` is represented as the tuple ((`segment`, `allele`), `orientation`).
+    A 'segment copy' is represented as the tuple (('segment', 'allele'), 'orientation').
 
-    A `breakend` is represented as the tuple ((`segment`, `allele`), `side`).
+    A 'breakend' is represented as the tuple (('segment', 'allele'), 'side').
 
-    A `breakpoint` is represented as the frozenset ([`breakend_1`, `breakend_2`])
+    A 'breakpoint' is represented as the frozenset (['breakend_1', 'breakend_2'])
 
     """
 

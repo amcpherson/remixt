@@ -53,7 +53,7 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', min
 
     Args:
         ax (matplotlib.axes.Axes): plot axes
-        cnv (pandas.DataFrame): `cnv_site` table
+        cnv (pandas.DataFrame): 'cnv_site' table
         maxcopies (int): maximum number of copies for setting y limits
         minlength (int): minimum length of segments to be drawn
         major_col (str): name of major copies column
