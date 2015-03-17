@@ -130,7 +130,7 @@ def simulate_normal_data(read_data_filename, mixture_filename, germline_alleles_
     with open(mixture_filename, 'r') as mixture_file:
         gm = pickle.load(mixture_file)
 
-    germline_alleles = pd.read_csv(germline_alleles_filename, sep='\t', converters={'chromosome':str})
+    germline_alleles = pd.read_csv(germline_alleles_filename, sep='\t', usecols=['chromosome', 'position', 'is_alt_0', 'is_alt_1'], dtype={'chromosome':str, 'position':np.uint32, 'is_alt_0':np.uint8, 'is_alt_1':np.uint8})
 
     np.random.seed(params['random_seed'])
 
@@ -148,7 +148,7 @@ def simulate_tumour_data(read_data_filename, mixture_filename, germline_alleles_
     with open(mixture_filename, 'r') as mixture_file:
         gm = pickle.load(mixture_file)
 
-    germline_alleles = pd.read_csv(germline_alleles_filename, sep='\t', converters={'chromosome':str})
+    germline_alleles = pd.read_csv(germline_alleles_filename, sep='\t', usecols=['chromosome', 'position', 'is_alt_0', 'is_alt_1'], dtype={'chromosome':str, 'position':np.uint32, 'is_alt_0':np.uint8, 'is_alt_1':np.uint8})
 
     np.random.seed(params['random_seed'])
 
