@@ -5,14 +5,13 @@ import numpy as np
 import gzip
 
 
-def create_sim_alleles(haplotypes_template, legend_template, chromosomes, phased_x_chromosome, recomb_rate=20.0/1.e8):
+def create_sim_alleles(haplotypes_template, legend_template, chromosomes, recomb_rate=20.0/1.e8):
     """ Create simulated alleles from 1000 genomes SNPs
 
     Args:
         haplotypes_template (str): template for 1000 genomes haplotypes filename
         legend_template (str): template for 1000 genomes legend filename
-        chromosomes (list of str): chromosomes to simulate
-        phased_x_chromosome (str): name of phased x chromosome
+        chromosomes (str): chromosomes to simulate
 
     KwArgs:
         recomb_rate (float): recombination rate per nt
@@ -24,10 +23,6 @@ def create_sim_alleles(haplotypes_template, legend_template, chromosomes, phased
     sim_alleles = list()
 
     for chromosome in chromosomes:
-
-        phased_chromosome = chromosome
-        if chromosome == 'X':
-            phased_chromosome = phased_chromosome_x
 
         hap_filename = haplotypes_template.format(chromosome)
         legend_filename = legend_template.format(chromosome)
