@@ -1,6 +1,7 @@
 import os
 import contextlib
 import tarfile
+import gzip
 import numpy as np
 import pandas as pd
 
@@ -302,17 +303,18 @@ def read_chromosomes(seqdata_filename):
         return chromosomes
 
 
-def create_seqdata(seqdata_filename, reads_filenames, alleles_filenames):
+def create_seqdata(seqdata_filename, reads_filenames, alleles_filenames, gzipped=False):
     """ Create a seqdata tar object
 
     Args:
         seqdata_filename (str): path to output seqdata tar file
         reads_filenames (dict): individual seqdata read tables keyed by chromosome name
         alleles_filenames (dict): individual seqdata allele tables keyed by chromosome name
+        gzipped (bool): the individual files are gzipped
 
     """
 
-    with tarfile.open(seqdata_filename, 'w:gz') as tar:
+    with tarfile.open(seqdata_filename, 'w') as tar:
 
         prefixes = ('reads.', 'alleles.')
         filenames = (reads_filenames, alleles_filenames)
@@ -322,8 +324,18 @@ def create_seqdata(seqdata_filename, reads_filenames, alleles_filenames):
             for chromosome, filename in chrom_filenames.iteritems():
 
                 name = prefix+chromosome
-                tarinfo = tarfile.TarInfo(name=name)
 
-                tar.add(filename, arcname=name)
+                if gzipped:
+
+                    with gzip.open(filename, 'rb') as f:
+                        data = StringIO.StringIO(f.read())
+                    
+                    tarinfo = tarfile.TarInfo(name=name)
+                    tarinfo.size = len(data.buf)
+                    tar.addfile(tarinfo=tarinfo, fileobj=data)                   
+
+                else:
+
+                    tar.add(filename, arcname=name)
 
 

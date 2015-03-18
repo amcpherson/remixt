@@ -66,7 +66,8 @@ if __name__ == '__main__':
         None,
         mgd.OutputFile(args['seqdata_file']),
         mgd.TempInputFile('reads', 'chromosome'),
-        mgd.TempInputFile('alleles', 'chromosome'))
+        mgd.TempInputFile('alleles', 'chromosome'),
+        gzipped=True)
 
     pyp.run()
 
