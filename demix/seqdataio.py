@@ -315,7 +315,7 @@ def create_seqdata(seqdata_filename, reads_filenames, alleles_filenames, gzipped
 
     """
 
-    with tarfile.open(seqdata_filename, 'w') as tar:
+    with tarfile.open(seqdata_filename, 'w:gz') as tar:
 
         prefixes = ('reads.', 'alleles.')
         filenames = (reads_filenames, alleles_filenames)
