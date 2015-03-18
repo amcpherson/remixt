@@ -68,29 +68,15 @@ if __name__ == '__main__':
 
     pyp = pypeliner.app.Pypeline([demix, prepare_counts], config)
 
-    tumour_info = zip(args['tumour_files'], args['count_files'])
-    tumour_info = [prepare_counts.TumourInfo(*a) for a in tumour_info]
+    tumour_fnames = dict(zip(enumerate(args['tumour_files'])))
+    count_fnames = dict(zip(enumerate(args['count_files'])))
 
-    pyp.sch.setobj(mgd.TempInputObj('tumour_info', 'bytumour'), tumour_info)
-
-    sch.transform('link_tumour_files', ('bytumour',), {'local':True},
-        demix.utils.link_libraries,
-        None,
-        mgd.TempInputObj('tumour_info', 'bytumour').prop('tumour_file'),
-        mgd.TempOutputFile('tumour_file', 'bytumour'),
-    )
-
-    sch.transform('link_count_files', ('bytumour',), {'local':True},
-        demix.utils.link_libraries,
-        None,
-        mgd.TempInputObj('tumour_info', 'bytumour').prop('count_file'),
-        mgd.TempOutputFile('count_file', 'bytumour'),
-    )
+    pyp.sch.setobj(mgd.OutputChunks('bytumour'), tumour_fnames.keys())
 
     pyp.sch.transform('calc_fragment_stats', ('bytumour',), {'mem':16},
         prepare_counts.calculate_fragment_stats,
         mgd.TempOutputObj('fragstats', 'bytumour'),
-        mgd.TempInputFile('tumour_file', 'bytumour'),
+        mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_fnames),
     )
 
     pyp.sch.setobj(mgd.OutputChunks('bychromosome'), config['chromosomes'])
@@ -118,7 +104,7 @@ if __name__ == '__main__':
         mgd.TempOutputFile('segment_counts.tsv', 'bytumour'),
         mgd.TempOutputFile('allele_counts.tsv', 'bytumour'),
         mgd.InputFile(args['segment_file']),
-        mgd.TempInputFile('tumour_file', 'bytumour'),
+        mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_fnames),
         mgd.TempInputFile('haps.tsv'),
     )
 
@@ -135,7 +121,7 @@ if __name__ == '__main__':
         prepare_counts.sample_gc,
         None,
         mgd.TempOutputFile('gcsamples.tsv', 'bytumour'),
-        mgd.InputFile(tumour_filename),
+        mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_fnames),
         mgd.TempInputObj('fragstats', 'bytumour').prop('fragment_mean'),
         config,
     )
@@ -167,16 +153,10 @@ if __name__ == '__main__':
         None,
         mgd.TempInputFile('segment_counts_lengths.tsv', 'bytumour'),
         mgd.TempInputFile('phased_allele_counts.tsv', 'bytumour2'),
-        mgd.OutputFile(count_filename),
+        mgd.OutputFile('count_file', 'bytumour', fnames=count_fnames),
     )
 
     pyp.run()
-
-
-TumourInfo = collections.namedtuple('TumourInfo', [
-    'tumour_file',
-    'count_file',
-])
 
 
 FragmentStats = collections.namedtuple('FragmentStats', [
