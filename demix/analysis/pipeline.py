@@ -158,6 +158,9 @@ def infer_cn(
 
     cn_table = demix.analysis.experiment.create_cn_table(experiment, cn, h, model.p)
 
+    cn_table['log_likelihood'] = model.log_likelihood_cn(experiment.x, experiment.l, cn, h)
+    cn_table['log_prior'] = model.log_prior_cn(experiment.l, cn)
+
     cn_table.to_csv(cn_table_filename, sep='\t', index=False, header=True)
 
     fig = demix.cn_plot.experiment_plot(experiment, cn, h, model.p)
