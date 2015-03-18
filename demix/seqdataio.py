@@ -2,6 +2,7 @@ import os
 import contextlib
 import tarfile
 import gzip
+import StringIO
 import numpy as np
 import pandas as pd
 
