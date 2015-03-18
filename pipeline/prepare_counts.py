@@ -68,8 +68,8 @@ if __name__ == '__main__':
 
     pyp = pypeliner.app.Pypeline([demix, prepare_counts], config)
 
-    tumour_fnames = dict(zip(enumerate(args['tumour_files'])))
-    count_fnames = dict(zip(enumerate(args['count_files'])))
+    tumour_fnames = dict(enumerate(args['tumour_files']))
+    count_fnames = dict(enumerate(args['count_files']))
 
     pyp.sch.setobj(mgd.OutputChunks('bytumour'), tumour_fnames.keys())
 
@@ -112,7 +112,7 @@ if __name__ == '__main__':
         prepare_counts.phase_segments,
         None,
         mgd.TempInputFile('allele_counts.tsv', 'bytumour'),
-        mgd.TempInputFile('phased_allele_counts.tsv', 'bytumour2'),
+        mgd.TempOutputFile('phased_allele_counts.tsv', 'bytumour2'),
     )
 
     pyp.sch.changeaxis('phased_axis', (), 'phased_allele_counts.tsv', 'bytumour2', 'bytumour')
@@ -144,7 +144,7 @@ if __name__ == '__main__':
         '-u', mgd.TempInputObj('fragstats', 'bytumour').prop('fragment_mean'),
         '-s', mgd.TempInputObj('fragstats', 'bytumour').prop('fragment_stddev'),
         '-a', config['mappability_length'],
-        '-l', mgd.TempInputFile('gcloess', 'bytumour'),
+        '-l', mgd.TempInputFile('gcloess.tsv', 'bytumour'),
         '>', mgd.TempOutputFile('segment_counts_lengths.tsv', 'bytumour'),
     )
 
