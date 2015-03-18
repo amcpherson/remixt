@@ -63,6 +63,7 @@ if __name__ == '__main__':
 
     pyp.sch.transform('create_seqdata', (), {'mem':4},
         seqdataio.create_seqdata,
+        None,
         mgd.OutputFile(args['seqdata_file']),
         mgd.TempInputFile('reads', 'chromosome'),
         mgd.TempInputFile('alleles', 'chromosome'))
