@@ -1207,7 +1207,7 @@ class CopyNumberModel(object):
 
         """
 
-        self.p = x[:,0:2].sum(axis=1).astype(float) / x[:,2].astype(float)
+        self.p = x[:,0:2].sum(axis=1).astype(float) / (x[:,2].astype(float) + 1.0)
         self.p = np.vstack([self.p, self.p, np.ones(self.p.shape)]).T
 
 
