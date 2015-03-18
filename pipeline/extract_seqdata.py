@@ -19,7 +19,7 @@ default_config_filename = os.path.join(demix_directory, 'defaultconfig.py')
 
 if __name__ == '__main__':
 
-    import extract_reads
+    import extract_seqdata
     
     argparser = argparse.ArgumentParser()
 
@@ -47,13 +47,11 @@ if __name__ == '__main__':
 
     config.update(args)
 
-    pyp = pypeliner.app.Pypeline([extract_reads], config)
-
-    ctx = {'mem':4}
+    pyp = pypeliner.app.Pypeline([extract_seqdata], config)
 
     pyp.sch.setobj(mgd.OutputChunks('chromosome'), config['chromosomes'])
 
-    pyp.sch.commandline('read_concordant', ('chromosome',), ctx_general,
+    pyp.sch.commandline('read_concordant', ('chromosome',), {'mem':4},
         os.path.join(bin_directory, 'bamconcordantreads'),
         '--clipmax', '8',
         '--flen', '1000',
@@ -63,9 +61,13 @@ if __name__ == '__main__':
         '-r', mgd.TempOutputFile('reads', 'chromosome'),
         '-a', mgd.TempOutputFile('alleles', 'chromosome'))
 
-    pyp.sch.transform('create_seqdata', (), ctx,
+    pyp.sch.transform('create_seqdata', (), {'mem':4},
         seqdataio.create_seqdata,
+        None,
         mgd.OutputFile(args['seqdata_file']),
         mgd.TempInputFile('reads', 'chromosome'),
         mgd.TempInputFile('alleles', 'chromosome'))
+
+    pyp.run()
+
 

@@ -42,7 +42,10 @@ def nll_nbinom_der(param_t, x, l):
 
 
 def infer_disperion(x, l):
-    
+
+    x = x[~np.isinf(l) & (l > 0)]
+    l = l[~np.isinf(l) & (l > 0)]
+   
     resize = int(len(x) / 2) * 2
     x = x[:resize]
     l = l[:resize]

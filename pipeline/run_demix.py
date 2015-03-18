@@ -59,7 +59,8 @@ if __name__ == '__main__':
 
     pyp.sch.transform('learn_h', ('byh',), {'mem':8},
         demix.analysis.pipeline.learn_h,
-        mgd.TempOutputObj('h_opt', 'byh'),
+        None,
+        mgd.TempOutputFile('h_opt', 'byh'),
         mgd.TempInputFile('experiment_learn.pickle'),
         mgd.TempInputFile('model_learn.pickle'),
         mgd.TempInputFile('h_init', 'byh'),
@@ -69,10 +70,10 @@ if __name__ == '__main__':
         demix.analysis.pipeline.tabulate_h,
         None,
         mgd.TempOutputFile('h_table.tsv'),
-        mgd.TempInputObj('h_opt', 'byh'),
+        mgd.TempInputFile('h_opt', 'byh'),
     )
 
-    pyp.sch.transform('infer_cn', (), {'mem':8},
+    pyp.sch.transform('infer_cn', (), {'mem':24},
         demix.analysis.pipeline.infer_cn,
         None,
         mgd.OutputFile(args['cn']),

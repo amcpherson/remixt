@@ -1,4 +1,6 @@
 import argparse
+import os
+import numpy as np
 import pandas as pd
 
 import demix.utils
@@ -28,6 +30,7 @@ def create_segments(segment_filename, breakpoint_filename, segment_length, chrom
         changepoints.append((row['chromosome_2'], row['position_2']))
 
     changepoints = pd.DataFrame(changepoints, columns=['chromosome', 'position'])
+    changepoints.sort(['chromosome', 'position'], inplace=True)
 
     # Create segments from changepoints
     segments = list()
