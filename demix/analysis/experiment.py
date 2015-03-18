@@ -95,7 +95,6 @@ def find_closest_segment_end(segment_data, breakpoint_data):
 def create_experiment(count_filename, breakpoint_filename, min_length=100000, min_brk_dist=2000):
 
     count_data = pd.read_csv(count_filename, sep='\t')
-    count_data = count_data.reset_index().rename(columns={'index':'segment_id'})
 
     breakpoint_data = pd.read_csv(breakpoint_filename, sep='\t')
 
