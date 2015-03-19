@@ -129,6 +129,8 @@ def read_snp_overlap(data, snps, read_length):
 
     for chromosome, chrom_fragments in data.groupby('chromosome'):
 
+        chrom_fragments = chrom_fragments.reset_index(drop=True)
+
         # Postion data, must be sorted
         snp_cols = ['position', 'is_alt_0', 'is_alt_1']
         chrom_snps = snps.loc[snps['chromosome'] == chromosome, snp_cols].reset_index(drop=True).sort('position')
