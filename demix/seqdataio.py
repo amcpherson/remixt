@@ -112,15 +112,7 @@ class Writer(object):
             chrom_allele_data = allele_data[allele_data['chromosome'] == chromosome]
 
             # Remap fragment ids
-            fragment_id_remap = pd.DataFrame({'fragment_id':chrom_read_data.index.values})
-            fragment_id_remap['remap_id'] = fragment_id_remap.index.values + self.fragment_id_offset[chromosome]
-
-            chrom_allele_data = (
-                chrom_allele_data
-                .merge(fragment_id_remap, on='fragment_id')
-                .drop('fragment_id', axis=1)
-                .rename(columns={'remap_id':'fragment_id'})
-            )
+            chrom_allele_data['fragment_id'] += self.fragment_id_offset[chromosome]
 
             with open(self.get_reads_filename(chromosome), 'ab') as f:
                 write_read_data(f, chrom_read_data)
@@ -315,7 +307,7 @@ def create_seqdata(seqdata_filename, reads_filenames, alleles_filenames, gzipped
 
     """
 
-    with tarfile.open(seqdata_filename, 'w:gz') as tar:
+    with tarfile.open(seqdata_filename, 'w') as tar:
 
         prefixes = ('reads.', 'alleles.')
         filenames = (reads_filenames, alleles_filenames)
