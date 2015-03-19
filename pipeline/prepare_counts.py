@@ -289,6 +289,9 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
         gc_count = gc.cumsum()
         gc_count[gc_window:] = gc_count[gc_window:] - gc.cumsum()[:-gc_window]
 
+        # Append nan for fragments too close to the end of the chromosome
+        gc_count = np.concatenate([gc_count, np.ones(fragment_length) * np.nan])
+
         # Calculate filter of positions in this chromosome
         chrom_sample_idx = (sample_pos >= chrom_start) & (sample_pos < chrom_end)
 
@@ -297,6 +300,10 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
 
         # Add the gc count for filtered positions
         sample_gc_count[chrom_sample_idx] += gc_count[chrom_window_end]
+
+    # Filter nan gc count values
+    sample_pos = sample_pos[~np.isnan(sample_gc_count)]
+    sample_gc_count = sample_gc_count[~np.isnan(sample_gc_count)]
 
     sample_gc_percent = sample_gc_count / float(gc_window)
 
