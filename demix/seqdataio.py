@@ -109,7 +109,7 @@ class Writer(object):
                 self.fragment_id_offset[chromosome] = 0
 
             chrom_read_data = read_data[read_data['chromosome'] == chromosome]
-            chrom_allele_data = allele_data[allele_data['chromosome'] == chromosome]
+            chrom_allele_data = allele_data[allele_data['chromosome'] == chromosome].copy()
 
             # Remap fragment ids
             chrom_allele_data['fragment_id'] += self.fragment_id_offset[chromosome]
