@@ -228,6 +228,7 @@ def phase_segments(allele_counts_filenames, phased_allele_counts_filename_callba
 
 def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
 
+    chromosomes = config['chromosomes']
     num_samples = config['sample_gc_num_positions']
     position_offset = config['sample_gc_offset']
     genome_fai = config['genome_fai']
@@ -237,14 +238,14 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
     fragment_length = int(fragment_length)
     gc_window = fragment_length - 2 * position_offset
 
-    chromosomes = pd.DataFrame({'chrom_length':demix.utils.read_chromosome_lengths(genome_fai)})
-    chromosomes['chrom_end'] = chromosomes['chrom_length'].cumsum()
-    chromosomes['chrom_start'] = chromosomes['chrom_end'] - chromosomes['chrom_length']
+    chrom_info = pd.DataFrame({'chrom_length':demix.utils.read_chromosome_lengths(genome_fai)})
+    chrom_info = chrom_info.reindex(chromosomes)
+    chrom_info['chrom_end'] = chrom_info['chrom_length'].cumsum()
+    chrom_info['chrom_start'] = chrom_info['chrom_end'] - chrom_info['chrom_length']
 
     # Sample random genomic positions from concatenated genome
-    genome_length = chromosomes['chrom_length'].sum()
+    genome_length = chrom_info['chrom_length'].sum()
     sample_pos = np.sort(np.random.randint(0, genome_length, num_samples))
-
 
     # Calculate mappability for each sample
     sample_mappability = np.zeros(sample_pos.shape)
@@ -254,11 +255,14 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
         converters={'chromosome':str}, names=['chromosome', 'start', 'end', 'score'])
     for mappability in mappability_iter:
 
+        # Filter extraneous chromosomes
+        mappability = mappability[mappability['chromosome'].isin(chromosomes)]
+
         # Perfect mappability only
         mappability = mappability[mappability['score'] == 1]
 
         # Add chromosome start end and calculate start/end in concatenated genome
-        mappability = mappability.merge(chromosomes[['chrom_start']], left_on='chromosome', right_index=True)
+        mappability = mappability.merge(chrom_info[['chrom_start']], left_on='chromosome', right_index=True)
         mappability['start'] += mappability['chrom_start']
         mappability['end'] += mappability['chrom_start']
 
@@ -272,8 +276,12 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
     sample_gc_count = np.zeros(sample_pos.shape)
     for chrom_id, sequence in demix.utils.read_sequences(genome_fasta):
 
+        # Ignore extraneous chromosomes
+        if chrom_id not in chromosomes:
+            continue
+
         # Start and end of current chromosome in concatenated genome
-        chrom_start, chrom_end = chromosomes.loc[chrom_id, ['chrom_start', 'chrom_end']].values
+        chrom_start, chrom_end = chrom_info.loc[chrom_id, ['chrom_start', 'chrom_end']].values
 
         # Calculate gc count within sliding window
         sequence = np.array(list(sequence.upper()))
@@ -296,10 +304,14 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
     sample_read_count = np.zeros(sample_pos.shape, dtype=int)
     for chrom_id in demix.seqdataio.read_chromosomes(seqdata_filename):
 
+        # Ignore extraneous chromosomes
+        if chrom_id not in chromosomes:
+            continue
+
         chrom_reads = next(demix.seqdataio.read_read_data(seqdata_filename, chromosome=chrom_id))
 
         # Calculate read start in concatenated genome
-        chrom_reads['start'] += chromosomes.loc[chrom_id, 'chrom_start']
+        chrom_reads['start'] += chrom_info.loc[chrom_id, 'chrom_start']
 
         # Add reads at each start
         sample_read_count += (
@@ -313,9 +325,9 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
         )
 
     # Calculate position in non-concatenated genome
-    sample_chrom_idx = np.searchsorted(chromosomes['chrom_end'].values, sample_pos, side='right')
-    sample_chrom = chromosomes.index.values[sample_chrom_idx]
-    sample_chrom_pos = sample_pos - chromosomes['chrom_start'].values[sample_chrom_idx]
+    sample_chrom_idx = np.searchsorted(chrom_info['chrom_end'].values, sample_pos, side='right')
+    sample_chrom = chrom_info.index.values[sample_chrom_idx]
+    sample_chrom_pos = sample_pos - chrom_info['chrom_start'].values[sample_chrom_idx]
 
     # Output chromosome, position, gc percent, read count
     gc_sample_data = pd.DataFrame({

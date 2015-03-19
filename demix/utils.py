@@ -85,10 +85,6 @@ def read_chromosome_lengths(genome_fai_filename):
         for row in csv.reader(genome_fai_file, delimiter='\t'):
             chromosome = row[0]
             length = int(row[1])
-            if chromosome.startswith('GL'):
-                continue
-            if chromosome == 'MT':
-                continue
             chromosome_lengths[chromosome] = length
     return chromosome_lengths
 
