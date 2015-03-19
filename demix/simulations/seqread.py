@@ -268,7 +268,7 @@ def simulate_mixture_read_data(read_data_filename, genomes, read_depths, snps, t
 
             # Create chunks of fragments to reduce memory usage
             num_fragments_created = 0
-            fragments_per_chunk = 1000000
+            fragments_per_chunk = 40000000
             while num_fragments_created < num_fragments:
 
                 # Sample fragment intervals from concatenated tumour genome, sorted by start
