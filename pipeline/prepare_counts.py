@@ -87,7 +87,7 @@ if __name__ == '__main__':
         mgd.TempOutputFile('haps.tsv', 'bychromosome'),
         mgd.InputFile(args['normal_file']),
         mgd.InputInstance('bychromosome'),
-        mgd.TempFile('haplotyping'),
+        mgd.TempFile('haplotyping', 'bychromosome'),
         config,
     )
 
