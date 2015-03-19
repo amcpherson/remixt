@@ -94,6 +94,9 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
 
     snp_counts_df = snp_counts_df.merge(snps_df, left_index=True, right_index=True)
 
+    # TODO: there should be no duplicates here, filter the data in create_ref_data.py
+    snp_counts_df.drop_duplicates(subset=['position'], inplace=True)
+
     # Create genotype file required by shapeit
     temp_gen_filename = os.path.join(temp_directory, 'snps.gen')
     snp_counts_df.reset_index(inplace=True)
