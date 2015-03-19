@@ -8,6 +8,40 @@ import pypeliner
 
 import demix.seqdataio
 
+
+def infer_snp_genotype(data, base_call_error=0.005, call_threshold=0.9):
+    """ Infer snp genotype based on binomial PMF
+
+    Args:
+        data (pandas.DataFrame): input snp data
+
+    KwArgs:
+        base_call_error (float): per base sequencing error
+        call_threshold (float): posterior threshold for calling a genotype
+
+    Input dataframe should have columns 'ref_count', 'alt_count'
+
+    The operation is in-place, and the input dataframe after the call will
+    have 'AA', 'AB', 'BB' columns, in addition to others.
+
+    """
+
+    data['total_count'] = data['ref_count'] + data['alt_count']
+
+    data['likelihood_AA'] = scipy.stats.binom.pmf(data['alt_count'], data['total_count'], base_call_error)
+    data['likelihood_AB'] = scipy.stats.binom.pmf(data['alt_count'], data['total_count'], 0.5)
+    data['likelihood_BB'] = scipy.stats.binom.pmf(data['ref_count'], data['total_count'], base_call_error)
+    data['evidence'] = data['likelihood_AA'] + data['likelihood_AB'] + data['likelihood_BB']
+
+    data['posterior_AA'] = data['likelihood_AA'] / data['evidence']
+    data['posterior_AB'] = data['likelihood_AB'] / data['evidence']
+    data['posterior_BB'] = data['likelihood_BB'] / data['evidence']
+
+    data['AA'] = (data['posterior_AA'] >= call_threshold) * 1
+    data['AB'] = (data['posterior_AB'] >= call_threshold) * 1
+    data['BB'] = (data['posterior_BB'] >= call_threshold) * 1
+
+    
 def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, config):
     """ Infer haplotype blocks for a chromosome using shapeit
 
@@ -44,9 +78,6 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
     except OSError:
         pass
 
-    # Thousand genomes snps
-    snps_filename = config['snp_positions']
-
     # Impute 2 files for thousand genomes data by chromosome
     phased_chromosome = chromosome
     if chromosome == 'X':
@@ -70,40 +101,31 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
         write_null()
         return
 
-    snp_counts_df['total_count'] = snp_counts_df['ref_count'] + snp_counts_df['alt_count']
+    infer_snp_genotype(snp_counts_df, config['sequencing_base_call_error'], config['het_snp_call_threshold'])
 
-    snp_counts_df['likelihood_AA'] = scipy.stats.binom.pmf(snp_counts_df['alt_count'], snp_counts_df['total_count'], float(config['sequencing_base_call_error']))
-    snp_counts_df['likelihood_AB'] = scipy.stats.binom.pmf(snp_counts_df['alt_count'], snp_counts_df['total_count'], 0.5)
-    snp_counts_df['likelihood_BB'] = scipy.stats.binom.pmf(snp_counts_df['ref_count'], snp_counts_df['total_count'], float(config['sequencing_base_call_error']))
-    snp_counts_df['evidence'] = snp_counts_df['likelihood_AA'] + snp_counts_df['likelihood_AB'] + snp_counts_df['likelihood_BB']
+    # Read snp positions from legend
+    snps_df = pd.read_csv(legend_filename, compression='gzip', sep=' ', usecols=['position', 'a0', 'a1'])
 
-    snp_counts_df['posterior_AA'] = snp_counts_df['likelihood_AA'] / snp_counts_df['evidence']
-    snp_counts_df['posterior_AB'] = snp_counts_df['likelihood_AB'] / snp_counts_df['evidence']
-    snp_counts_df['posterior_BB'] = snp_counts_df['likelihood_BB'] / snp_counts_df['evidence']
-
-    snp_counts_df['AA'] = (snp_counts_df['posterior_AA'] >= float(config['het_snp_call_threshold'])) * 1
-    snp_counts_df['AB'] = (snp_counts_df['posterior_AB'] >= float(config['het_snp_call_threshold'])) * 1
-    snp_counts_df['BB'] = (snp_counts_df['posterior_BB'] >= float(config['het_snp_call_threshold'])) * 1
-
-    snp_counts_df = snp_counts_df[(snp_counts_df['AA'] == 1) | (snp_counts_df['AB'] == 1) | (snp_counts_df['BB'] == 1)]
-
-    snps_df_iter = pd.read_csv(snps_filename, sep='\t', names=['chr', 'position', 'ref', 'alt'], converters={'chr':str}, iterator=True, chunksize=10000)
-    snps_df = pd.concat([chunk[chunk['chr'] == chromosome] for chunk in snps_df_iter])
-    snps_df.drop('chr', axis=1)
-    snps_df.set_index('position', inplace=True)
-
-    snp_counts_df = snp_counts_df.merge(snps_df, left_index=True, right_index=True)
-
-    # TODO: there should be no duplicates here, filter the data in create_ref_data.py
-    snp_counts_df.drop_duplicates(subset=['position'], inplace=True)
+    # Create a list of excluded snps
+    excluded = snps_df.loc[
+        (snps_df.duplicated(subset=['position'])) &
+        (~snps_df['a0'].isin(['A', 'C', 'T', 'G'])) &
+        (~snps_df['a1'].isin(['A', 'C', 'T', 'G'])),
+        ['position']
+    ]
+    temp_excluded_filename = os.path.join(temp_directory, 'snps.excluded')
+    excluded.to_csv(temp_excluded_filename, header=False, index=False)
 
     # Create genotype file required by shapeit
-    temp_gen_filename = os.path.join(temp_directory, 'snps.gen')
-    snp_counts_df.reset_index(inplace=True)
-    snp_counts_df['chr'] = chromosome
-    snp_counts_df['chr_pos'] = snp_counts_df['chr'].astype(str) + ':' + snp_counts_df['position'].astype(str)
+    snps_df = snps_df.merge(snp_counts_df[['AA', 'AB', 'BB']], left_on='position', right_index=True, how='left')
 
-    snp_counts_df.to_csv(temp_gen_filename, sep=' ', columns=['chr', 'chr_pos', 'position', 'ref', 'alt', 'AA', 'AB', 'BB'], index=False, header=False)
+    for genotype in ('AA', 'AB', 'BB'):
+        snps_df[genotype] = snps_df[genotype].fillna(0).astype(int)
+    snps_df['chr'] = chromosome
+    snps_df['chr_pos'] = snps_df['chr'].astype(str) + ':' + snps_df['position'].astype(str)
+
+    temp_gen_filename = os.path.join(temp_directory, 'snps.gen')
+    snps_df.to_csv(temp_gen_filename, sep=' ', columns=['chr', 'chr_pos', 'position', 'ref', 'alt', 'AA', 'AB', 'BB'], index=False, header=False)
 
     # Create single sample file required by shapeit
     temp_sample_filename = os.path.join(temp_directory, 'snps.sample')
@@ -116,9 +138,22 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
     chr_x_flag = ''
     if chromosome == 'X':
         chr_x_flag = '--chrX'
-    pypeliner.commandline.execute('shapeit', '-M', genetic_map_filename, '-R', hap_filename, legend_filename, config['sample_filename'],
-                                  '-G', temp_gen_filename, temp_sample_filename, '--output-graph', hgraph_filename, chr_x_flag,
-                                  '--no-mcmc', '-L', hgraph_logs_prefix)
+
+    pypeliner.commandline.execute(
+        'shapeit',
+        '-M', genetic_map_filename,
+        '-R', hap_filename,
+        legend_filename,
+        config['sample_filename'],
+        '-G', temp_gen_filename,
+        '--exclude-snp', temp_excluded_filename,
+        temp_sample_filename,
+        '--output-graph',
+        hgraph_filename,
+        chr_x_flag,
+        '--no-mcmc',
+        '-L', hgraph_logs_prefix
+    )
 
     # Run shapeit to sample from phased haplotype graph
     sample_template = os.path.join(temp_directory, 'sampled.{0}')
