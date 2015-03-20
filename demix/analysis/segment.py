@@ -64,6 +64,9 @@ def create_segment_counts(segments, seqdata_filename):
     counts = [count_segment_reads(seqdata_filename, *a) for a in gp]
     counts = pd.concat(counts, ignore_index=True)
 
+    # Sort on index to return dataframe in original order
+    counts.sort_index(inplace=True)
+
     return counts
 
 
