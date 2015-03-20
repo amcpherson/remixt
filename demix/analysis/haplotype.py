@@ -199,16 +199,24 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
     haps.to_csv(haps_filename, sep='\t', index=False)
 
 
-def count_allele_reads(seqdata_filename, haps_filename, chromosome, segments):
+def count_allele_reads(seqdata_filename, haps, chromosome, segments):
     """ Count reads for each allele of haplotype blocks for a given chromosome
 
     Args:
         seqdata_filename (str): input sequence data file
-        haps_filename (str): input haplotype data file
-        segments_filename (str): input genomic segments
+        haps (pandas.DataFrame): input haplotype data
         chromosome (str): id of chromosome for which counts will be calculated
+        segments (pandas.DataFrame): input genomic segments
 
-    Input segments should have columns 'start', 'end'.  The table should be sorted by 'start'.
+    Input haps should have the following columns:
+
+        'chromosome': het snp chromosome
+        'position': het snp position
+        'allele': binary indicator for reference (0) vs alternate (1) allele
+        'hap_label': label of the haplotype block
+        'allele_id': binary indicator of the haplotype allele
+
+    Input segments should have columns 'start', 'end'.
 
     The output allele counts table will contain read counts for haplotype blocks within each segment.
 
@@ -221,8 +229,7 @@ def count_allele_reads(seqdata_filename, haps_filename, chromosome, segments):
 
     """
 
-    # Read haplotype block data for selected chromosome
-    haps = pd.read_csv(haps_filename, sep='\t', converters={'chromosome':str})
+    # Select haps for given chromosome
     haps = haps[haps['chromosome'] == chromosome]
 
     # Merge haplotype information into read alleles table
@@ -238,6 +245,9 @@ def count_allele_reads(seqdata_filename, haps_filename, chromosome, segments):
 
     # Arbitrarily assign a haplotype/allele label to each read
     alleles.drop_duplicates('fragment_id', inplace=True)
+
+    # Sort in preparation for search, reindex to allow for subsequent merge
+    segments = segments.sort('start').reset_index(drop=True)
 
     # Annotate segment for start and end of each read
     alleles.sort('start', inplace=True)
@@ -300,14 +310,14 @@ def create_allele_counts(segments, seqdata_filename, haps_filename):
 
     """
 
-    # Sort in preparation for search
-    segments.sort(['chromosome', 'start'], inplace=True)
+    # Read haplotype block data
+    haps = pd.read_csv(haps_filename, sep='\t', converters={'chromosome':str})
 
-    # Count separately for each chromosome, ensuring order is preserved for groups
-    gp = segments.groupby('chromosome', sort=False)
+    # Count separately for each chromosome
+    gp = segments.groupby('chromosome')
 
     # Table of allele counts, calculated for each group
-    counts = [count_allele_reads(seqdata_filename, haps_filename, *a) for a in gp]
+    counts = [count_allele_reads(seqdata_filename, haps, chrom, segs.copy()) for chrom, segs in gp]
     counts = pd.concat(counts, ignore_index=True)
 
     return counts
