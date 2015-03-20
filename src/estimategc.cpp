@@ -56,76 +56,29 @@ private:
 	vector<double> mCurveData;
 };
 
-struct RegionCounts
+struct SegmentCounts
 {
-	string id;
-	string chromosome[2];
-	int strand[2];
-	int position[2];
-	int count;
+	string chromosome;
+	int start;
+	int end;
 };
 
-void BuildIntervalSeqData(const RegionCounts& regionCounts, const Sequences& seqData, int fragmentLength, vector<uint8_t>& regionSeqData)
+void BuildIntervalSeqData(const SegmentCounts& segmentCounts, const Sequences& seqData, int fragmentLength, vector<uint8_t>& segmentSeqData)
 {
-	int start = regionCounts.position[0] + 1;
-	int end = regionCounts.position[1] - 1;
+	int start = segmentCounts.start + 1;
+	int end = segmentCounts.end - 1;
 	
 	if (start > end)
 	{
 		return;
 	}
 	
-	seqData.GetWithDefault(regionCounts.chromosome[0], start, end, 0, regionSeqData);
+	seqData.GetWithDefault(segmentCounts.chromosome, start, end, 0, segmentSeqData);
 }
 
-void BuildReferenceSeqData(const RegionCounts& regionCounts, const Sequences& seqData, int fragmentLength, vector<uint8_t>& regionSeqData)
+int GCIndicator(char nt)
 {
-	int adjacentLength = max(0, 2*fragmentLength - (regionCounts.position[1] - regionCounts.position[0])) / 2;
-	int start = regionCounts.position[0] - adjacentLength + 1;
-	int end = regionCounts.position[1] + adjacentLength - 1;
-	
-	if (start > end)
-	{
-		return;
-	}
-	
-	seqData.GetWithDefault(regionCounts.chromosome[0], start, end, 0, regionSeqData);
-}
-
-void BuildVariantSeqData(const RegionCounts& regionCounts, const Sequences& seqData, int fragmentLength, vector<uint8_t>& regionSeqData)
-{
-	for (int variantEnd = 0; variantEnd <= 1; variantEnd++)
-	{
-		int start = regionCounts.position[variantEnd] - fragmentLength + 1;
-		int end = regionCounts.position[variantEnd];
-		
-		if (regionCounts.position[variantEnd] == MinusStrand)
-		{
-			start = regionCounts.position[variantEnd];
-			end = regionCounts.position[variantEnd] + fragmentLength - 1;
-		}
-		
-		if (start > end)
-		{
-			continue;
-		}
-		
-		vector<uint8_t> variantEndMappability;
-		seqData.GetWithDefault(regionCounts.chromosome[0], start, end, 0, variantEndMappability);
-		
-		if ((variantEnd == 0 && regionCounts.position[variantEnd] == MinusStrand) ||
-			(variantEnd == 1 && regionCounts.position[variantEnd] == PlusStrand))
-		{
-			reverse(variantEndMappability.begin(), variantEndMappability.end());
-		}
-		
-		regionSeqData.insert(regionSeqData.begin(), variantEndMappability.begin(), variantEndMappability.end());
-	}
-}
-
-double GCIndicator(char nt)
-{
-	return (nt == 'G' || nt == 'g' || nt == 'C' || nt == 'c') ? 1.0 : 0.0;
+	return (nt == 'G' || nt == 'g' || nt == 'C' || nt == 'c') ? 1 : 0;
 }
 
 struct PairedMappability
@@ -170,7 +123,7 @@ int main(int argc, char* argv[])
 	double fragmentMean;
 	double fragmentStdDev;
 	int positionOffset;
-	string regionCountsFilename;
+	string segmentCountsFilename;
 	string genomeFastaFilename;
 	string mappabilityFilename;
 	bool intervalType;
@@ -185,7 +138,7 @@ int main(int argc, char* argv[])
 		TCLAP::ValueArg<double> fragmentMeanArg("u","ufragment","Fragment Length Mean",true,0,"float",cmd);
 		TCLAP::ValueArg<double> fragmentStdDevArg("s","sfragment","Fragment Length StdDev",true,0,"float",cmd);
 		TCLAP::ValueArg<int> positionOffsetArg("o","offset","Position Offset for GC",true,0,"integer",cmd);
-		TCLAP::ValueArg<string> regionCountsFilenameArg("c","counts","Region Counts Filename",true,"","string",cmd);
+		TCLAP::ValueArg<string> segmentCountsFilenameArg("c","counts","Region Counts Filename",true,"","string",cmd);
 		TCLAP::ValueArg<string> genomeFastaFilenameArg("g","genome","Genome Fasta",true,"","string",cmd);
 		TCLAP::ValueArg<string> mappabilityFilenameArg("m","map","Mappability BedGraph Filename",true,"","string",cmd);
 		
@@ -206,7 +159,7 @@ int main(int argc, char* argv[])
 		fragmentMean = fragmentMeanArg.getValue();
 		fragmentStdDev = fragmentStdDevArg.getValue();
 		positionOffset = positionOffsetArg.getValue();
-		regionCountsFilename = regionCountsFilenameArg.getValue();
+		segmentCountsFilename = segmentCountsFilenameArg.getValue();
 		genomeFastaFilename = genomeFastaFilenameArg.getValue();
 		mappabilityFilename = mappabilityFilenameArg.getValue();
 		intervalType = intervalTypeArg.getValue();
@@ -236,51 +189,47 @@ int main(int argc, char* argv[])
 	Sequences mappability;
 	mappability.ReadMappabilityBedGraph(mappabilityFilename);
 	
-	ifstream regionCountsFile(regionCountsFilename.c_str());
-	CheckFile(regionCountsFile, regionCountsFilename);
+	ifstream segmentCountsFile(segmentCountsFilename.c_str());
+	CheckFile(segmentCountsFile, segmentCountsFilename);
 	
 	PairedMappability pairedMappability(fragmentMean, fragmentStdDev, alignLength);
+
+	cout << "chromosome\tstart\tend\treadcount\tlength" << endl;
 	
 	vector<string> fields;
-	int line = 1;
-	while (ReadTSV(regionCountsFile, fields))
+	int line = 0;
+	while (ReadTSV(segmentCountsFile, fields))
 	{
-		if (fields.size() < 8)
+		line++;
+
+		if (line == 1)
+		{
+			if (fields[0] != "chromosome" || fields[1] != "start" || fields[2] != "end" || fields[3] != "readcount")
+			{
+				cerr << "Error: Incorrect header" << endl;
+				exit(1);
+			}
+
+			continue;
+		}
+
+		if (fields.size() < 4)
 		{
 			cerr << "Error: line " << line << " has too few fields" << endl;
 			exit(1);
 		}
 		
-		RegionCounts regionCounts;
-		
-		regionCounts.id = fields[0];
-		
-		int fieldIdx = 1;
-		for (int regionEnd = 0; regionEnd <= 1; regionEnd++)
-		{
-			regionCounts.chromosome[regionEnd] = fields[fieldIdx++];
-			regionCounts.position[regionEnd] = SAFEPARSE(int, fields[fieldIdx++]);
-			regionCounts.strand[regionEnd] = (fields[fieldIdx++] == "+") ? PlusStrand : MinusStrand;
-		}
-		regionCounts.count = SAFEPARSE(int, fields[7]);
+		SegmentCounts segmentCounts;
+
+		segmentCounts.chromosome = fields[0];
+		segmentCounts.start = SAFEPARSE(int, fields[1]);
+		segmentCounts.end = SAFEPARSE(int, fields[2]);
 		
 		vector<uint8_t> regionSequence;
 		vector<uint8_t> regionMappability;
-		if (intervalType)
-		{
-			BuildIntervalSeqData(regionCounts, genome, fragmentLength, regionSequence);
-			BuildIntervalSeqData(regionCounts, mappability, fragmentLength, regionMappability);
-		}
-		else if (referenceType)
-		{
-			BuildReferenceSeqData(regionCounts, genome, fragmentLength, regionSequence);
-			BuildReferenceSeqData(regionCounts, mappability, fragmentLength, regionMappability);
-		}
-		else if (variantType)
-		{
-			BuildVariantSeqData(regionCounts, genome, fragmentLength, regionSequence);
-			BuildVariantSeqData(regionCounts, mappability, fragmentLength, regionMappability);
-		}
+
+		BuildIntervalSeqData(segmentCounts, genome, fragmentLength, regionSequence);
+		BuildIntervalSeqData(segmentCounts, mappability, fragmentLength, regionMappability);
 		
 		vector<int> gcIndicator;
 		for (int position = 0; position < regionSequence.size(); position++)
@@ -315,4 +264,5 @@ int main(int argc, char* argv[])
 		cout << adjustedLength << endl;
 	}
 }
+
 
