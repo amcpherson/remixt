@@ -133,21 +133,9 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
     chr_x_flag = ''
     if chromosome == 'X':
         chr_x_flag = '--chrX'
-
-    pypeliner.commandline.execute(
-        'shapeit',
-        '-M', genetic_map_filename,
-        '-R', hap_filename,
-        legend_filename,
-        config['sample_filename'],
-        '-G', temp_gen_filename,
-        temp_sample_filename,
-        '--output-graph',
-        hgraph_filename,
-        chr_x_flag,
-        '--no-mcmc',
-        '-L', hgraph_logs_prefix
-    )
+    pypeliner.commandline.execute('shapeit', '-M', genetic_map_filename, '-R', hap_filename, legend_filename, config['sample_filename'],
+                                  '-G', temp_gen_filename, temp_sample_filename, '--output-graph', hgraph_filename, chr_x_flag,
+                                  '--no-mcmc', '-L', hgraph_logs_prefix)
 
     # Run shapeit to sample from phased haplotype graph
     sample_template = os.path.join(temp_directory, 'sampled.{0}')
