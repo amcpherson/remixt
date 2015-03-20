@@ -197,15 +197,15 @@ def create_counts(segment_counts_filename, allele_counts_filename, segment_filen
 
     segment_counts = demix.analysis.segment.create_segment_counts(
         segments,
-        tumour_filename,
+        seqdata_filename,
     )
 
     segment_counts.to_csv(segment_counts_filename, sep='\t', index=False)
 
     allele_counts = demix.analysis.haplotype.create_allele_counts(
         segments,
-        tumour_filename,
-        haplotype_filename,
+        seqdata_filename,
+        haps_filename,
     )
 
     allele_counts.to_csv(allele_counts_filename, sep='\t', index=False)
