@@ -103,29 +103,24 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
 
     infer_snp_genotype(snp_counts_df, config['sequencing_base_call_error'], config['het_snp_call_threshold'])
 
+    # Remove ambiguous positions
+    snp_counts_df = snp_counts_df[(snp_counts_df['AA'] == 1) | (snp_counts_df['AB'] == 1) | (snp_counts_df['BB'] == 1)]
+
     # Read snp positions from legend
     snps_df = pd.read_csv(legend_filename, compression='gzip', sep=' ', usecols=['position', 'a0', 'a1'])
 
-    # Create a list of excluded snps
-    excluded = snps_df.loc[
-        (snps_df.duplicated(subset=['position'])) &
-        (~snps_df['a0'].isin(['A', 'C', 'T', 'G'])) &
-        (~snps_df['a1'].isin(['A', 'C', 'T', 'G'])),
-        ['position']
-    ]
-    temp_excluded_filename = os.path.join(temp_directory, 'snps.excluded')
-    excluded.to_csv(temp_excluded_filename, header=False, index=False)
+    # Remove indels
+    snps_df = snps_df[(snps_df['a0'].isin(['A', 'C', 'T', 'G'])) & (snps_df['a1'].isin(['A', 'C', 'T', 'G']))]
+
+    # Merge data specific inferred genotype
+    snps_df = snps_df.merge(snp_counts_df[['AA', 'AB', 'BB']], left_on='position', right_index=True, how='inner', sort=False)
 
     # Create genotype file required by shapeit
-    snps_df = snps_df.merge(snp_counts_df[['AA', 'AB', 'BB']], left_on='position', right_index=True, how='left')
-
-    for genotype in ('AA', 'AB', 'BB'):
-        snps_df[genotype] = snps_df[genotype].fillna(0).astype(int)
     snps_df['chr'] = chromosome
     snps_df['chr_pos'] = snps_df['chr'].astype(str) + ':' + snps_df['position'].astype(str)
 
     temp_gen_filename = os.path.join(temp_directory, 'snps.gen')
-    snps_df.to_csv(temp_gen_filename, sep=' ', columns=['chr', 'chr_pos', 'position', 'ref', 'alt', 'AA', 'AB', 'BB'], index=False, header=False)
+    snps_df.to_csv(temp_gen_filename, sep=' ', columns=['chr', 'chr_pos', 'position', 'a0', 'a1', 'AA', 'AB', 'BB'], index=False, header=False)
 
     # Create single sample file required by shapeit
     temp_sample_filename = os.path.join(temp_directory, 'snps.sample')
@@ -146,7 +141,6 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
         legend_filename,
         config['sample_filename'],
         '-G', temp_gen_filename,
-        '--exclude-snp', temp_excluded_filename,
         temp_sample_filename,
         '--output-graph',
         hgraph_filename,
