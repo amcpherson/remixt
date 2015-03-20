@@ -86,7 +86,7 @@ if __name__ == '__main__':
         mgd.TempInputObj('sim_defs'),
         config)
 
-    pyp.sch.transform('simulate_normal_data', (), {'mem':16},
+    pyp.sch.transform('simulate_normal_data', (), {'mem':24},
         demix.simulations.pipeline.simulate_normal_data,
         None,
         mgd.TempOutputFile('normal'),
@@ -95,7 +95,7 @@ if __name__ == '__main__':
         mgd.TempFile('normal_tmp'),
         mgd.TempInputObj('sim_defs'))
 
-    pyp.sch.transform('simulate_tumour_data', (), {'mem':16},
+    pyp.sch.transform('simulate_tumour_data', (), {'mem':24},
         demix.simulations.pipeline.simulate_tumour_data,
         None,
         mgd.TempOutputFile('tumour'),
@@ -133,7 +133,7 @@ if __name__ == '__main__':
         mgd.TempOutputFile('haps.tsv', 'bychromosome'),
         mgd.TempInputFile('normal'),
         mgd.InputInstance('bychromosome'),
-        mgd.TempFile('haplotyping'),
+        mgd.TempFile('haplotyping', 'bychromosome'),
         config)
 
     pyp.sch.transform('merge_haps', (), {'mem':16},
