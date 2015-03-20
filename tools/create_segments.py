@@ -43,6 +43,10 @@ def create_segments(segment_filename, breakpoint_filename, segment_length, chrom
         segments.append(chrom_segments)
     segments = pd.concat(segments, ignore_index=True)
 
+    # Sort segments by placement in chromosome list, and position
+    segments = segments.merge(pd.DataFrame(list(enumerate(chromosomes)), columns=['chromosome_idx', 'chromosome']))
+    segments.sort(['chromosome_idx', 'start'], inplace=True)
+
     segments.to_csv(segment_filename, sep='\t', index=False, columns=['chromosome', 'start', 'end'])
 
 
