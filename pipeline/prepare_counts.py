@@ -152,7 +152,7 @@ if __name__ == '__main__':
         prepare_counts.prepare_counts,
         None,
         mgd.TempInputFile('segment_counts_lengths.tsv', 'bytumour'),
-        mgd.TempInputFile('phased_allele_counts.tsv', 'bytumour2'),
+        mgd.TempInputFile('phased_allele_counts.tsv', 'bytumour'),
         mgd.OutputFile('count_file', 'bytumour', fnames=count_fnames),
     )
 
@@ -219,7 +219,7 @@ def phase_segments(allele_counts_filenames, phased_allele_counts_filename_callba
     for allele_counts_filename in allele_counts_filenames.itervalues():
         allele_count_tables.append(pd.read_csv(allele_counts_filename, sep='\t', converters={'chromosome':str}))
 
-    phased_allele_counts_tables = demix.analysis.haplotype.phase_segments(allele_count_tables)
+    phased_allele_counts_tables = demix.analysis.haplotype.phase_segments(*allele_count_tables)
 
     for tumour_id, phased_allele_counts in zip(tumour_ids, phased_allele_counts_tables):
         phased_allele_counts_filename = phased_allele_counts_filename_callback(tumour_id)
