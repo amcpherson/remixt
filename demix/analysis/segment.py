@@ -15,7 +15,7 @@ def count_segment_reads(seqdata_filename, chromosome, segments):
     Returns:
         pandas.DataFrame: output segment data
 
-    Input segments should have columns 'start', 'end'.  The table should be sorted by 'start'.
+    Input segments should have columns 'start', 'end'.
 
     The output segment counts will be in TSV format with an additional 'readcount' column
     for the number of counts per segment.
@@ -27,12 +27,16 @@ def count_segment_reads(seqdata_filename, chromosome, segments):
         
     # Sort in preparation for search
     reads.sort('start', inplace=True)
-
+    segments.sort('start', inplace=True)
+    
      # Count segment reads
     segments['readcount'] = demix.segalg.contained_counts(
         segments[['start', 'end']].values,
         reads[['start', 'end']].values
     )
+
+    # Sort on index to return dataframe in original order
+    segments.sort_index(inplace=True)
 
     return segments
 
@@ -54,15 +58,12 @@ def create_segment_counts(segments, seqdata_filename):
 
     """
 
-    # Sort in preparation for search
-    segments.sort(['chromosome', 'start'], inplace=True)
-
     # Count separately for each chromosome, ensuring order is preserved for groups
-    gp = segments.groupby('chromosome', sort=False)
+    gp = segments.groupby('chromosome')
 
     # Table of read counts, calculated for each group
-    counts = [count_segment_reads(seqdata_filename, *a) for a in gp]
-    counts = pd.concat(counts, ignore_index=True)
+    counts = [count_segment_reads(seqdata_filename, chrom, segs.copy()) for chrom, segs in gp]
+    counts = pd.concat(counts)
 
     # Sort on index to return dataframe in original order
     counts.sort_index(inplace=True)
