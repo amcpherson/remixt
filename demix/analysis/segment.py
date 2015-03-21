@@ -99,6 +99,9 @@ def create_segment_allele_counts(segment_data, allele_data):
     # Merge haplotype blocks contained within the same segment
     allele_data = allele_data.groupby(level=[0, 1, 2])[['allele_a_readcount', 'allele_b_readcount']].sum()
 
+    # Reindex and fill with 0
+    allele_data = allele_data.reindex(segment_data.set_index(['chromosome', 'start', 'end']).index, fill_value=0)
+
     # Calculate major and minor readcounts, and relationship to allele a/b
     allele_data['major_readcount'] = allele_data[['allele_a_readcount', 'allele_b_readcount']].apply(max, axis=1)
     allele_data['minor_readcount'] = allele_data[['allele_a_readcount', 'allele_b_readcount']].apply(min, axis=1)
