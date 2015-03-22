@@ -135,8 +135,17 @@ class Writer(object):
         """
 
         gzipped = dict()
+
         for chrom, filename in filenames.iteritems():
+
+            try:
+                os.remove(filename + '.gz')
+            except OSError as e:
+                if e.errno != 2:
+                    raise e
+
             subprocess.check_call(['gzip', filename])
+
             gzipped[chrom] = filename + '.gz'
 
         return gzipped
