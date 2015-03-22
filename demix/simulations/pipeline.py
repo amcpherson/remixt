@@ -111,14 +111,12 @@ def simulate_experiment(experiment_filename, mixture_filename, params):
         pickle.dump(exp, experiment_file)
 
 
-def simulate_germline_alleles(germline_alleles_filename, params, config):
+def simulate_germline_alleles(germline_alleles_filename, seed, chromosomes, config):
 
-    chromosomes = params['chromosomes']
-    
     haplotypes_template = config['haplotypes_template']
     legend_template = config['legend_template']
 
-    np.random.seed(params['random_seed'])
+    np.random.seed(seed)
 
     alleles_table = demix.simulations.haplotype.create_sim_alleles(haplotypes_template, legend_template, chromosomes)
 
