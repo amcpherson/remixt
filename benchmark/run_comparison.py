@@ -159,10 +159,16 @@ if __name__ == '__main__':
 
     tool_axis = mixture_axis + ('bytool',)
 
-    pyp.sch.transform('create_tool_analyses', mixture_axis, {'local':True},
-        run_comparison.create_tool_analysis,
-        mgd.TempOutputObj('tool_analysis', *tool_axis),
+    pyp.sch.transform('create_tools', mixture_axis, {'local':True},
+        run_inference_read_sim.create_tools,
+        mgd.TempOutputObj('tool', *tool_axis),
         args['install_dir'],
+    )
+
+    pyp.sch.transform('create_analysis', tool_axis, {'local':True},
+        run_inference_read_sim.create_analysis,
+        mgd.TempOutputObj('tool_analysis', *tool_axis),
+        mgd.TempInputObj('tool', *tool_axis),
         mgd.TempFile('tool_tmp', *tool_axis),
     )
 
@@ -240,14 +246,18 @@ else:
         return sim_defs['chromosomes']
 
 
-    def create_tool_analysis(install_directory, analysis_directory):
+    def create_tools(install_directory):
 
-        tool_analyses = dict()
+        tools = dict()
         for tool_name, Tool in demix.wrappers.catalog.iteritems():
-            tool = Tool(os.path.join(install_directory, tool_name))
-            tool_analyses[tool_name] = tool.create_analysis(analysis_directory)
+            tools[tool_name] = Tool(os.path.join(install_directory, tool_name))
 
-        return tool_analyses
+        return tools
+
+
+    def create_analysis(tool, analysis_directory):
+
+        return tool.create_analysis(analysis_directory)
 
 
     def tool_prepare(tool_analysis, normal_filename, tumour_filename, segment_filename, perfect_segment_filename, breakpoint_filename, haps_filename):
