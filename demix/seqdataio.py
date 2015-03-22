@@ -3,6 +3,7 @@ import contextlib
 import tarfile
 import gzip
 import StringIO
+import subprocess
 import numpy as np
 import pandas as pd
 
@@ -112,7 +113,7 @@ class Writer(object):
                 self.fragment_id_offset[chromosome] = 0
 
             chrom_read_data = read_gb[chromosome]
-            chrom_allele_data = allele_gb[chromosome]
+            chrom_allele_data = allele_gb.get(chromosome, pd.DataFrame(columns=['position', 'fragment_id', 'is_alt']))
 
             with open(self.get_reads_filename(chromosome), 'ab') as f:
                 write_read_data(f, chrom_read_data)
