@@ -75,7 +75,7 @@ def interval_position_overlap(intervals, positions):
 
     Args:
         intervals (numpy.array): start and end of intervals with shape (N,2) for N intervals
-        positions (numpy.array): positions, length M
+        positions (numpy.array): positions, length M, must be sorted
 
     Returns:
         numpy.array: interval index, length L (arbitrary)
@@ -107,7 +107,7 @@ def read_snp_overlap(data, snps, read_length):
 
     Args:
         data (pandas.DataFrame): fragments
-        snps (pandas.DataFrame): snp positions
+        snps (dict of pandas.DataFrame): snp positions by chromosome
         read_length (int): read length
 
     Returns:
@@ -116,7 +116,8 @@ def read_snp_overlap(data, snps, read_length):
     Input 'fragments' dataframe has columns 'chromosome', 'fragment_id', 'allele', 'start', 'end'.
     The 'fragment_id' should be unique per chromosome.
 
-    Input 'snps' dataframe has columns 'chromosome', 'position', 'is_alt_0', 'is_alt_1'.
+    Input 'snps' dict is keyed by 'chromosome', values are dataframes with columns 'position',
+    'is_alt_0', 'is_alt_1', sorted by 'position', 0..N-1 indexed
 
     Output dataframe has columns 'chromosome', 'position', 'fragment_id', 'is_alt'.
     The 'fragment_id' column is a foreign key indexing entries in the input data dataframe.
@@ -131,9 +132,8 @@ def read_snp_overlap(data, snps, read_length):
 
         chrom_fragments = chrom_fragments.reset_index(drop=True)
 
-        # Postion data, must be sorted
-        snp_cols = ['position', 'is_alt_0', 'is_alt_1']
-        chrom_snps = snps.loc[snps['chromosome'] == chromosome, snp_cols].reset_index(drop=True).sort('position')
+        # Postion data
+        chrom_snps = snps[chromosome]
 
         # Overlap snp positions and fragment intervals
         fragment_idx, snp_idx = interval_position_overlap(
@@ -220,6 +220,11 @@ def simulate_mixture_read_data(read_data_filename, genomes, read_depths, snps, t
     Input 'snps' dataframe has columns 'chromosome', 'position', 'is_alt_0', 'is_alt_1'.
 
     """
+
+    snps = dict(list(snps.groupby('chromosome')))
+    for chromosome, chrom_snps in snps.iteritems():
+        chrom_snps.reset_index(drop=True, inplace=True)
+        chrom_snps.drop('chromosome', axis=1, inplace=True)
 
     with demix.seqdataio.Writer(read_data_filename, temp_dir) as w:
 

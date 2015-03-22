@@ -32,7 +32,7 @@ def write_read_data(reads_file, read_data):
     raw_data.tofile(reads_file)
 
 
-def write_allele_data(alleles_file, allele_data):
+def write_allele_data(alleles_file, allele_data, fragment_id_offset=0):
     """ Write allele data for a specific chromosome to a file
 
     Args:
@@ -45,7 +45,7 @@ def write_allele_data(alleles_file, allele_data):
 
     raw_data = np.zeros(len(allele_data.index), dtype=allele_data_dtype)
 
-    raw_data['fragment_id'] = allele_data['fragment_id']
+    raw_data['fragment_id'] = allele_data['fragment_id'] + fragment_id_offset
     raw_data['position'] = allele_data['position']
     raw_data['is_alt'] = allele_data['is_alt']
 
@@ -93,7 +93,10 @@ class Writer(object):
 
         """
 
-        for chromosome in read_data['chromosome'].unique():
+        read_gb = dict(list(read_data.groupby('chromosome', sort=False)))
+        allele_gb = dict(list(allele_data.groupby('chromosome', sort=False)))
+
+        for chromosome in read_gb.keys():
 
             if chromosome not in self.fragment_id_offset:
 
@@ -108,24 +111,43 @@ class Writer(object):
 
                 self.fragment_id_offset[chromosome] = 0
 
-            chrom_read_data = read_data[read_data['chromosome'] == chromosome]
-            chrom_allele_data = allele_data[allele_data['chromosome'] == chromosome].copy()
-
-            # Remap fragment ids
-            chrom_allele_data['fragment_id'] += self.fragment_id_offset[chromosome]
+            chrom_read_data = read_gb[chromosome]
+            chrom_allele_data = allele_gb[chromosome]
 
             with open(self.get_reads_filename(chromosome), 'ab') as f:
                 write_read_data(f, chrom_read_data)
 
             with open(self.get_alleles_filename(chromosome), 'ab') as f:
-                write_allele_data(f, chrom_allele_data)
+                write_allele_data(f, chrom_allele_data, self.fragment_id_offset[chromosome])
 
             self.fragment_id_offset[chromosome] += len(chrom_read_data.index)
 
-    def __enter__(self):
-        return self
+    def gzip_files(self, filenames):
+        """ Gzip files
 
-    def __exit__(self, exc_type, exc_value, traceback):
+        Args:
+            filenames (dict): files to gzip, keyed by chromosome
+
+        Returns: 
+            dict: gzipped files, keyed by chromosome
+
+        """
+
+        gzipped = dict()
+        for chrom, filename in filenames.iteritems():
+            subprocess.check_call(['gzip', filename])
+            gzipped[chrom] = filename + '.gz'
+
+        return gzipped
+
+    def close(self):
+        """ Write final seqdata
+        
+        """
+
+        self.reads_filenames = self.gzip_files(self.reads_filenames)
+        self.alleles_filenames = self.gzip_files(self.alleles_filenames)
+
         create_seqdata(self.seqdata_filename, self.reads_filenames, self.alleles_filenames)
 
 
@@ -215,7 +237,7 @@ def read_seq_data(seqdata_filename, record_type, chromosome=None, num_rows=None)
 
     """
 
-    with tarfile.open(seqdata_filename, 'r:gz') as tar:
+    with tarfile.open(seqdata_filename, 'r') as tar:
         
         for tarinfo in tar:
 
@@ -287,7 +309,7 @@ def read_chromosomes(seqdata_filename):
 
     """
 
-    with tarfile.open(seqdata_filename, 'r:gz') as tar:
+    with tarfile.open(seqdata_filename, 'r') as tar:
 
         chromosomes = set()
         for tarinfo in tar:
@@ -296,18 +318,17 @@ def read_chromosomes(seqdata_filename):
         return chromosomes
 
 
-def create_seqdata(seqdata_filename, reads_filenames, alleles_filenames, gzipped=False):
+def create_seqdata(seqdata_filename, reads_filenames, alleles_filenames):
     """ Create a seqdata tar object
 
     Args:
         seqdata_filename (str): path to output seqdata tar file
         reads_filenames (dict): individual seqdata read tables keyed by chromosome name
         alleles_filenames (dict): individual seqdata allele tables keyed by chromosome name
-        gzipped (bool): the individual files are gzipped
 
     """
 
-    with tarfile.open(seqdata_filename, 'w:gz') as tar:
+    with tarfile.open(seqdata_filename, 'w') as tar:
 
         prefixes = ('reads.', 'alleles.')
         filenames = (reads_filenames, alleles_filenames)
@@ -317,18 +338,6 @@ def create_seqdata(seqdata_filename, reads_filenames, alleles_filenames, gzipped
             for chromosome, filename in chrom_filenames.iteritems():
 
                 name = prefix+chromosome
-
-                if gzipped:
-
-                    with gzip.open(filename, 'rb') as f:
-                        data = StringIO.StringIO(f.read())
-                    
-                    tarinfo = tarfile.TarInfo(name=name)
-                    tarinfo.size = len(data.buf)
-                    tar.addfile(tarinfo=tarinfo, fileobj=data)                   
-
-                else:
-
-                    tar.add(filename, arcname=name)
+                tar.add(filename, arcname=name)
 
 
