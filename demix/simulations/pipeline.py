@@ -123,10 +123,10 @@ def simulate_germline_alleles(germline_alleles_filename, seed, chromosomes, conf
     alleles_table.to_csv(germline_alleles_filename, sep='\t', index=False, header=True)
 
 
-def simulate_normal_data(read_data_filename, mixture_filename, germline_alleles_filename, temp_dir, params):
+def simulate_normal_data(read_data_filename, genome_filename, germline_alleles_filename, temp_dir, params):
 
-    with open(mixture_filename, 'r') as mixture_file:
-        gm = pickle.load(mixture_file)
+    with open(genome_filename, 'r') as genome_file:
+        gc = pickle.load(genome_file)
 
     germline_alleles = pd.read_csv(germline_alleles_filename, sep='\t', usecols=['chromosome', 'position', 'is_alt_0', 'is_alt_1'], dtype={'chromosome':str, 'position':np.uint32, 'is_alt_0':np.uint8, 'is_alt_1':np.uint8})
 
@@ -134,7 +134,7 @@ def simulate_normal_data(read_data_filename, mixture_filename, germline_alleles_
 
     demix.simulations.seqread.simulate_mixture_read_data(
         read_data_filename,
-        [gm.genome_collection.genomes[0]],
+        [gc.genomes[0]],
         [params['h_total']],
         germline_alleles,
         temp_dir,
