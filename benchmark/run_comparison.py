@@ -21,7 +21,7 @@ default_config_filename = os.path.join(demix_directory, 'defaultconfig.py')
 
 if __name__ == '__main__':
 
-    import run_inference_read_sim
+    import run_comparison
 
     argparser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
@@ -52,7 +52,7 @@ if __name__ == '__main__':
 
     config.update(args)
 
-    pyp = pypeliner.app.Pypeline([demix, run_inference_read_sim], config)
+    pyp = pypeliner.app.Pypeline([demix, run_comparison], config)
 
 
     sim_params = dict()
@@ -67,7 +67,7 @@ if __name__ == '__main__':
 
     germline_axis = ('bygermline',)
 
-    pyp.sch.setobj(mgd.OutputChunks('germline_seed', *germline_axis), sim_params['germline_seeds'])
+    pyp.sch.setobj(mgd.TempOutputObj('germline_seed', *germline_axis), sim_params['germline_seeds'])
     pyp.sch.setobj(mgd.TempOutputObj('bychromosome'), sim_params['chromosomes'])
 
     pyp.sch.transform('simulate_germline_alleles', germline_axis, {'mem':8},
@@ -86,7 +86,7 @@ if __name__ == '__main__':
 
     genome_axis = germline_axis + ('bygenome',)
 
-    pyp.sch.setobj(mgd.TempOutputObj('genome_params', *genome_axis), sim_params['genome_params'])
+    pyp.sch.setobj(mgd.TempOutputObj('genome_params', *genome_axis), sim_params['genome_params'], genome_axis[:-1])
 
     pyp.sch.transform('simulate_genomes', genome_axis, {'mem':4},
         run_comparison.simulate_genomes,
@@ -115,7 +115,7 @@ if __name__ == '__main__':
 
     mixture_axis = genome_axis + ('bymixture',)
 
-    pyp.sch.setobj(mgd.TempOutputObj('mixture_params', *genome_axis), sim_params['mixture_params'])
+    pyp.sch.setobj(mgd.TempOutputObj('mixture_params', *genome_axis), sim_params['mixture_params'], genome_axis[:-1])
 
     pyp.sch.transform('simulate_mixture', mixture_axis, {'mem':1},
         demix.simulations.pipeline.simulate_mixture,
@@ -138,7 +138,7 @@ if __name__ == '__main__':
 
     haps_axis = genome_axis + ('bychromosome',)
 
-    pyp.sch.setobj(mgd.OutputChunks('chromosomes', *genome_axis), sim_params['chromosomes'])
+    pyp.sch.setobj(mgd.OutputChunks('chromosomes', *haps_axis), sim_params['chromosomes'], haps_axis[:-1])
 
     pyp.sch.transform('infer_haps', haps_axis, {'mem':16},
         demix.analysis.haplotype.infer_haps,
@@ -160,7 +160,7 @@ if __name__ == '__main__':
     tool_axis = mixture_axis + ('bytool',)
 
     pyp.sch.transform('create_tool_analyses', mixture_axis, {'local':True},
-        run_inference_read_sim.create_tool_analysis,
+        run_comparison.create_tool_analysis,
         mgd.TempOutputObj('tool_analysis', *tool_axis),
         args['install_dir'],
         mgd.TempFile('tool_tmp', *tool_axis),
@@ -169,7 +169,7 @@ if __name__ == '__main__':
     init_axis = tool_axis + ('bytool',)
 
     pyp.sch.transform('tool_prepare', tool_axis, {'mem':8},
-        run_inference_read_sim.tool_prepare,
+        run_comparison.tool_prepare,
         mgd.TempOutputObj('init_idx', *init_axis),
         mgd.TempInputObj('tool_analysis', *tool_axis),
         mgd.TempInputFile('normal', *genome_axis),
@@ -181,14 +181,14 @@ if __name__ == '__main__':
     )
 
     pyp.sch.transform('tool_run', init_axis, {'mem':8},
-        run_inference_read_sim.tool_run,
+        run_comparison.tool_run,
         mgd.TempOutputObj('run_result', *init_axis),
         mgd.TempInputObj('tool_analysis', *tool_axis),
         mgd.TempInputObj('init_idx', *init_axis),
     )
 
     pyp.sch.transform('tool_report', tool_axis, {'mem':4},
-        run_inference_read_sim.tool_report,
+        run_comparison.tool_report,
         None,
         mgd.TempInputObj('tool_analysis', *tool_axis),
         mgd.TempInputObj('run_result', *init_axis),
@@ -197,7 +197,7 @@ if __name__ == '__main__':
     )
 
     pyp.sch.transform('tabulate_results', tool_axis, {'mem':1},
-        run_inference_read_sim.tabulate_results,
+        run_comparison.tabulate_results,
         None,
         mgd.OutputFile(args['results_table']),
         mgd.TempInputFile('cn.tsv', *tool_axis),
