@@ -252,11 +252,11 @@ def read_seq_data(seqdata_filename, record_type, chromosome=None, num_rows=None)
                 continue
 
             if rectype == 'reads':
-                for data in read_raw_read_data(tar.extractfile(tarinfo), num_rows=num_rows):
+                for data in read_raw_read_data(gzip.GzipFile(fileobj=tar.extractfile(tarinfo)), num_rows=num_rows):
                     yield data
 
             elif rectype == 'alleles':
-                for data in read_raw_allele_data(tar.extractfile(tarinfo), num_rows=num_rows):
+                for data in read_raw_allele_data(gzip.GzipFile(fileobj=tar.extractfile(tarinfo)), num_rows=num_rows):
                     yield data
 
 
