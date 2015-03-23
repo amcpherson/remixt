@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+import demix.segalg
 import demix.seqdataio
 
 
@@ -36,70 +37,6 @@ def simulate_fragment_intervals(genome_length, num_fragments, read_length, fragm
     length = length[~is_filtered]
 
     return start, length
-
-
-def vrange(starts, lengths):
-    """ Create concatenated ranges of integers for multiple start/length
-
-    Args:
-        starts (numpy.array): starts for each range
-        lengths (numpy.array): lengths for each range (same length as starts)
-
-    Returns:
-        numpy.array: concatenated ranges
-
-    See the following illustrative example:
-
-        starts = np.array([1, 3, 4, 6])
-        lengths = np.array([0, 2, 3, 0])
-
-        print vrange(starts, lengths)
-        >>> [3 4 4 5 6]
-
-    """
-    
-    # Repeat start position index length times and concatenate
-    cat_start = np.repeat(starts, lengths)
-
-    # Create group counter that resets for each start/length
-    cat_counter = np.arange(lengths.sum()) - np.repeat(lengths.cumsum() - lengths, lengths)
-
-    # Add group counter to group specific starts
-    cat_range = cat_start + cat_counter
-
-    return cat_range
-
-
-def interval_position_overlap(intervals, positions):
-    """ Map intervals to contained positions
-
-    Args:
-        intervals (numpy.array): start and end of intervals with shape (N,2) for N intervals
-        positions (numpy.array): positions, length M, must be sorted
-
-    Returns:
-        numpy.array: interval index, length L (arbitrary)
-        numpy.array: position index, length L (same as interval index)
-
-    Given a set of possibly overlapping intervals, create a mapping of positions that are contained
-    within those intervals.
-
-    """
-
-    # Search for start and end of each interval in list of positions
-    start_pos_idx = np.searchsorted(positions, intervals[:,0])
-    end_pos_idx = np.searchsorted(positions, intervals[:,1])
-
-    # Calculate number of positions for each segment
-    lengths = end_pos_idx - start_pos_idx
-
-    # Interval index for mapping
-    interval_idx = np.repeat(np.arange(len(lengths)), lengths)
-
-    # Position index for mapping 
-    position_idx = vrange(start_pos_idx, lengths)
-
-    return interval_idx, position_idx
 
 
 def segment_remap(segments, positions):
@@ -267,14 +204,14 @@ def simulate_mixture_read_data(read_data_filename, genomes, read_depths, snps, t
                 chrom_snps = snps[chromosome]
 
                 # Overlap snp positions and fragment intervals
-                fragment_idx, snp_idx = interval_position_overlap(
+                fragment_idx, snp_idx = demix.segalg.interval_position_overlap(
                     chrom_fragments[['start', 'end']].values,
                     chrom_snps['position'].values,
                 )
 
                 # Create fragment snp table
                 fragment_snps = pd.DataFrame({'snp_idx':snp_idx, 'fragment_id':fragment_idx})
-                fragment_snps = fragment_snps.merge(chrom_fragments, left_index='fragment_idx', right_index=True)
+                fragment_snps = fragment_snps.merge(chrom_fragments, left_on='fragment_id', right_index=True)
                 fragment_snps = fragment_snps.merge(chrom_snps, left_on='snp_idx', right_index=True)
 
                 # Keep only snps falling within reads

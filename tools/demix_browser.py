@@ -24,6 +24,7 @@ else:
     compression = None
 
 cnv = pd.read_csv(args.preds_filename, sep='\t', converters={'chromosome':str}, compression=compression)
+cnv.dropna(inplace=True)
 
 cnv = cnv.loc[(cnv['chromosome'].isin(chromosomes))]
 
@@ -193,7 +194,7 @@ class Picker(object):
 
             # Print the segment to the terminal
             cnv_region = cnv.iloc[event.ind[0]]
-            print 'selected: {0}:{1}-{2}'.format(cnv_region['chromosome'], int(cnv_region['start']), int(cnv_region['end']))
+            print 'selected: {0}:{1}-{2} {3} {4}'.format(cnv_region['chromosome'], int(cnv_region['start']), int(cnv_region['end']), cnv_region['major_raw'], cnv_region['minor_raw'])
 
             self.select_segment(event.ind)
 
