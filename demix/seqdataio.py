@@ -82,7 +82,7 @@ class Writer(object):
     def get_alleles_filename(self, chromosome):
         return os.path.join(self.temp_dir, 'alleles.{0}'.format(chromosome))
 
-    def write(self, read_data, allele_data):
+    def write(self, chromosome, read_data, allele_data):
         """ Write a chunk of reads and alleles data
 
         Args:
@@ -94,34 +94,26 @@ class Writer(object):
 
         """
 
-        read_gb = dict(list(read_data.groupby('chromosome', sort=False)))
-        allele_gb = dict(list(allele_data.groupby('chromosome', sort=False)))
+        if chromosome not in self.fragment_id_offset:
 
-        for chromosome in read_gb.keys():
+            with open(self.get_reads_filename(chromosome), 'w'):
+                pass
 
-            if chromosome not in self.fragment_id_offset:
+            with open(self.get_alleles_filename(chromosome), 'w'):
+                pass
 
-                with open(self.get_reads_filename(chromosome), 'w'):
-                    pass
+            self.reads_filenames[chromosome] = self.get_reads_filename(chromosome)
+            self.alleles_filenames[chromosome] = self.get_alleles_filename(chromosome)
 
-                with open(self.get_alleles_filename(chromosome), 'w'):
-                    pass
+            self.fragment_id_offset[chromosome] = 0
 
-                self.reads_filenames[chromosome] = self.get_reads_filename(chromosome)
-                self.alleles_filenames[chromosome] = self.get_alleles_filename(chromosome)
+        with open(self.get_reads_filename(chromosome), 'ab') as f:
+            write_read_data(f, read_data)
 
-                self.fragment_id_offset[chromosome] = 0
+        with open(self.get_alleles_filename(chromosome), 'ab') as f:
+            write_allele_data(f, allele_data, self.fragment_id_offset[chromosome])
 
-            chrom_read_data = read_gb[chromosome]
-            chrom_allele_data = allele_gb.get(chromosome, pd.DataFrame(columns=['position', 'fragment_id', 'is_alt']))
-
-            with open(self.get_reads_filename(chromosome), 'ab') as f:
-                write_read_data(f, chrom_read_data)
-
-            with open(self.get_alleles_filename(chromosome), 'ab') as f:
-                write_allele_data(f, chrom_allele_data, self.fragment_id_offset[chromosome])
-
-            self.fragment_id_offset[chromosome] += len(chrom_read_data.index)
+        self.fragment_id_offset[chromosome] += len(read_data.index)
 
     def gzip_files(self, filenames):
         """ Gzip files

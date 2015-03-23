@@ -102,70 +102,6 @@ def interval_position_overlap(intervals, positions):
     return interval_idx, position_idx
 
 
-def read_snp_overlap(data, snps, read_length):
-    """ Calculate read snp overlap table
-
-    Args:
-        data (pandas.DataFrame): fragments
-        snps (dict of pandas.DataFrame): snp positions by chromosome
-        read_length (int): read length
-
-    Returns:
-        pandas.DataFrame
-
-    Input 'fragments' dataframe has columns 'chromosome', 'fragment_id', 'allele', 'start', 'end'.
-    The 'fragment_id' should be unique per chromosome.
-
-    Input 'snps' dict is keyed by 'chromosome', values are dataframes with columns 'position',
-    'is_alt_0', 'is_alt_1', sorted by 'position', 0..N-1 indexed
-
-    Output dataframe has columns 'chromosome', 'position', 'fragment_id', 'is_alt'.
-    The 'fragment_id' column is a foreign key indexing entries in the input data dataframe.
-
-    No sorting assumptions are made.
-
-    """
-
-    allele_data = list()
-
-    for chromosome, chrom_fragments in data.groupby('chromosome'):
-
-        chrom_fragments = chrom_fragments.reset_index(drop=True)
-
-        # Postion data
-        chrom_snps = snps[chromosome]
-
-        # Overlap snp positions and fragment intervals
-        fragment_idx, snp_idx = interval_position_overlap(
-            chrom_fragments[['start', 'end']].values,
-            chrom_snps['position'].values,
-        )
-
-        # Create fragment snp table
-        fragment_snps = pd.DataFrame({'snp_idx':snp_idx}, index=fragment_idx)
-        fragment_snps = fragment_snps.merge(chrom_fragments, left_index=True, right_index=True)
-        fragment_snps = fragment_snps.merge(chrom_snps, left_on='snp_idx', right_index=True)
-
-        # Keep only snps falling within reads
-        fragment_snps = fragment_snps[
-            (fragment_snps['position'] < fragment_snps['start'] + read_length) |
-            (fragment_snps['position'] >= fragment_snps['end'] - read_length)
-        ]
-
-        # Calculate whether the snp is the alternate based on the allele of the fragment and the genotype
-        fragment_snps['is_alt'] = np.where(
-            fragment_snps['allele'] == 0,
-            fragment_snps['is_alt_0'],
-            fragment_snps['is_alt_1'],
-        )
-
-        allele_data.append(fragment_snps[['chromosome', 'position', 'fragment_id', 'is_alt']])
-
-    allele_data = pd.concat(allele_data, ignore_index=True)
-
-    return allele_data
-
-
 def segment_remap(segments, positions):
     """ Remap positions in a set of ordered segments
 
@@ -286,64 +222,86 @@ def simulate_mixture_read_data(read_data_filename, genomes, read_depths, snps, t
                 params['fragment_mean'],
                 params['fragment_stddev'],
             )
-
-            # Remapped fragments
-            fragments_remapped = np.zeros((fragment_start.shape[0], 2))
-
-            # Remap start to reference genome
-            segment_idx, fragments_remapped[:,0] = segment_remap(
-                segment_data[['start', 'end']].values,
-                fragment_start,
-            )
+            fragment_data = pd.DataFrame({'start':fragment_start, 'length':fragment_length})
 
             # Remap end to reference genome
-            end_segment_idx, fragments_remapped[:,1] = segment_remap(
+            fragment_data['segment_idx'], fragment_data['end'] = segment_remap(
                 segment_data[['start', 'end']].values,
-                fragment_start + fragment_length,
+                fragment_data['start'] + fragment_data['length'],
+            )
+
+            # Remap start to reference genome, overwrite start
+            fragment_data['segment_idx'], fragment_data['start'] = segment_remap(
+                segment_data[['start', 'end']].values,
+                fragment_data['start'],
             )
 
             # Filter discordant
-            is_concordant = (fragments_remapped[:,1] - fragments_remapped[:,0]) == fragment_length
-            fragments_remapped = fragments_remapped[is_concordant,:]
-            segment_idx = segment_idx[is_concordant]
+            fragment_data = fragment_data[(fragment_data['end'] - fragment_data['start']) == fragment_data['length']]
 
             # Negate and flip start and end for reversed fragments
-            fragments_remapped = np.absolute(fragments_remapped)
-            fragments_remapped.sort(axis=1)
-
-            # Fragment data mapped to concatenated reference genome
-            remapped_data = pd.DataFrame({'start':fragments_remapped[:,0], 'end':fragments_remapped[:,1]}, index=segment_idx)
-
-            # Merge chromosome, allele
-            remapped_data = remapped_data.merge(
-                segment_data[['chromosome', 'allele']],
-                left_index=True,
-                right_index=True,
+            fragment_data['start'] = np.where(
+                fragment_data['start'] < 0,
+                -fragment_data['start'] - fragment_data['length'],
+                fragment_data['start'],
             )
+            fragment_data['end'] = fragment_data['start'] + fragment_data['length']
+            fragment_data.drop('length', axis=1, inplace=True)
 
-            # Sort by chromosome
-            remapped_data.sort('chromosome', inplace=True)
-            remapped_data.reset_index(drop=True, inplace=True)
+            # Segment merge/groupby operations require segment_idx index
+            fragment_data.set_index('segment_idx', inplace=True)
 
-            # Add fragment id, unique per chromosome
-            counts = remapped_data.groupby('chromosome', sort=False).size().values
-            remapped_data['fragment_id'] = np.arange(counts.sum()) - np.repeat(counts.cumsum() - counts, counts)
+            # Add allele to fragment data table
+            fragment_data['allele'] = segment_data['allele'].reindex(fragment_data.index)
 
-            # Create table of read pairs overlapping snp positions
-            allele_data = read_snp_overlap(remapped_data, snps, params['read_length'])
+            # Group by chromosome
+            fragment_data = dict(list(fragment_data.groupby(segment_data['chromosome'])))
 
-            # Random base calling errors at snp positions
-            base_call_error = np.random.choice(
-                [True, False],
-                size=len(allele_data.index),
-                p=[params['base_call_error'], 1. - params['base_call_error']]
-            )
-            allele_data['is_alt'] = np.where(base_call_error, 1-allele_data['is_alt'], allele_data['is_alt'])
+            # Overlap with SNPs and output per chromosome
+            for chromosome, chrom_fragments in fragment_data.iteritems():
 
-            # Write out a chunk of data
-            writer.write(remapped_data, allele_data)
+                # Reindex for subsequent index based merge
+                chrom_fragments.reset_index(drop=True, inplace=True)
 
-            num_fragments_created += len(remapped_data.index)
+                # Postion data
+                chrom_snps = snps[chromosome]
+
+                # Overlap snp positions and fragment intervals
+                fragment_idx, snp_idx = interval_position_overlap(
+                    chrom_fragments[['start', 'end']].values,
+                    chrom_snps['position'].values,
+                )
+
+                # Create fragment snp table
+                fragment_snps = pd.DataFrame({'snp_idx':snp_idx, 'fragment_id':fragment_idx})
+                fragment_snps = fragment_snps.merge(chrom_fragments, left_index='fragment_idx', right_index=True)
+                fragment_snps = fragment_snps.merge(chrom_snps, left_on='snp_idx', right_index=True)
+
+                # Keep only snps falling within reads
+                fragment_snps = fragment_snps[
+                    (fragment_snps['position'] < fragment_snps['start'] + params['read_length']) |
+                    (fragment_snps['position'] >= fragment_snps['end'] - params['read_length'])
+                ]
+
+                # Calculate whether the snp is the alternate based on the allele of the fragment and the genotype
+                fragment_snps['is_alt'] = np.where(
+                    fragment_snps['allele'] == 0,
+                    fragment_snps['is_alt_0'],
+                    fragment_snps['is_alt_1'],
+                )
+
+                # Random base calling errors at snp positions
+                base_call_error = np.random.choice(
+                    [True, False],
+                    size=len(fragment_snps.index),
+                    p=[params['base_call_error'], 1. - params['base_call_error']]
+                )
+                fragment_snps['is_alt'] = np.where(base_call_error, 1-fragment_snps['is_alt'], fragment_snps['is_alt'])
+
+                # Write out a chunk of data
+                writer.write(chromosome, chrom_fragments, fragment_snps)
+
+                num_fragments_created += len(chrom_fragments.index)
 
     writer.close()
 
