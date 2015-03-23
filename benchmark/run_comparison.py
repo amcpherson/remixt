@@ -54,7 +54,7 @@ if __name__ == '__main__':
 
     pyp = pypeliner.app.Pypeline([demix, run_comparison], config)
 
-    chromosomes = ['20']
+    chromosomes = [str(a) for a in xrange(1, 23)]
 
     defaults = {
         'h_total':0.1,
@@ -119,7 +119,7 @@ if __name__ == '__main__':
         mgd.TempInputObj('genome_params', *genome_axis),
     )
 
-    pyp.sch.transform('simulate_normal_data', genome_axis, {'mem':24},
+    pyp.sch.transform('simulate_normal_data', genome_axis, {'mem':16},
         demix.simulations.pipeline.simulate_normal_data,
         None,
         mgd.TempOutputFile('normal', *genome_axis),
@@ -147,7 +147,7 @@ if __name__ == '__main__':
         mgd.TempInputObj('mixture_params', *mixture_axis),
     )
 
-    pyp.sch.transform('simulate_tumour_data', mixture_axis, {'mem':24},
+    pyp.sch.transform('simulate_tumour_data', mixture_axis, {'mem':16},
         demix.simulations.pipeline.simulate_tumour_data,
         None,
         mgd.TempOutputFile('tumour', *mixture_axis),
