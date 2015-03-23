@@ -60,6 +60,7 @@ if __name__ == '__main__':
     for chromosome, length in demix.utils.read_chromosome_lengths(config['genome_fai']).iteritems():
         if chromosome not in chromosomes:
             continue
+        chromosome_lengths[chromosome] = length
 
     defaults = {
         'h_total':0.1,
