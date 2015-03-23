@@ -60,28 +60,28 @@ if __name__ == '__main__':
         'h_total':0.1,
         'N':1000,
         'M':3,
-        'fragment_mean' = 300.,
-        'fragment_stddev' = 30.,
-        'read_length' = 100,
-        'base_call_error' = 0.005,
-        'frac_normal' = 0.4,
+        'fragment_mean':300.,
+        'fragment_stddev':30.,
+        'read_length':100,
+        'base_call_error':0.005,
+        'frac_normal':0.4,
     }
 
     germline_params = defaults.copy()
-    germline_params['random_seed'] = range(10, 11)
-    germline_params = dict(enumerate([a.to_dict() for a in pd.DataFrame(germline_params)]))
+    germline_params['random_seed'] = range(10, 10+10)
+    germline_params = dict(enumerate([a.to_dict() for i, a in pd.DataFrame(germline_params).astype(object).iterrows()]))
 
     genome_params = defaults.copy()
     genome_params['random_seed'] = range(10, 10+4)
     genome_params['num_descendent_events'] = [10, 10, 20, 30]
     genome_params['proportion_subclonal'] = [0.15, 0.3, 0.45, 0.6]
-    genome_params = dict(enumerate([a.to_dict() for a in pd.DataFrame(genome_params)]))
+    genome_params = dict(enumerate([a.to_dict() for i, a in pd.DataFrame(genome_params).astype(object).iterrows()]))
 
     mixture_params = defaults.copy()
     mixture_params['random_seed'] = range(10, 10+4)
     mixture_params['tumour_data_seed'] = range(10, 10+4)
     mixture_params['frac_clone'] = [(0.55,0.05),(0.5,0.1),(0.4,0.2),(0.3,0.3)]
-    mixture_params = dict(enumerate([a.to_dict() for a in pd.DataFrame(mixture_params)]))
+    mixture_params = dict(enumerate([a.to_dict() for i, a in pd.DataFrame(mixture_params).astype(object).iterrows()]))
 
     # For each of n patients:
     #     * simulate germline alleles
