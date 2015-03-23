@@ -54,28 +54,49 @@ if __name__ == '__main__':
 
     pyp = pypeliner.app.Pypeline([demix, run_comparison], config)
 
+    chromosomes = ['20']
 
-    sim_params = dict()
-    sim_params['chromosomes'] = ['20']
-    sim_params['germline_seeds'] = range(10, 11)
-    sim_params['genome_params'] = {'1':{}, '2':{}}
-    sim_params['mixture_params'] = {'1':{}, '2':{}}
+    defaults = {
+        'h_total':0.1,
+        'N':1000,
+        'M':3,
+        'fragment_mean' = 300.,
+        'fragment_stddev' = 30.,
+        'read_length' = 100,
+        'base_call_error' = 0.005,
+        'frac_normal' = 0.4,
+    }
 
+    germline_params = defaults.copy()
+    germline_params['random_seed'] = range(10, 11)
+    germline_params = dict(enumerate([a.to_dict() for a in pd.DataFrame(germline_params)]))
+
+    genome_params = defaults.copy()
+    genome_params['random_seed'] = range(10, 10+4)
+    genome_params['num_descendent_events'] = [10, 10, 20, 30]
+    genome_params['proportion_subclonal'] = [0.15, 0.3, 0.45, 0.6]
+    genome_params = dict(enumerate([a.to_dict() for a in pd.DataFrame(genome_params)]))
+
+    mixture_params = defaults.copy()
+    mixture_params['random_seed'] = range(10, 10+4)
+    mixture_params['tumour_data_seed'] = range(10, 10+4)
+    mixture_params['frac_clone'] = [(0.55,0.05),(0.5,0.1),(0.4,0.2),(0.3,0.3)]
+    mixture_params = dict(enumerate([a.to_dict() for a in pd.DataFrame(mixture_params)]))
 
     # For each of n patients:
     #     * simulate germline alleles
 
     germline_axis = ('bygermline',)
 
-    pyp.sch.setobj(mgd.TempOutputObj('germline_seed', *germline_axis), sim_params['germline_seeds'])
-    pyp.sch.setobj(mgd.TempOutputObj('bychromosome'), sim_params['chromosomes'])
+    pyp.sch.setobj(mgd.TempOutputObj('germline_params', *germline_axis), germline_params)
+    pyp.sch.setobj(mgd.TempOutputObj('chromosomes'), chromosomes)
 
     pyp.sch.transform('simulate_germline_alleles', germline_axis, {'mem':8},
         demix.simulations.pipeline.simulate_germline_alleles,
         None,
         mgd.TempOutputFile('germline_alleles', *germline_axis),
-        mgd.TempInputObj('germline_seed', *germline_axis),
-        mgd.TempInputObj('bychromosome'),
+        mgd.TempInputObj('germline_params', *germline_axis),
+        mgd.TempInputObj('chromosomes'),
         config,
     )
 
@@ -86,7 +107,7 @@ if __name__ == '__main__':
 
     genome_axis = germline_axis + ('bygenome',)
 
-    pyp.sch.setobj(mgd.TempOutputObj('genome_params', *genome_axis), sim_params['genome_params'], genome_axis[:-1])
+    pyp.sch.setobj(mgd.TempOutputObj('genome_params', *genome_axis), genome_params, genome_axis[:-1])
 
     pyp.sch.transform('simulate_genomes', genome_axis, {'mem':4},
         run_comparison.simulate_genomes,
@@ -102,7 +123,7 @@ if __name__ == '__main__':
         demix.simulations.pipeline.simulate_normal_data,
         None,
         mgd.TempOutputFile('normal', *genome_axis),
-        mgd.TempInputFile('mixture', *genome_axis),
+        mgd.TempInputFile('genomes', *genome_axis),
         mgd.TempInputFile('germline_alleles', *germline_axis),
         mgd.TempFile('normal_tmp', *genome_axis),
         mgd.TempInputObj('genome_params', *genome_axis),
@@ -115,15 +136,15 @@ if __name__ == '__main__':
 
     mixture_axis = genome_axis + ('bymixture',)
 
-    pyp.sch.setobj(mgd.TempOutputObj('mixture_params', *genome_axis), sim_params['mixture_params'], genome_axis[:-1])
+    pyp.sch.setobj(mgd.TempOutputObj('mixture_params', *mixture_axis), mixture_params, mixture_axis[:-1])
 
-    pyp.sch.transform('simulate_mixture', mixture_axis, {'mem':1},
-        demix.simulations.pipeline.simulate_mixture,
+    pyp.sch.transform('simulate_mixture', mixture_axis, {'mem':2},
+        run_comparison.simulate_mixture,
         None,
         mgd.TempOutputFile('mixture', *mixture_axis),
         mgd.TempOutputFile('mixture_plot.pdf', *mixture_axis),
         mgd.TempInputFile('genomes', *genome_axis),
-        mgd.TempInputObj('mixture_params', *genome_axis),
+        mgd.TempInputObj('mixture_params', *mixture_axis),
     )
 
     pyp.sch.transform('simulate_tumour_data', mixture_axis, {'mem':24},
@@ -133,12 +154,12 @@ if __name__ == '__main__':
         mgd.TempInputFile('mixture', *mixture_axis),
         mgd.TempInputFile('germline_alleles', *germline_axis),
         mgd.TempFile('tumour_tmp', *mixture_axis),
-        mgd.TempInputObj('mixture_params', *genome_axis),
+        mgd.TempInputObj('mixture_params', *mixture_axis),
     )
 
     haps_axis = genome_axis + ('bychromosome',)
 
-    pyp.sch.setobj(mgd.OutputChunks('chromosomes', *haps_axis), sim_params['chromosomes'], haps_axis[:-1])
+    pyp.sch.setobj(mgd.OutputChunks(*haps_axis), chromosomes, haps_axis[:-1])
 
     pyp.sch.transform('infer_haps', haps_axis, {'mem':16},
         demix.analysis.haplotype.infer_haps,
@@ -160,13 +181,13 @@ if __name__ == '__main__':
     tool_axis = mixture_axis + ('bytool',)
 
     pyp.sch.transform('create_tools', mixture_axis, {'local':True},
-        run_inference_read_sim.create_tools,
+        run_comparison.create_tools,
         mgd.TempOutputObj('tool', *tool_axis),
         args['install_dir'],
     )
 
     pyp.sch.transform('create_analysis', tool_axis, {'local':True},
-        run_inference_read_sim.create_analysis,
+        run_comparison.create_analysis,
         mgd.TempOutputObj('tool_analysis', *tool_axis),
         mgd.TempInputObj('tool', *tool_axis),
         mgd.TempFile('tool_tmp', *tool_axis),
@@ -202,10 +223,10 @@ if __name__ == '__main__':
         mgd.TempOutputFile('mix.tsv', *tool_axis),
     )
 
-    pyp.sch.transform('tabulate_results', tool_axis, {'mem':1},
+    pyp.sch.transform('tabulate_results', mixture_axis, {'mem':1},
         run_comparison.tabulate_results,
         None,
-        mgd.OutputFile(args['results_table']),
+        mgd.TempOutputFile('results.tsv', *mixture_axis),
         mgd.TempInputFile('cn.tsv', *tool_axis),
         mgd.TempInputFile('mix.tsv', *tool_axis),
     )
