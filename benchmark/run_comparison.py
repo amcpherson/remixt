@@ -75,24 +75,24 @@ if __name__ == '__main__':
     }
 
     def merge_params(params, defaults):
-        transposed = dict()
+        merged = dict()
         for idx, values in enumerate(zip(*params.values())):
-            transposed[idx] = dict(zip(params.keys(), values))
+            merged[idx] = dict(zip(params.keys(), values))
             for key, value in defaults.iteritems():
-                transposed[idx][key] = value
-        return tranposed
+                merged[idx][key] = value
+        return merged
 
-    germline_params = defaults.copy()
+    germline_params = dict()
     germline_params['random_seed'] = range(10, 10+10)
     germline_params = merge_params(germline_params, defaults)
 
-    genome_params = defaults.copy()
+    genome_params = dict()
     genome_params['random_seed'] = range(10, 10+4)
     genome_params['num_descendent_events'] = [10, 10, 20, 30]
     genome_params['proportion_subclonal'] = [0.15, 0.3, 0.45, 0.6]
     genome_params = merge_params(genome_params, defaults)
 
-    mixture_params = defaults.copy()
+    mixture_params = dict()
     mixture_params['random_seed'] = range(10, 10+4)
     mixture_params['tumour_data_seed'] = range(10, 10+4)
     mixture_params['frac_clone'] = [(0.55,0.05),(0.5,0.1),(0.4,0.2),(0.3,0.3)]
