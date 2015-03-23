@@ -56,6 +56,11 @@ if __name__ == '__main__':
 
     chromosomes = [str(a) for a in xrange(1, 23)]
 
+    chromosome_lengths = dict()
+    for chromosome, length in demix.utils.read_chromosome_lengths(config['genome_fai']).iteritems():
+        if chromosome not in chromosomes:
+            continue
+
     defaults = {
         'h_total':0.1,
         'N':1000,
@@ -65,6 +70,8 @@ if __name__ == '__main__':
         'read_length':100,
         'base_call_error':0.005,
         'frac_normal':0.4,
+        'chromosomes':chromosomes,
+        'chromosome_lengths':chromosome_lengths,
     }
 
     germline_params = defaults.copy()
