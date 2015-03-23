@@ -74,21 +74,29 @@ if __name__ == '__main__':
         'chromosome_lengths':chromosome_lengths,
     }
 
+    def merge_params(params, defaults):
+        transposed = dict()
+        for idx, values in enumerate(zip(*params.values())):
+            transposed[idx] = dict(zip(params.keys(), values))
+            for key, value in defaults.iteritems():
+                transposed[idx][key] = value
+        return tranposed
+
     germline_params = defaults.copy()
     germline_params['random_seed'] = range(10, 10+10)
-    germline_params = dict(enumerate([a.to_dict() for i, a in pd.DataFrame(germline_params).astype(object).iterrows()]))
+    germline_params = merge_params(germline_params, defaults)
 
     genome_params = defaults.copy()
     genome_params['random_seed'] = range(10, 10+4)
     genome_params['num_descendent_events'] = [10, 10, 20, 30]
     genome_params['proportion_subclonal'] = [0.15, 0.3, 0.45, 0.6]
-    genome_params = dict(enumerate([a.to_dict() for i, a in pd.DataFrame(genome_params).astype(object).iterrows()]))
+    genome_params = merge_params(genome_params, defaults)
 
     mixture_params = defaults.copy()
     mixture_params['random_seed'] = range(10, 10+4)
     mixture_params['tumour_data_seed'] = range(10, 10+4)
     mixture_params['frac_clone'] = [(0.55,0.05),(0.5,0.1),(0.4,0.2),(0.3,0.3)]
-    mixture_params = dict(enumerate([a.to_dict() for i, a in pd.DataFrame(mixture_params).astype(object).iterrows()]))
+    mixture_params = merge_params(mixture_params, defaults)
 
     # For each of n patients:
     #     * simulate germline alleles
