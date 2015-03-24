@@ -1256,6 +1256,11 @@ class CopyNumberModel(object):
 
         p = self.p
 
+        is_filtered = (l > 0) & np.all(p > 0, axis=1)
+        x = x[is_filtered,:]
+        l = l[is_filtered]
+        p = p[is_filtered,:]
+
         rd = ((x.T / p.T) / l.T)
 
         rd_min = np.minimum(rd[0], rd[1])
@@ -1281,7 +1286,7 @@ class CopyNumberModel(object):
             h_tumour_candidates.append(h_tumour)
 
         if ax is not None:
-            self.plot_depth(ax, x, l, annotated=means)
+            self.plot_depth(ax, x, l, p, annotated=means)
 
         h_candidates = list()
 
@@ -1305,11 +1310,9 @@ class CopyNumberModel(object):
         return h_candidates
 
 
-    def plot_depth(self, ax, x, l, annotated=()):
+    def plot_depth(self, ax, x, l, p, annotated=()):
         """ 
         """
-
-        p = self.p
 
         rd = ((x.T / p.T) / l.T)
         rd.sort(axis=0)
