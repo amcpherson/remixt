@@ -15,6 +15,7 @@ import cmdline
 
 import demix.seqdataio
 import demix.segalg
+import demix.analysis.haplotype
 
 
 def read_chromosome_lengths(chrom_info_filename):
@@ -36,17 +37,17 @@ def create_segments(chrom_length, segment_length=1000):
     return segments
 
 
-def write_segment_count_wig(wig_filename, read_data_filename, chromosome_lengths, segment_length=1000):
+def write_segment_count_wig(wig_filename, seqdata_filename, chromosome_lengths, segment_length=1000):
 
     with open(wig_filename, 'w') as wig:
 
-        chromosomes = demix.seqdataio.read_chromosomes(read_data_filename)
+        chromosomes = demix.seqdataio.read_chromosomes(seqdata_filename)
 
         for chrom in chromosomes:
 
             wig.write('fixedStep chrom={0} start=1 step={1} span={1}\n'.format(chrom, segment_length))
 
-            chrom_reads = next(demix.seqdataio.read_read_data(read_data_filename, chromosome=chrom))
+            chrom_reads = next(demix.seqdataio.read_read_data(seqdata_filename, chromosome=chrom))
 
             chrom_reads.sort('start', inplace=True)
 
@@ -60,27 +61,16 @@ def write_segment_count_wig(wig_filename, read_data_filename, chromosome_lengths
             wig.write('\n'.join([str(c) for c in seg_count]))
 
 
-def calculate_allele_counts(read_data_filename):
+def calculate_allele_counts(seqdata_filename):
 
     allele_counts = list()
     
-    chromosomes = demix.seqdataio.read_chromosomes(read_data_filename)
+    chromosomes = demix.seqdataio.read_chromosomes(seqdata_filename)
 
     for chrom in chromosomes:
 
-        chrom_alleles = next(demix.seqdataio.read_allele_data(read_data_filename, chromosome=chrom))
-
-        chrom_allele_counts = (
-            chrom_alleles
-            .groupby(['position', 'is_alt'])['fragment_id']
-            .size()
-            .unstack()
-            .fillna(0)
-            .astype(int)
-            .rename(columns={0:'ref_count', 1:'alt_count'})
-            .reset_index()
-        )
-
+        chrom_allele_counts = demix.analysis.haplotype.read_snp_counts(seqdata_filename, chrom)
+        
         chrom_allele_counts['chromosome'] = chrom
 
         allele_counts.append(chrom_allele_counts)
