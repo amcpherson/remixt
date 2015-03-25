@@ -97,6 +97,8 @@ class GenomeGraph(object):
         self.cn = cn_init.copy()
         self.model = model
 
+        self.integral_cost_scale = 100.
+
         # If some tumour adjacencies are also wild type adjacencies, we will
         # get problems with maintenence of the copy balance condition
         assert len(wt_adj.intersection(tmr_adj)) == 0
@@ -414,11 +416,17 @@ class GenomeGraph(object):
             # print '# edges ', num_edges
             # print '# vertices ', num_vertices
 
-            self.matching_vertex_edges.to_csv(graph_file, sep='\t', columns=['vertex_id_1', 'vertex_id_2', 'cost'],
-                                              index=False, header=False)
+            edge_cost_cols = ['vertex_id_1', 'vertex_id_2', 'cost']
 
-            mod_edge_costs.to_csv(graph_file, sep='\t', columns=['vertex_id_1', 'vertex_id_2', 'cost'],
-                                  index=False, header=False)
+            edge_costs = [
+                self.matching_vertex_edges[edge_cost_cols],
+                mod_edge_costs[edge_cost_cols],
+            ]
+            edge_costs = pd.concat(edge_costs, ignore_index=True)
+
+            edge_costs['cost'] = np.rint(edge_costs['cost'] * self.integral_cost_scale).astype(int)
+
+            edge_costs.to_csv(graph_file, sep='\t', columns=edge_cost_cols, index=False, header=False)
 
         subprocess.check_call([blossomv_bin,
                                '-e', blossom_input_filename,
