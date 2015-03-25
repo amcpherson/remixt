@@ -183,7 +183,7 @@ def read_raw_read_data(reads_file, num_rows=None):
         data = np.fromstring(raw_data, dtype=read_data_dtype)
 
         df = pd.DataFrame(data)
-        df['end'] = df['start'] + df['length'] - 1
+        df['end'] = df['start'] + df['length']
         df = df.drop('length', axis=1)
 
         yield df
