@@ -15,6 +15,7 @@ import cmdline
 
 import demix.seqdataio
 import demix.segalg
+import demix.analysis.haplotype
 
 
 def read_chromosome_lengths(chrom_info_filename):
@@ -36,17 +37,17 @@ def create_segments(chrom_length, segment_length=1000):
     return segments
 
 
-def write_segment_count_wig(wig_filename, read_data_filename, chromosome_lengths, segment_length=1000):
+def write_segment_count_wig(wig_filename, seqdata_filename, chromosome_lengths, segment_length=1000):
 
     with open(wig_filename, 'w') as wig:
 
-        chromosomes = demix.seqdataio.read_chromosomes(read_data_filename)
+        chromosomes = demix.seqdataio.read_chromosomes(seqdata_filename)
 
         for chrom in chromosomes:
 
             wig.write('fixedStep chrom={0} start=1 step={1} span={1}\n'.format(chrom, segment_length))
 
-            chrom_reads = next(demix.seqdataio.read_read_data(read_data_filename, chromosome=chrom))
+            chrom_reads = next(demix.seqdataio.read_read_data(seqdata_filename, chromosome=chrom))
 
             chrom_reads.sort('start', inplace=True)
 
@@ -60,27 +61,16 @@ def write_segment_count_wig(wig_filename, read_data_filename, chromosome_lengths
             wig.write('\n'.join([str(c) for c in seg_count]))
 
 
-def calculate_allele_counts(read_data_filename):
+def calculate_allele_counts(seqdata_filename):
 
     allele_counts = list()
     
-    chromosomes = demix.seqdataio.read_chromosomes(read_data_filename)
+    chromosomes = demix.seqdataio.read_chromosomes(seqdata_filename)
 
     for chrom in chromosomes:
 
-        chrom_alleles = next(demix.seqdataio.read_allele_data(read_data_filename, chromosome=chrom))
-
-        chrom_allele_counts = (
-            chrom_alleles
-            .groupby(['position', 'is_alt'])['fragment_id']
-            .size()
-            .unstack()
-            .fillna(0)
-            .astype(int)
-            .rename(columns={0:'ref_count', 1:'alt_count'})
-            .reset_index()
-        )
-
+        chrom_allele_counts = demix.analysis.haplotype.read_snp_counts(seqdata_filename, chrom)
+        
         chrom_allele_counts['chromosome'] = chrom
 
         allele_counts.append(chrom_allele_counts)
@@ -90,24 +80,15 @@ def calculate_allele_counts(read_data_filename):
     return allele_counts
 
 
-def infer_genotype(allele_counts, base_call_error=0.005, call_threshold=0.9):
+def infer_het_positions(seqdata_filename):
 
-    allele_counts['total_count'] = allele_counts['ref_count'] + allele_counts['alt_count']
+    allele_count = calculate_allele_counts(seqdata_filename)
+    
+    allele_count = demix.analysis.haplotype.infer_genotype(allele_count)
 
-    allele_counts['likelihood_AA'] = scipy.stats.binom.pmf(allele_counts['alt_count'], allele_counts['total_count'], float(base_call_error))
-    allele_counts['likelihood_AB'] = scipy.stats.binom.pmf(allele_counts['alt_count'], allele_counts['total_count'], 0.5)
-    allele_counts['likelihood_BB'] = scipy.stats.binom.pmf(allele_counts['ref_count'], allele_counts['total_count'], float(base_call_error))
-    allele_counts['evidence'] = allele_counts['likelihood_AA'] + allele_counts['likelihood_AB'] + allele_counts['likelihood_BB']
+    het_positions = normal_allele_count.loc[normal_allele_count['AB'] == 1, ['chromosome', 'position']]
 
-    allele_counts['posterior_AA'] = allele_counts['likelihood_AA'] / allele_counts['evidence']
-    allele_counts['posterior_AB'] = allele_counts['likelihood_AB'] / allele_counts['evidence']
-    allele_counts['posterior_BB'] = allele_counts['likelihood_BB'] / allele_counts['evidence']
-
-    allele_counts['AA'] = (allele_counts['posterior_AA'] >= call_threshold) * 1
-    allele_counts['AB'] = (allele_counts['posterior_AB'] >= call_threshold) * 1
-    allele_counts['BB'] = (allele_counts['posterior_BB'] >= call_threshold) * 1
-
-    return allele_counts
+    return het_positions
 
 
 def write_titan_format_alleles(allele_filename, allele_count):
@@ -238,18 +219,11 @@ class TitanAnalysis(object):
         write_segment_count_wig(normal_wig_filename, normal_filename, chromosome_lengths)
         write_segment_count_wig(tumour_wig_filename, tumour_filename, chromosome_lengths)
 
-        normal_allele_count = calculate_allele_counts(normal_filename)
-        tumour_allele_count = calculate_allele_counts(tumour_filename)
-
         # Identify het from normal
-        normal_allele_count = infer_genotype(normal_allele_count)
-        normal_allele_count = normal_allele_count[normal_allele_count['AB'] == 1]
+        het_positions = infer_het_positions(normal_filename)
 
         # Filter tumour for het positions
-        tumour_allele_count = tumour_allele_count.merge(
-            normal_allele_count[['chromosome', 'position']],
-            how='right',
-        )
+        tumour_allele_count = calculate_allele_counts(tumour_filename).merge(het_positions)
 
         tumour_allele_filename = self.get_analysis_filename('alleles.tsv')
         write_titan_format_alleles(tumour_allele_filename, tumour_allele_count)

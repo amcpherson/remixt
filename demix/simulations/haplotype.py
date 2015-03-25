@@ -41,7 +41,7 @@ def create_sim_alleles(haplotypes_template, legend_template, chromosomes, recomb
         recomb_positions.sort()
 
         # Randomly select individuals for each recombinated region
-        recomb_individuals = np.random.random_integers(0, num_1kg_individuals, num_recombinations + 1)
+        recomb_individuals = np.random.random_integers(0, num_1kg_individuals - 1, num_recombinations + 1)
 
         # Recombination regions
         recomb_start = np.array([0] + list(recomb_positions))

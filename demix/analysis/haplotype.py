@@ -41,6 +41,45 @@ def infer_snp_genotype(data, base_call_error=0.005, call_threshold=0.9):
     data['AB'] = (data['posterior_AB'] >= call_threshold) * 1
     data['BB'] = (data['posterior_BB'] >= call_threshold) * 1
 
+
+def read_snp_counts(seqdata_filename, chromosome, num_rows=1000000):
+    """ Count reads for each SNP from sequence data
+
+    Args:
+        seqdata_filename (str): sequence data filename
+        chromosome (str): chromosome for which to count reads
+
+    KwArgs:
+        num_rows (int): number of rows per chunk for streaming
+
+    Returns:
+        pandas.DataFrame: read counts per SNP
+
+    Returned dataframe has columns 'position', 'ref_count', 'alt_count'
+
+    """
+
+    snp_counts = list()
+    for alleles_chunk in demix.seqdataio.read_allele_data(seqdata_filename, chromosome=chromosome, num_rows=num_rows):
+
+        snp_counts_chunk = (
+            alleles_chunk
+            .groupby(['position', 'is_alt'])
+            .size()
+            .unstack()
+            .fillna(0)
+            .astype(int)
+            .rename(columns=lambda a: {0:'ref_count', 1:'alt_count'}[a])
+            .reset_index()
+        )
+
+        snp_counts.append(snp_counts_chunk)
+
+    snp_counts = pd.concat(snp_counts, ignore_index=True).groupby('position').sum().reset_index()
+    snp_counts.sort('position', inplace=True)
+
+    return snp_counts
+
     
 def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, config):
     """ Infer haplotype blocks for a chromosome using shapeit
@@ -87,15 +126,7 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
     legend_filename = config['legend_template'].format(phased_chromosome)
 
     # Call snps based on reference and alternate read counts from normal
-    snp_counts_df = list()
-    for alleles_chunk in demix.seqdataio.read_allele_data(seqdata_filename, chromosome=chromosome, num_rows=10000):
-        snp_counts_chunk = alleles_chunk.groupby(['position', 'is_alt']).size().unstack().fillna(0)
-        snp_counts_chunk = snp_counts_chunk.rename(columns=lambda a: {0:'ref_count', 1:'alt_count'}[a])
-        snp_counts_chunk = snp_counts_chunk.astype(float)
-        snp_counts_df.append(snp_counts_chunk)
-    snp_counts_df = pd.concat(snp_counts_df)
-    snp_counts_df = snp_counts_df.groupby(level=0).sum()
-    snp_counts_df.sort_index(inplace=True)
+    snp_counts_df = read_snp_counts(seqdata_filename, chromosome)
 
     if len(snp_counts_df) == 0:
         write_null()
@@ -113,7 +144,7 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
     snps_df = snps_df[(snps_df['a0'].isin(['A', 'C', 'T', 'G'])) & (snps_df['a1'].isin(['A', 'C', 'T', 'G']))]
 
     # Merge data specific inferred genotype
-    snps_df = snps_df.merge(snp_counts_df[['AA', 'AB', 'BB']], left_on='position', right_index=True, how='inner', sort=False)
+    snps_df = snps_df.merge(snp_counts_df[['position', 'AA', 'AB', 'BB']], on='position', how='inner', sort=False)
 
     # Create genotype file required by shapeit
     snps_df['chr'] = chromosome

@@ -84,13 +84,14 @@ if __name__ == '__main__':
         None,
         mgd.TempOutputFile('germline_alleles'),
         mgd.TempInputObj('sim_defs'),
+        mgd.TempInputObj('sim_defs').extract(lambda a: a['chromosomes']),
         config)
 
     pyp.sch.transform('simulate_normal_data', (), {'mem':24},
         demix.simulations.pipeline.simulate_normal_data,
         None,
         mgd.TempOutputFile('normal'),
-        mgd.TempInputFile('mixture'),
+        mgd.TempInputFile('genomes'),
         mgd.TempInputFile('germline_alleles'),
         mgd.TempFile('normal_tmp'),
         mgd.TempInputObj('sim_defs'))

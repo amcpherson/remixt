@@ -14,18 +14,19 @@ import cmdline
 
 import demix.seqdataio
 import demix.segalg
+import demix.analysis.haplotype
 
 
-def calculate_segment_counts(read_data_filename, segments):
+def calculate_segment_counts(seqdata_filename, segments):
 
     segment_counts = list()
     
-    chromosomes = demix.seqdataio.read_chromosomes(read_data_filename)
+    chromosomes = demix.seqdataio.read_chromosomes(seqdata_filename)
 
     for chrom, chrom_segs in segments.groupby('chromosome'):
 
         try:
-            chrom_reads = next(demix.seqdataio.read_read_data(read_data_filename, chromosome=chrom))
+            chrom_reads = next(demix.seqdataio.read_read_data(seqdata_filename, chromosome=chrom))
         except StopIteration:
             chrom_reads = pd.DataFrame(columns=['start', 'end'])
 
@@ -46,26 +47,15 @@ def calculate_segment_counts(read_data_filename, segments):
     return segment_counts
 
 
-def calculate_allele_counts(read_data_filename):
+def calculate_allele_counts(seqdata_filename):
 
     allele_counts = list()
     
-    chromosomes = demix.seqdataio.read_chromosomes(read_data_filename)
+    chromosomes = demix.seqdataio.read_chromosomes(seqdata_filename)
 
     for chrom in chromosomes:
 
-        chrom_alleles = next(demix.seqdataio.read_allele_data(read_data_filename, chromosome=chrom))
-
-        chrom_allele_counts = (
-            chrom_alleles
-            .groupby(['position', 'is_alt'])['fragment_id']
-            .size()
-            .unstack()
-            .fillna(0)
-            .astype(int)
-            .rename(columns={0:'ref_count', 1:'alt_count'})
-            .reset_index()
-        )
+        chrom_allele_counts = demix.analysis.haplotype.read_snp_counts(seqdata_filename, chrom)
 
         chrom_allele_counts['chromosome'] = chrom
 
