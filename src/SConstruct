@@ -77,7 +77,7 @@ if not os.path.exists(blossom5_tar_gz):
 if not os.path.exists(blossom5_dir):
     subprocess.check_call(['tar', '-C', external_dir, '-xzvf', blossom5_tar_gz])
 
-env.Command(blossom5_bin, '', ' '.join(['cd', blossom5_dir, '&&', 'make', 'CFLAGS="-DPERFECT_MATCHING_DOUBLE=1 -D_NDEBUG -g"']))
+env.Command(blossom5_bin, '', ' '.join(['cd', blossom5_dir, '&&', 'make']))
 env.AlwaysBuild(blossom5_bin)
 env.Install(install_dir, blossom5_bin)
 
