@@ -87,7 +87,7 @@ if __name__ == '__main__':
         mgd.TempInputObj('sim_defs').extract(lambda a: a['chromosomes']),
         config)
 
-    pyp.sch.transform('simulate_normal_data', (), {'mem':24},
+    pyp.sch.transform('simulate_normal_data', (), {'mem':32},
         demix.simulations.pipeline.simulate_normal_data,
         None,
         mgd.TempOutputFile('normal'),
@@ -96,7 +96,7 @@ if __name__ == '__main__':
         mgd.TempFile('normal_tmp'),
         mgd.TempInputObj('sim_defs'))
 
-    pyp.sch.transform('simulate_tumour_data', (), {'mem':24},
+    pyp.sch.transform('simulate_tumour_data', (), {'mem':32},
         demix.simulations.pipeline.simulate_tumour_data,
         None,
         mgd.TempOutputFile('tumour'),
@@ -137,7 +137,7 @@ if __name__ == '__main__':
         mgd.TempFile('haplotyping', 'bychromosome'),
         config)
 
-    pyp.sch.transform('merge_haps', (), {'mem':16},
+    pyp.sch.transform('merge_haps', (), {'mem':1},
         demix.utils.merge_tables,
         None,
         mgd.TempOutputFile('haps.tsv'),
@@ -154,7 +154,7 @@ if __name__ == '__main__':
         mgd.TempInputObj('tool', 'bytool'),
         mgd.TempFile('tool_tmp', 'bytool'))
 
-    pyp.sch.transform('tool_prepare', ('bytool',), {'mem':8},
+    pyp.sch.transform('tool_prepare', ('bytool',), {'mem':16},
         run_inference_read_sim.tool_prepare,
         mgd.TempOutputObj('init_idx', 'bytool', 'byinit'),
         mgd.TempInputObj('tool_analysis', 'bytool'),
@@ -165,13 +165,13 @@ if __name__ == '__main__':
         mgd.TempInputFile('breakpoint.tsv'),
         mgd.TempInputFile('haps.tsv'))
 
-    pyp.sch.transform('tool_run', ('bytool', 'byinit'), {'mem':8},
+    pyp.sch.transform('tool_run', ('bytool', 'byinit'), {'mem':16},
         run_inference_read_sim.tool_run,
         mgd.TempOutputObj('run_result', 'bytool', 'byinit'),
         mgd.TempInputObj('tool_analysis', 'bytool'),
         mgd.TempInputObj('init_idx', 'bytool', 'byinit'))
 
-    pyp.sch.transform('tool_report', ('bytool',), {'mem':4},
+    pyp.sch.transform('tool_report', ('bytool',), {'mem':16},
         run_inference_read_sim.tool_report,
         None,
         mgd.TempInputObj('tool_analysis', 'bytool'),
