@@ -83,6 +83,7 @@ if __name__ == '__main__':
         mgd.TempInputFile('experiment_infer.pickle'),
         mgd.TempInputFile('model_infer.pickle'),
         mgd.TempInputFile('h_table.tsv'),
+        mgd.TempOutputFile('model_infer_debug.pickle'),
     )
 
     pyp.run()
