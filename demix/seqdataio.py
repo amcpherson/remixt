@@ -261,7 +261,7 @@ def read_seq_data(seqdata_filename, record_type, chromosome=None, num_rows=None)
 
 
 def read_read_data(seqdata_filename, chromosome=None, num_rows=None):
-    """ Read read data from gzipped tar of chromosome files
+    """ Read read data from a tar of gzipped chromosome files
 
     Args:
         seqdata_filename (str): name of seqdata tar file
@@ -281,7 +281,7 @@ def read_read_data(seqdata_filename, chromosome=None, num_rows=None):
 
 
 def read_allele_data(seqdata_filename, chromosome=None, num_rows=None):
-    """ Read allele data from gzipped tar of chromosome files
+    """ Read allele data from a tar of gzipped chromosome files
 
     Args:
         seqdata_filename (str): name of seqdata tar file
