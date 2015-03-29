@@ -184,7 +184,7 @@ def read_raw_read_data(reads_file, num_rows=None):
 
         df = pd.DataFrame(data)
         df['end'] = df['start'] + df['length']
-        df = df.drop('length', axis=1)
+        df.drop('length', axis=1, inplace=True)
 
         yield df
 
