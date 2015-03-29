@@ -137,7 +137,7 @@ if __name__ == '__main__':
         mgd.TempFile('haplotyping', 'bychromosome'),
         config)
 
-    pyp.sch.transform('merge_haps', (), {'mem':1},
+    pyp.sch.transform('merge_haps', (), {'mem':4},
         demix.utils.merge_tables,
         None,
         mgd.TempOutputFile('haps.tsv'),
