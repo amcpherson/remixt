@@ -47,21 +47,36 @@ def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor'):
             plot_connectors(ax, row, next_row, minor_col, color_minor)
 
 
-def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', minor_col='minor'):
+def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', minor_col='minor', 
+                    chromosome=None, start=None, end=None):
     """
     Plot major/minor copy number across the genome
 
     Args:
         ax (matplotlib.axes.Axes): plot axes
         cnv (pandas.DataFrame): 'cnv_site' table
+
+    KwArgs:
         maxcopies (int): maximum number of copies for setting y limits
         minlength (int): minimum length of segments to be drawn
         major_col (str): name of major copies column
         minor_col (str): name of minor copies column
+        chromosome (str): name of chromosome to plot, None for all chromosomes
+        start (int): start of region in chromosome, None for beginning
+        end (int): end of region in chromosome, None for end of chromosome
 
     """
+    
+    if chromosome is None and (start is not None or end is not None):
+        raise ValueError('start and end require chromosome arg')
 
     cnv = cnv[['chromosome', 'start', 'end', 'length', major_col, minor_col]].copy()
+    
+    if chromosome is not None:
+        cnv = cnv[cnv['chromosome'] == chromosome]
+        
+    if minlength is not None:
+        cnv = cnv[cnv['length'] >= minlength]
 
     chromosomes = cnv['chromosome'].unique()
 
@@ -87,17 +102,32 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', min
     ax.spines['bottom'].set_position(('outward', 10))
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    
-    ax.set_ylim((-0.05*maxcopies, maxcopies+.6))
-    ax.set_xlim((-0.5, chromosome_end.max()))
-    ax.set_xlabel('chromosome')
-    ax.set_xticks([0] + list(chromosome_end.values))
-    ax.set_xticklabels([])
-    ax.set_yticks(range(0, maxcopies+1))
+        
     ax.xaxis.tick_bottom()
+
+    if chromosome is not None:
+        if start is None:
+            start = 0
+        if end is None:
+            end = chromosome_end.max()
+        ax.set_xlim((start, end))
+        ax.set_xlabel('chromosome ' + chromosome)
+        step = (end - start) / 16.
+        step = np.round(step, decimals=-int(np.floor(np.log10(step))))
+        xticks = np.arange(start, end, step)
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([str(a/1e6) + 'Mb' for a in xticks])
+    else:
+        ax.set_xlim((0, chromosome_end.max()))
+        ax.set_xlabel('chromosome')
+        ax.set_xticks([0] + list(chromosome_end.values))
+        ax.set_xticklabels([])
+        ax.xaxis.set_minor_locator(matplotlib.ticker.FixedLocator(chromosome_mid))
+        ax.xaxis.set_minor_formatter(matplotlib.ticker.FixedFormatter(chromosomes))
+
+    ax.set_ylim((-0.05*maxcopies, maxcopies+.6))
+    ax.set_yticks(range(0, maxcopies+1))
     ax.yaxis.tick_left()
-    ax.xaxis.set_minor_locator(matplotlib.ticker.FixedLocator(chromosome_mid))
-    ax.xaxis.set_minor_formatter(matplotlib.ticker.FixedFormatter(chromosomes))
     ax.xaxis.grid(True, which='major', linestyle=':')
     ax.yaxis.grid(True, which='major', linestyle=':')
 
