@@ -60,6 +60,7 @@ def write_segment_count_wig(wig_filename, seqdata_filename, chromosome_lengths, 
             )
 
             wig.write('\n'.join([str(c) for c in seg_count]))
+            wig.write('\n')
 
 
 def calculate_allele_counts(seqdata_filename):
@@ -85,9 +86,9 @@ def infer_het_positions(seqdata_filename):
 
     allele_count = calculate_allele_counts(seqdata_filename)
     
-    allele_count = demix.analysis.haplotype.infer_genotype(allele_count)
+    demix.analysis.haplotype.infer_snp_genotype(allele_count)
 
-    het_positions = normal_allele_count.loc[normal_allele_count['AB'] == 1, ['chromosome', 'position']]
+    het_positions = allele_count.loc[allele_count['AB'] == 1, ['chromosome', 'position']]
 
     return het_positions
 
