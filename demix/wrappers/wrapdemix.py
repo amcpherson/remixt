@@ -150,7 +150,7 @@ class DemixAnalysis(object):
             'major_2',
             'minor_2',
             'total_2',
-        })
+        ]
 
         cn_data = cn_data[cn_columns]
 
