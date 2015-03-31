@@ -78,10 +78,13 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', min
     chromosome_length = cnv.groupby('chromosome')['end'].max()
     chromosome_info = pd.DataFrame({'length':chromosome_length})
     
-    # Reorder in a standard way with X and Y last
-    chromosome_info = chromosome_info.reindex([str(a) for a in xrange(50)] + ['X', 'Y']).dropna()
-    if len(chromosome_info.index) != len(cnv['chromosome'].unique()):
-        raise Exception('Unable to reindex chromosomes')
+    if issubclass(chromosome_info.index.dtype.type, np.integer):
+        chromosome_info.sort_index(inplace=True)
+    else:
+        # Reorder in a standard way with X and Y last
+        chromosome_info = chromosome_info.reindex([str(a) for a in xrange(50)] + ['X', 'Y']).dropna()
+        if len(chromosome_info.index) != len(cnv['chromosome'].unique()):
+            raise Exception('Unable to reindex chromosomes')
 
     # Calculate start and end in plot
     chromosome_info['end'] = np.cumsum(chromosome_info['length'])
