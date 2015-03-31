@@ -179,12 +179,20 @@ if __name__ == '__main__':
         mgd.TempOutputFile('cn.tsv', 'bytool'),
         mgd.TempOutputFile('mix.tsv', 'bytool'))
 
-    pyp.sch.transform('tabulate_results', (), {'mem':1},
-        run_inference_read_sim.tabulate_results,
+    pyp.sch.transform('evaluate_results', ('bytool',), {'mem':1},
+        run_inference_read_sim.evaluate_results,
+        None,
+        mgd.TempInputFile('results.tsv'),
+        mgd.TempInputFile('mixture'),
+        mgd.TempInputFile('cn.tsv', 'bytool'),
+        mgd.TempInputFile('mix.tsv', 'bytool'),
+        mgd.InputInstance('bytool'))
+
+    pyp.sch.transform('merge_results', (), {'mem':1},
+        demix.utils.merge_tables,
         None,
         mgd.OutputFile(args['results_table']),
-        mgd.TempInputFile('cn.tsv', 'bytool'),
-        mgd.TempInputFile('mix.tsv', 'bytool'))
+        mgd.TempInputFile('results.tsv', 'bytool'))
 
     pyp.run()
 
@@ -249,10 +257,67 @@ else:
         tool_analysis.report(cn_filename, mix_filename)
 
 
-    def tabulate_results(table_filename, cn_filenames, mix_filenames):
+    def evaluate_results(results_filename, mixture_filename, cn_filename, mix_filename, tool_name):
 
-        with open(table_filename, 'w') as f:
-            pass
+        with open(mixture_filename, 'r') as mixture_file:
+            gm = pickle.load(mixture_file)
 
+        cn_data = pd.read_csv(cn_filename, sep='\t', converters={'chromosome':str})
+
+        sim_segments = pd.DataFrame({
+            'chromosome':gm.segment_chromosome_id,
+            'start':gm.segment_start,
+            'end':gm.segment_end,
+        })
+
+        if 'major_1' in cn_data:
+
+            cn_true = gm.cn[:,1:,:]
+
+            cn_pred = np.array(
+                [
+                    [cn_data['major_1'], cn_data['minor_1']],
+                    [cn_data['major_2'], cn_data['minor_2']],
+                ]
+            ).swapaxes(0, 2).swapaxes(1, 2)
+
+        else:
+
+            cn_true = np.zeros((gm.cn.shape[0], gm.cn.shape[1]-1, 1))
+
+            cn_true[:,:,0] = gm.cn[:,1:,:].sum(axis=2)
+
+            cn_pred = np.array(
+                [
+                    [cn_data['total_1']],
+                    [cn_data['total_2']],
+                ]
+            ).swapaxes(0, 2).swapaxes(1, 2)
+            
+        cn_data_index = demix.simulations.pipeline.reindex_segments(sim_segments, cn_data)
+
+        cn_true = cn_true[cn_data_index['idx_1'].values,:,:]
+        cn_pred = cn_pred[cn_data_index['idx_2'].values,:,:]
+        segment_lengths = (cn_data_index['end'] - cn_data_index['start']).values
+
+        mix_true = gm.frac
+        with open(mix_filename, 'r') as mix_file:
+            mix_pred = np.array(mix_file.readline().split()).astype(float)
+
+        proportion_cn_correct = demix.simulations.pipeline.compare_cn(
+            mix_true[1:], mix_pred[1:], cn_true, cn_pred, segment_lengths)
+
+        results = pd.DataFrame({
+            'tool':tool_name,
+            'proportion_cn_correct':[proportion_cn_correct],
+        })
+
+        for idx, f in enumerate(mix_true):
+            results['mix_true_'+str(idx)] = f
+
+        for idx, f in enumerate(mix_pred):
+            results['mix_pred_'+str(idx)] = f
+
+        results.to_csv(results_filename, sep='\t', index=False)
 
 
