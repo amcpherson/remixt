@@ -391,22 +391,26 @@ def compare_cn(mix_true, mix_pred, cn_true, cn_pred, segment_lengths):
     """
 
     # Ensure clones are consistent
-    order_true = numpy.argsort(mix_true)
+    order_true = np.argsort(mix_true)
     mix_true = mix_true[order_true]
     cn_true = cn_true[:,order_true,:]
 
     # Ensure clones are consistent
-    order_pred = numpy.argsort(mix_pred)
+    order_pred = np.argsort(mix_pred)
     mix_pred = mix_pred[order_pred]
     cn_pred = cn_pred[:,order_pred,:]
 
+    # Ensure major minor ordering is consistent
+    cn_true = np.sort(cn_true, axis=2)
+    cn_pred = np.sort(cn_pred, axis=2)
+
     # Allow for clone copy number swapping if the mix fractions are close to equal
-    if mix.min() / mix.max() > 0.75:
+    if mix_true.min() / mix_true.max() > 0.75:
         cn_correct = (cn_true == cn_pred).all(axis=(1, 2)) | (cn_true == cn_pred[:,::-1,:]).all(axis=(1, 2))
     else:
         cn_correct = (cn_true == cn_pred).all(axis=(1, 2))
 
-    proportion_correct = cn_correct * segment_lengths / segment_lengths.sum()
+    proportion_correct = float((cn_correct * segment_lengths).sum()) / float(segment_lengths.sum())
 
     return proportion_correct
 
