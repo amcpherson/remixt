@@ -2,12 +2,14 @@ import sys
 import os
 import unittest
 import numpy as np
+import pandas as pd
 
 demix_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 
 sys.path.append(demix_directory)
 
 import demix.segalg as segalg
+import demix.simulations.pipeline
 
 np.random.seed(2014)
 
@@ -68,6 +70,36 @@ if __name__ == '__main__':
             opt_result = segalg.find_contained(X, Y)
 
             self.assertTrue(np.all(unopt_result == opt_result))
+
+
+        def test_reindex_segments(self):
+
+            df_1 = pd.DataFrame({
+                'chromosome':'1',
+                'start':[10, 20, 30],
+                'end':[20, 30, 40],
+            })
+
+            df_2 = pd.DataFrame({
+                'chromosome':'1',
+                'start':[0, 5, 25, 27, 28, 45],
+                'end':[5, 25, 27, 28, 45, 50],
+            })
+
+            df_result = pd.DataFrame({
+                'chromosome':'1',
+                'start':[10, 20, 25, 27, 28, 30],
+                'end':[20, 25, 27, 28, 30, 40],
+                'idx_1':[0, 1, 1, 1, 1, 2],
+                'idx_2':[1, 1, 2, 3, 4, 4],
+            })
+
+            df_reindex = demix.simulations.pipeline.reindex_segments(df_1, df_2)
+
+            df_reindex = df_reindex.reindex(columns=df_result.columns)
+
+            self.assertTrue(np.all(df_result.index.values == df_reindex.index.values))
+            self.assertTrue(np.all(df_result == df_reindex))
 
 
     unittest.main()
