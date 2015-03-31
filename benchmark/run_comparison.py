@@ -187,7 +187,7 @@ if __name__ == '__main__':
         config,
     )
 
-    pyp.sch.transform('merge_haps', genome_axis, {'mem':1},
+    pyp.sch.transform('merge_haps', genome_axis, {'mem':8},
         demix.utils.merge_tables,
         None,
         mgd.TempOutputFile('haps.tsv', *genome_axis),
@@ -211,7 +211,7 @@ if __name__ == '__main__':
 
     init_axis = tool_axis + ('bytool',)
 
-    pyp.sch.transform('tool_prepare', tool_axis, {'mem':8},
+    pyp.sch.transform('tool_prepare', tool_axis, {'mem':16},
         run_comparison.tool_prepare,
         mgd.TempOutputObj('init_idx', *init_axis),
         mgd.TempInputObj('tool_analysis', *tool_axis),
@@ -223,14 +223,14 @@ if __name__ == '__main__':
         mgd.TempInputFile('haps.tsv', *genome_axis),
     )
 
-    pyp.sch.transform('tool_run', init_axis, {'mem':8},
+    pyp.sch.transform('tool_run', init_axis, {'mem':16},
         run_comparison.tool_run,
         mgd.TempOutputObj('run_result', *init_axis),
         mgd.TempInputObj('tool_analysis', *tool_axis),
         mgd.TempInputObj('init_idx', *init_axis),
     )
 
-    pyp.sch.transform('tool_report', tool_axis, {'mem':4},
+    pyp.sch.transform('tool_report', tool_axis, {'mem':16},
         run_comparison.tool_report,
         None,
         mgd.TempInputObj('tool_analysis', *tool_axis),
