@@ -6,6 +6,7 @@ import subprocess
 import tarfile
 import argparse
 import itertools
+import collections
 import numpy as np
 import pandas as pd
 import scipy.stats
@@ -328,9 +329,27 @@ class TitanAnalysis(object):
             'python',
             self.tool.parse_segments_script,
             self.get_analysis_filename('init_{0}'.format(best_idx), 'cn.tsv'),
-            output_cn_filename,
+            self.get_analysis_filename('cn_best.tsv'),
             '--max_copy_number', '{0}'.format(self.tool.max_copy_number),
         ])
+
+        cn_data = pd.read_csv(self.get_analysis_filename('cn_best.tsv'), sep='\t', converters={'Chr':str})
+
+        cn_columns = collections.OrderedDict({
+            'Chr':'chromosome',
+            'beg':'start',
+            'end':'end',
+            'major_cn':'major_1',
+            'minor_cn':'minor_1',
+            'total_cn':'total_1',
+            'alt_major_cn':'major_2',
+            'alt_minor_cn':'minor_2',
+            'alt_total_cn':'total_2',
+        })
+
+        cn_data = cn_data[cn_columns.keys()].rename(columns=cn_columns)
+
+        cn_data.to_csv(output_cn_filename, sep='\t', index=False)
 
 
 
