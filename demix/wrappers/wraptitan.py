@@ -6,6 +6,7 @@ import subprocess
 import tarfile
 import argparse
 import itertools
+import collections
 import numpy as np
 import pandas as pd
 import scipy.stats
@@ -59,6 +60,7 @@ def write_segment_count_wig(wig_filename, seqdata_filename, chromosome_lengths, 
             )
 
             wig.write('\n'.join([str(c) for c in seg_count]))
+            wig.write('\n')
 
 
 def calculate_allele_counts(seqdata_filename):
@@ -84,9 +86,9 @@ def infer_het_positions(seqdata_filename):
 
     allele_count = calculate_allele_counts(seqdata_filename)
     
-    allele_count = demix.analysis.haplotype.infer_genotype(allele_count)
+    demix.analysis.haplotype.infer_snp_genotype(allele_count)
 
-    het_positions = normal_allele_count.loc[normal_allele_count['AB'] == 1, ['chromosome', 'position']]
+    het_positions = allele_count.loc[allele_count['AB'] == 1, ['chromosome', 'position']]
 
     return het_positions
 
@@ -328,9 +330,27 @@ class TitanAnalysis(object):
             'python',
             self.tool.parse_segments_script,
             self.get_analysis_filename('init_{0}'.format(best_idx), 'cn.tsv'),
-            output_cn_filename,
+            self.get_analysis_filename('cn_best.tsv'),
             '--max_copy_number', '{0}'.format(self.tool.max_copy_number),
         ])
+
+        cn_data = pd.read_csv(self.get_analysis_filename('cn_best.tsv'), sep='\t', converters={'Chr':str})
+
+        cn_columns = collections.OrderedDict({
+            'Chr':'chromosome',
+            'beg':'start',
+            'end':'end',
+            'major_cn':'major_1',
+            'minor_cn':'minor_1',
+            'total_cn':'total_1',
+            'alt_major_cn':'major_2',
+            'alt_minor_cn':'minor_2',
+            'alt_total_cn':'total_2',
+        })
+
+        cn_data = cn_data[cn_columns.keys()].rename(columns=cn_columns)
+
+        cn_data.to_csv(output_cn_filename, sep='\t', index=False)
 
 
 

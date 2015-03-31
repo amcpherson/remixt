@@ -52,7 +52,7 @@ def init(
     model = demix.cn_model.CopyNumberModel(3, experiment.adjacencies, experiment.breakpoints)
     model.emission_model = 'negbin'
     model.e_step_method = 'genomegraph'
-    model.total_cn = True
+    model.total_cn = False
 
     model.infer_offline_parameters(experiment.x, experiment.l)
 
@@ -134,7 +134,8 @@ def infer_cn(
         mix_filename,
         experiment_filename,
         model_filename,
-        h_table_filename
+        h_table_filename,
+        model_debug_filename=None,
     ):
 
     with open(experiment_filename, 'r') as experiment_file:
@@ -152,9 +153,11 @@ def infer_cn(
     with open(mix_filename, 'w') as mix_file:
         mix_file.write('\t'.join([str(a) for a in mix]))
 
-    model.e_step_method = 'genomegraph'
-
     cn, brk_cn = model.decode(experiment.x, experiment.l, h)
+
+    if model_debug_filename is not None:
+        with open(model_debug_filename, 'w') as model_debug_file:
+            pickle.dump(model, model_debug_file)
 
     cn_table = demix.analysis.experiment.create_cn_table(experiment, cn, h, model.p)
 

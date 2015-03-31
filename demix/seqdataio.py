@@ -177,14 +177,17 @@ def read_raw_read_data(reads_file, num_rows=None):
             raw_data = reads_file.read()
 
         if raw_data == '':
-            yield pd.DataFrame(columns=['start', 'end'])
+            yield pd.DataFrame({
+                'start':np.array([], dtype=np.uint32),
+                'end':np.array([], dtype=np.uint32),
+            })
             break
 
         data = np.fromstring(raw_data, dtype=read_data_dtype)
 
         df = pd.DataFrame(data)
-        df['end'] = df['start'] + df['length'] - 1
-        df = df.drop('length', axis=1)
+        df['end'] = df['start'] + df['length']
+        df.drop('length', axis=1, inplace=True)
 
         yield df
 
@@ -213,7 +216,11 @@ def read_raw_allele_data(alleles_file, num_rows=None):
             raw_data = alleles_file.read()
 
         if raw_data == '':
-            yield pd.DataFrame(columns=['position', 'is_alt', 'fragment_id'])
+            yield pd.DataFrame({
+                'fragment_id':np.array([], dtype=np.uint32),
+                'position':np.array([], dtype=np.uint32),
+                'is_alt':np.array([], dtype=np.uint8),
+            })
             break
 
         data = np.fromstring(raw_data, dtype=allele_data_dtype)
@@ -261,7 +268,7 @@ def read_seq_data(seqdata_filename, record_type, chromosome=None, num_rows=None)
 
 
 def read_read_data(seqdata_filename, chromosome=None, num_rows=None):
-    """ Read read data from gzipped tar of chromosome files
+    """ Read read data from a tar of gzipped chromosome files
 
     Args:
         seqdata_filename (str): name of seqdata tar file
@@ -281,7 +288,7 @@ def read_read_data(seqdata_filename, chromosome=None, num_rows=None):
 
 
 def read_allele_data(seqdata_filename, chromosome=None, num_rows=None):
-    """ Read allele data from gzipped tar of chromosome files
+    """ Read allele data from a tar of gzipped chromosome files
 
     Args:
         seqdata_filename (str): name of seqdata tar file

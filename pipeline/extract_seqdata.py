@@ -59,7 +59,8 @@ if __name__ == '__main__':
         '-b', mgd.InputFile(args['bam_file']),
         '-s', mgd.InputFile(config['snp_positions']),
         '-r', mgd.TempOutputFile('reads', 'chromosome'),
-        '-a', mgd.TempOutputFile('alleles', 'chromosome'))
+        '-a', mgd.TempOutputFile('alleles', 'chromosome'),
+    )
 
     pyp.sch.transform('create_seqdata', (), {'mem':4},
         seqdataio.create_seqdata,
@@ -67,7 +68,7 @@ if __name__ == '__main__':
         mgd.OutputFile(args['seqdata_file']),
         mgd.TempInputFile('reads', 'chromosome'),
         mgd.TempInputFile('alleles', 'chromosome'),
-        gzipped=True)
+    )
 
     pyp.run()
 
