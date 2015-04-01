@@ -53,9 +53,11 @@ def write_cna(cna_filename, seqdata_filename, chromosome_lengths, segment_length
             segments = create_segments(chromosome_lengths[chrom], segment_length)
 
             segments['count'] = demix.segalg.contained_counts(
-                segments,
+                segments[['start', 'end']].values,
                 reads[['start', 'end']].values,
             )
+
+            segments['chromosome'] = chrom
 
             segments.to_csv(cna, sep='\t', index=False, header=False,
                 columns=['chromosome', 'end', 'count'])
@@ -73,7 +75,7 @@ def write_tumour_baf(baf_filename, normal_filename, tumour_filename):
 
             demix.analysis.haplotype.infer_snp_genotype(normal_allele_count)
 
-            het_positions = normal_allele_count.loc[normal_allele_count['AB'] == 1, ['chromosome', 'position']]
+            het_positions = normal_allele_count.loc[normal_allele_count['AB'] == 1, ['position']]
 
             tumour_allele_count = demix.analysis.haplotype.read_snp_counts(tumour_filename, chrom)
             tumour_allele_count = tumour_allele_count.merge(het_positions)
@@ -87,6 +89,8 @@ def write_tumour_baf(baf_filename, normal_filename, tumour_filename):
                 tumour_allele_count['ref_count'] +
                 tumour_allele_count['alt_count']
             )
+
+            tumour_allele_count['chromosome'] = chrom
 
             tumour_allele_count.to_csv(baf_file, sep='\t', index=False, header=False,
                 columns=['chromosome', 'position', 'minor_count', 'total_count'])
@@ -136,8 +140,11 @@ class CloneHDTool(object):
             if sentinal.unfinished:
                 with utils.CurrentDirectory(self.packages_directory):
                     install_sys = platform.system()
-                    subprocess.check_call('wget --no-check-certificate '+self.package_url[install_sys], shell=True)
-                    subprocess.check_call('tar -xzvf '+self.package_filename[install_sys], shell=True)
+                    subprocess.check_call('wget --no-check-certificate ' + self.package_url[install_sys] + ' -O ' + self.package_filename[install_sys], shell=True)
+                    try:
+                        subprocess.check_call('tar -xzvf '+self.package_filename[install_sys], shell=True)
+                    except subprocess.CalledProcessError as e:
+                        print e
                     for binary in ('cloneHD', 'filterHD', 'pre-filter'):
                         binary_filename = os.path.abspath(os.path.join(self.package_bin_subdir[install_sys], binary))
                         utils.symlink(binary_filename, link_directory=self.bin_directory)
