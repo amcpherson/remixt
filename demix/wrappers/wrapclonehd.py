@@ -145,7 +145,10 @@ class CloneHDTool(object):
                         utils.makedirs('build')
                         with utils.CurrentDirectory('src'):
                             os.environ['CPLUS_INCLUDE_PATH'] = os.path.join(self.packages_directory, 'include')
-                            subprocess.check_call(['make', 'GSL='+os.path.join(self.packages_directory, 'lib', 'libgsl.a')+' '+os.path.join(self.packages_directory, 'lib', 'libgslcblas.a')])
+                            subprocess.check_call(['make',
+                                'GSL='+os.path.join(self.packages_directory, 'lib', 'libgsl.a')+' '
+                                      +os.path.join(self.packages_directory, 'lib', 'libgslcblas.a'),
+                                'CC=g++'])
                         for binary in ('cloneHD', 'filterHD', 'pre-filter'):
                             binary_filename = os.path.abspath(os.path.join('build', binary))
                             utils.symlink(binary_filename, link_directory=self.bin_directory)
@@ -184,7 +187,7 @@ class CloneHDAnalysis(object):
         write_cna(self.get_analysis_filename('normal.cna.txt'), normal_filename, chromosome_lengths)
         write_cna(self.get_analysis_filename('tumour.cna.txt'), tumour_filename, chromosome_lengths)
 
-        write_tumour_baf(self.get_analysis_filename('tumour.cna.txt'), normal_filename, tumour_filename)
+        write_tumour_baf(self.get_analysis_filename('tumour.baf.txt'), normal_filename, tumour_filename)
 
         return 1
 
