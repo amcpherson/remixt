@@ -6,7 +6,6 @@ import subprocess
 import tarfile
 import argparse
 import itertools
-import platform
 import numpy as np
 import pandas as pd
 import scipy.stats
@@ -106,20 +105,8 @@ class CloneHDTool(object):
         self.data_directory = os.path.join(self.install_directory, 'data')
         self.bin_directory = os.path.join(self.install_directory, 'bin')
 
-        self.package_url = {
-            'Linux':'https://github.com/andrej-fischer/cloneHD/releases/download/v1.17.8/cloneHD-v1.17.8.tar.gz',
-            'Darwin':'https://github.com/andrej-fischer/cloneHD/releases/download/v1.17.8/build-MacOSX.tar.gz',
-        }
-
-        self.package_filename = {
-            'Linux':'cloneHD-v1.17.8.tar.gz',
-            'Darwin':'build-MacOSX.tar.gz',
-        }
-
-        self.package_bin_subdir = {
-            'Linux':os.path.join('cloneHD-v1.17.8', 'build'),
-            'Darwin':'build',
-        }
+        self.git_repo_url = 'https://github.com/andrej-fischer/cloneHD.git'
+        self.git_tag = 'v1.17.8'
 
         self.chrom_info_filename = os.path.join(self.data_directory, 'chromInfo.txt.gz')
 
@@ -139,18 +126,29 @@ class CloneHDTool(object):
 
         Sentinal = utils.SentinalFactory(os.path.join(self.install_directory, 'sentinal_'), kwargs)
 
+        with Sentinal('install_gsl') as sentinal:
+            if sentinal.unfinished:
+                with utils.CurrentDirectory(self.packages_directory):
+                    subprocess.check_call(['wget', 'ftp://ftp.gnu.org/gnu/gsl/gsl-1.16.tar.gz'])
+                    subprocess.check_call(['tar', '-xzvf', 'gsl-1.16.tar.gz'])
+                    with utils.CurrentDirectory('gsl-1.16'):
+                        subprocess.check_call(['./configure', '--prefix', self.packages_directory])
+                        subprocess.check_call(['make'])
+                        subprocess.check_call(['make', 'install'])
+
         with Sentinal('install_clonehd') as sentinal:
             if sentinal.unfinished:
                 with utils.CurrentDirectory(self.packages_directory):
-                    install_sys = platform.system()
-                    subprocess.check_call('wget --no-check-certificate ' + self.package_url[install_sys] + ' -O ' + self.package_filename[install_sys], shell=True)
-                    try:
-                        subprocess.check_call('tar -xzvf '+self.package_filename[install_sys], shell=True)
-                    except subprocess.CalledProcessError as e:
-                        print e
-                    for binary in ('cloneHD', 'filterHD', 'pre-filter'):
-                        binary_filename = os.path.abspath(os.path.join(self.package_bin_subdir[install_sys], binary))
-                        utils.symlink(binary_filename, link_directory=self.bin_directory)
+                    subprocess.check_call(['git', 'clone', self.git_repo_url])
+                    with utils.CurrentDirectory('cloneHD'):
+                        subprocess.check_call(['git', 'checkout', self.git_tag])
+                        utils.makedirs('build')
+                        with utils.CurrentDirectory('src'):
+                            os.environ['CPLUS_INCLUDE_PATH'] = os.path.join(self.packages_directory, 'include')
+                            subprocess.check_call(['make', 'GSL='+os.path.join(self.packages_directory, 'lib', 'libgsl.a')+' '+os.path.join(self.packages_directory, 'lib', 'libgslcblas.a')])
+                        for binary in ('cloneHD', 'filterHD', 'pre-filter'):
+                            binary_filename = os.path.abspath(os.path.join('build', binary))
+                            utils.symlink(binary_filename, link_directory=self.bin_directory)
 
         with Sentinal('download_chrom_info') as sentinal:
             if sentinal.unfinished:
