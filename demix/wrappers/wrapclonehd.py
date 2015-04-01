@@ -57,9 +57,10 @@ def write_cna(cna_filename, seqdata_filename, chromosome_lengths, segment_length
             )
 
             segments['chromosome'] = chrom
+            segments['num_obs'] = 1
 
             segments.to_csv(cna, sep='\t', index=False, header=False,
-                columns=['chromosome', 'end', 'count'])
+                columns=['chromosome', 'end', 'count', 'num_obs'])
 
 
 def write_tumour_baf(baf_filename, normal_filename, tumour_filename):
