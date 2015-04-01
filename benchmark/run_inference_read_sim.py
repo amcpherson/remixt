@@ -182,7 +182,7 @@ if __name__ == '__main__':
     pyp.sch.transform('evaluate_results', ('bytool',), {'mem':1},
         run_inference_read_sim.evaluate_results,
         None,
-        mgd.TempInputFile('results.tsv'),
+        mgd.TempOutputFile('results.tsv', 'bytool'),
         mgd.TempInputFile('mixture'),
         mgd.TempInputFile('cn.tsv', 'bytool'),
         mgd.TempInputFile('mix.tsv', 'bytool'),
