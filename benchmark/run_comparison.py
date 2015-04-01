@@ -242,38 +242,38 @@ if __name__ == '__main__':
     pyp.sch.transform('evaluate_results', tool_axis, {'mem':1},
         run_comparison.evaluate_results,
         None,
-        mgd.TempInputFile('results.tsv', *tool_axis),
+        mgd.TempOutputFile('results.tsv', *tool_axis),
         mgd.TempInputFile('mixture', *mixture_axis),
         mgd.TempInputFile('cn.tsv', *tool_axis),
         mgd.TempInputFile('mix.tsv', *tool_axis),
         mgd.InputInstance('bytool'),
-        mgd.TempOutputObj('mixture_params', *mixture_axis),
-        mgd.TempOutputObj('genome_params', *genome_axis),
-        mgd.TempOutputObj('germline_params', *germline_axis),
+        mgd.TempInputObj('germline_params', *germline_axis),
+        mgd.TempInputObj('mixture_params', *mixture_axis),
+        mgd.TempInputObj('genome_params', *genome_axis),
     )
 
-    pyp.sch.transform('merge_results', mixture_axis, {'mem':1},
+    pyp.sch.transform('merge_tool_results', mixture_axis, {'mem':1},
         demix.utils.merge_tables,
         None,
         mgd.TempOutputFile('results.tsv', *mixture_axis),
         mgd.TempInputFile('results.tsv', *tool_axis),
     )
 
-    pyp.sch.transform('merge_results', genome_axis, {'mem':1},
+    pyp.sch.transform('merge_mixture_results', genome_axis, {'mem':1},
         demix.utils.merge_tables,
         None,
         mgd.TempOutputFile('results.tsv', *genome_axis),
         mgd.TempInputFile('results.tsv', *mixture_axis),
     )
 
-    pyp.sch.transform('merge_results', germline_axis, {'mem':1},
+    pyp.sch.transform('merge_genome_results', germline_axis, {'mem':1},
         demix.utils.merge_tables,
         None,
         mgd.TempOutputFile('results.tsv', *germline_axis),
         mgd.TempInputFile('results.tsv', *genome_axis),
     )
 
-    pyp.sch.transform('merge_results', (), {'mem':1},
+    pyp.sch.transform('merge_germline_results', (), {'mem':1},
         demix.utils.merge_tables,
         None,
         mgd.OutputFile(args['results_table']),
@@ -364,7 +364,7 @@ else:
         results['tool'] = tool_name
 
         for param in params:
-            for key, value in param:
+            for key, value in param.iteritems():
                 assert key not in results or results[key] == value
                 results[key] = value
 

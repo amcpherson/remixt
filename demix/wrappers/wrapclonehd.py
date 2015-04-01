@@ -80,6 +80,9 @@ def write_tumour_baf(baf_filename, normal_filename, tumour_filename):
             tumour_allele_count = demix.analysis.haplotype.read_snp_counts(tumour_filename, chrom)
             tumour_allele_count = tumour_allele_count.merge(het_positions)
 
+            tumour_allele_count['ref_count'] = tumour_allele_count['ref_count'].astype(int)
+            tumour_allele_count['alt_count'] = tumour_allele_count['alt_count'].astype(int)
+
             tumour_allele_count['minor_count'] = np.minimum(
                 tumour_allele_count['ref_count'],
                 tumour_allele_count['alt_count'],
@@ -211,17 +214,17 @@ class CloneHDAnalysis(object):
 
         subprocess.check_call([
             self.tool.filterhd_bin,
-            '--data', self.get_analysis_filename('tumor.cna.txt'),
+            '--data', self.get_analysis_filename('tumour.cna.txt'),
             '--mode', '3',
-            '--pre', self.get_analysis_filename('tumor.cna'),
+            '--pre', self.get_analysis_filename('tumour.cna'),
             '--rnd', '0',
         ])
 
         subprocess.check_call([
             self.tool.filterhd_bin,
-            '--data', self.get_analysis_filename('tumor.cna'),
+            '--data', self.get_analysis_filename('tumour.cna.txt'),
             '--mode', '3',
-            '--pre', self.get_analysis_filename('tumor.cna.bias'),
+            '--pre', self.get_analysis_filename('tumour.cna.bias'),
             '--bias', self.get_analysis_filename('normal.cna.posterior-1.txt'),
             '--sigma', '0',
             '--jumps', '1',
@@ -230,9 +233,9 @@ class CloneHDAnalysis(object):
 
         subprocess.check_call([
             self.tool.filterhd_bin,
-            '--data', self.get_analysis_filename('tumor.baf.txt'),
+            '--data', self.get_analysis_filename('tumour.baf.txt'),
             '--mode', '1',
-            '--pre', self.get_analysis_filename('tumor.baf'),
+            '--pre', self.get_analysis_filename('tumour.baf'),
             '--sigma', '0',
             '--jumps', '1',
             '--reflect', '1',
@@ -242,17 +245,17 @@ class CloneHDAnalysis(object):
 
         subprocess.check_call([
             self.tool.clonehd_bin,
-            '--cna', self.get_analysis_filename('tumor.cna.txt'),
-            '--baf', self.get_analysis_filename('tumor.baf.txt'),
-            '--pre', self.get_analysis_filename('tumor'),
+            '--cna', self.get_analysis_filename('tumour.cna.txt'),
+            '--baf', self.get_analysis_filename('tumour.baf.txt'),
+            '--pre', self.get_analysis_filename('tumour'),
             '--bias', self.get_analysis_filename('normal.cna.posterior-1.txt'),
             '--seed', '123',
             '--trials', '2',
             '--nmax', '3',
             '--force',
             '--max-tcn', '4',
-            '--cna-jumps', self.get_analysis_filename('tumor.cna.bias.jumps.txt'),
-            '--baf-jumps', self.get_analysis_filename('tumor.baf.jumps.txt'),
+            '--cna-jumps', self.get_analysis_filename('tumour.cna.bias.jumps.txt'),
+            '--baf-jumps', self.get_analysis_filename('tumour.baf.jumps.txt'),
             '--min-jump', '0.01',
             '--restarts', '10',
             '--mass-gauging', '1',
