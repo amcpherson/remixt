@@ -123,6 +123,9 @@ class CloneHDTool(object):
 
         self.chrom_info_filename = os.path.join(self.data_directory, 'chromInfo.txt.gz')
 
+        self.filterhd_bin = os.path.join(self.bin_directory, 'filterHD')
+        self.clonehd_bin = os.path.join(self.bin_directory, 'cloneHD')
+
 
     def get_analysis_filename(self, *names):
         return os.path.realpath(os.path.join(self.analysis_directory, *names))
@@ -197,7 +200,7 @@ class CloneHDAnalysis(object):
             raise utils.InvalidInitParam()
 
         subprocess.check_call([
-            self.filterhd_bin,
+            self.tool.filterhd_bin,
             '--data', self.get_analysis_filename('normal.cna.txt'),
             '--mode', '3',
             '--pre', self.get_analysis_filename('normal.cna'),
@@ -205,7 +208,7 @@ class CloneHDAnalysis(object):
         ])
 
         subprocess.check_call([
-            self.filterhd_bin,
+            self.tool.filterhd_bin,
             '--data', self.get_analysis_filename('tumor.cna.txt'),
             '--mode', '3',
             '--pre', self.get_analysis_filename('tumor.cna'),
@@ -213,7 +216,7 @@ class CloneHDAnalysis(object):
         ])
 
         subprocess.check_call([
-            self.filterhd_bin,
+            self.tool.filterhd_bin,
             '--data', self.get_analysis_filename('tumor.cna'),
             '--mode', '3',
             '--pre', self.get_analysis_filename('tumor.cna.bias'),
@@ -224,7 +227,7 @@ class CloneHDAnalysis(object):
         ])
 
         subprocess.check_call([
-            self.filterhd_bin,
+            self.tool.filterhd_bin,
             '--data', self.get_analysis_filename('tumor.baf.txt'),
             '--mode', '1',
             '--pre', self.get_analysis_filename('tumor.baf'),
@@ -236,7 +239,7 @@ class CloneHDAnalysis(object):
         ])
 
         subprocess.check_call([
-            self.clonehd_bin,
+            self.tool.clonehd_bin,
             '--cna', self.get_analysis_filename('tumor.cna.txt'),
             '--baf', self.get_analysis_filename('tumor.baf.txt'),
             '--pre', self.get_analysis_filename('tumor'),
