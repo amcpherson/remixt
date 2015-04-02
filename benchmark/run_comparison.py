@@ -247,9 +247,9 @@ if __name__ == '__main__':
         mgd.TempInputFile('cn.tsv', *tool_axis),
         mgd.TempInputFile('mix.tsv', *tool_axis),
         mgd.InputInstance('bytool'),
-        mgd.TempInputObj('germline_params', *germline_axis),
-        mgd.TempInputObj('mixture_params', *mixture_axis),
-        mgd.TempInputObj('genome_params', *genome_axis),
+        germline=mgd.TempInputObj('germline_params', *germline_axis),
+        mixture=mgd.TempInputObj('mixture_params', *mixture_axis),
+        genome=mgd.TempInputObj('genome_params', *genome_axis),
     )
 
     pyp.sch.transform('merge_tool_results', mixture_axis, {'mem':1},
@@ -356,19 +356,16 @@ else:
         tool_analysis.report(cn_filename, mix_filename)
 
 
-    def evaluate_results(results_filename, mixture_filename, cn_filename, mix_filename, tool_name, *params):
+    def evaluate_results(results_filename, mixture_filename, cn_filename, mix_filename, tool_name, **params):
 
         results = demix.simulations.pipeline.evaluate_results(
             mixture_filename, cn_filename, mix_filename)
 
         results['tool'] = tool_name
 
-        for param in params:
-            for key, value in param.iteritems():
-                if key in results:
-                    if results[key] != value:
-                        raise Exception('key {0} has value {1} and {2}'.format(key, value, results[key]))
-                results[key] = value
+        for param_group, param_values in params.iteritems():
+            for key, value in param_values.iteritems():
+                results[param_group + '_' + key] = value
 
         results = pd.DataFrame(results, index=[0])
 
