@@ -252,7 +252,7 @@ class CloneHDAnalysis(object):
             '--seed', '123',
             '--trials', '2',
             '--nmax', '3',
-            '--force',
+            '--force', '2',
             '--max-tcn', '4',
             '--cna-jumps', self.get_analysis_filename('tumour.cna.bias.jumps.txt'),
             '--baf-jumps', self.get_analysis_filename('tumour.baf.jumps.txt'),
