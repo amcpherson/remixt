@@ -365,7 +365,9 @@ else:
 
         for param in params:
             for key, value in param.iteritems():
-                assert key not in results or results[key] == value
+                if key in results:
+                    if results[key] != value:
+                        raise Exception('key {0} has value {1} and {2}'.format(key, value, results[key]))
                 results[key] = value
 
         results = pd.DataFrame(results, index=[0])
