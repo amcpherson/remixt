@@ -300,7 +300,9 @@ class CloneHDAnalysis(object):
             cna_data = pd.read_csv(cna_filename, delim_whitespace=True)
             cna_data.rename(columns={'#chr':'chromosome', 'first-locus':'start', 'last-locus':'end'}, inplace=True)
             cna_data.drop(['nloci'], axis=1, inplace=True)
-            cna_data['start'] -= segment_length
+            # Unclear from the documentation, though techically the first datapoint is an endpoint
+            # however, expanding regions results in inconsistencies
+            #cna_data['start'] -= segment_length
             cna_data.set_index(['chromosome', 'start', 'end'], inplace=True)
             cna_data = cna_data.idxmax(axis=1).astype(int)
             cna_data.name = 'total'
@@ -324,7 +326,10 @@ class CloneHDAnalysis(object):
             data['minor'] = np.minimum(data['allele'], data['total'] - data['allele'])
             data.drop(['idx_1', 'idx_2', 'allele'], axis=1, inplace=True)
 
-            assert (data['minor'] >= 0).all()
+            if not (data['minor'] >= 0).all():
+                error = 'Negative minor copies\n'
+                error += data[data['minor'] < 0].to_string()
+                raise Exception(error)
 
             data.rename(inplace=True, columns={
                 'total':'total_{0}'.format(clone_id),
