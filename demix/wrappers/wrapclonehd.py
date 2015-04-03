@@ -274,7 +274,7 @@ class CloneHDAnalysis(object):
             summary_info = dict()
 
             names = list()
-            for line in summary_files:
+            for line in summary_file:
                 if line.startswith('#'):
                     names = line[1:].split()
                     if len(names) == 2 and names[1] == 'clones':
@@ -289,13 +289,13 @@ class CloneHDAnalysis(object):
             mix = [float(summary_info['frac_'+str(i+1)]) for i in xrange(summary_info['num_clones'])]
             mix = [1-sum(mix)] + mix
 
-            output_mix_file.write('\t'.join(mix))
+            output_mix_file.write('\t'.join([str(a) for a in mix]))
 
         cn_table = None
 
         for clone_id in xrange(1, summary_info['num_clones']+1):
 
-            cna_filename = self.get_analysis_filename('tumour.cna.clone-{0}.txt'.format(clone_id))
+            cna_filename = self.get_analysis_filename('tumour.cna.subclone-{0}.txt'.format(clone_id))
 
             cna_data = pd.read_csv(cna_filename, delim_whitespace=True)
             cna_data.rename(columns={'#chr':'chromosome', 'first-locus':'start', 'last-locus':'end'}, inplace=True)
@@ -306,7 +306,7 @@ class CloneHDAnalysis(object):
             cna_data.name = 'total'
             cna_data = cna_data.reset_index()
 
-            baf_filename = self.get_analysis_filename('tumour.baf.clone-{0}.txt'.format(clone_id))
+            baf_filename = self.get_analysis_filename('tumour.baf.subclone-{0}.txt'.format(clone_id))
 
             baf_data = pd.read_csv(baf_filename, delim_whitespace=True)
             baf_data.rename(columns={'#chr':'chromosome', 'first-locus':'start', 'last-locus':'end'}, inplace=True)
@@ -337,7 +337,7 @@ class CloneHDAnalysis(object):
 
             else:
                 cn_table_prev = cn_table
-                cn_table = reindex_segments(cn_table_prev, data)
+                cn_table = demix.segalg.reindex_segments(cn_table_prev, data)
 
                 cn_table_prev.drop(['chromosome', 'start', 'end'], axis=1, inplace=True)
                 data.drop(['chromosome', 'start', 'end'], axis=1, inplace=True)
