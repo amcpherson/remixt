@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 
 def is_contained(a, b):
@@ -198,5 +199,80 @@ def interval_position_overlap(intervals, positions):
     position_idx = vrange(start_pos_idx, lengths)
 
     return interval_idx, position_idx
+
+
+def reindex_segments(cn_1, cn_2):
+    """ Reindex segment data to a common set of intervals
+
+    Args:
+        cn_1 (pandas.DataFrame): table of copy number
+        cn_2 (pandas.DataFrame): another table of copy number
+
+    Returns:
+        pandas.DataFrame: reindex table
+
+    Expected columns of input dataframe: 'chromosome', 'start', 'end'
+
+    Output dataframe has columns 'chromosome', 'start', 'end', 'idx_1', 'idx_2'
+    where 'idx_1', and 'idx_2' are the indexes into cn_1 and cn_2 of sub segments
+    with the given chromosome, start, and end.
+
+    """
+
+    reseg = list()
+
+    for chromosome, chrom_cn_1 in cn_1.groupby('chromosome'):
+        
+        chrom_cn_2 = cn_2[cn_2['chromosome'] == chromosome]
+        if len(chrom_cn_2.index) == 0:
+            continue
+
+        segment_boundaries = np.concatenate([
+            chrom_cn_1['start'].values,
+            chrom_cn_1['end'].values,
+            chrom_cn_2['start'].values,
+            chrom_cn_2['end'].values,
+        ])
+
+        segment_boundaries = np.sort(np.unique(segment_boundaries))
+
+        chrom_reseg = pd.DataFrame({
+            'start':segment_boundaries[:-1],
+            'end':segment_boundaries[1:],
+        })
+
+        for suffix, chrom_cn in zip(('_1', '_2'), (chrom_cn_1, chrom_cn_2)):
+
+            chrom_reseg['start_idx'+suffix] = np.searchsorted(
+                chrom_cn['start'].values,
+                chrom_reseg['start'].values,
+                side='right',
+            ) - 1
+
+            chrom_reseg['end_idx'+suffix] = np.searchsorted(
+                chrom_cn['end'].values,
+                chrom_reseg['end'].values,
+                side='left',
+            )
+
+            chrom_reseg['filter'+suffix] = (
+                (chrom_reseg['start_idx'+suffix] != chrom_reseg['end_idx'+suffix]) | 
+                (chrom_reseg['start_idx'+suffix] < 0) | 
+                (chrom_reseg['start_idx'+suffix] >= len(chrom_reseg['end'].values))
+            )
+
+        chrom_reseg = chrom_reseg[~chrom_reseg['filter_1'] & ~chrom_reseg['filter_2']]
+
+        for suffix, chrom_cn in zip(('_1', '_2'), (chrom_cn_1, chrom_cn_2)):
+
+            chrom_reseg['idx'+suffix] = chrom_cn.index.values[chrom_reseg['start_idx'+suffix].values]
+            chrom_reseg.drop(['start_idx'+suffix, 'end_idx'+suffix, 'filter'+suffix], axis=1, inplace=True)
+
+        chrom_reseg['chromosome'] = chromosome
+
+        reseg.append(chrom_reseg)
+
+    return pd.concat(reseg, ignore_index=True)
+
 
 
