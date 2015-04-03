@@ -365,7 +365,7 @@ else:
 
         for param_group, param_values in params.iteritems():
             for key, value in param_values.iteritems():
-                results[param_group + '_' + key] = value
+                results[param_group + '_' + key] = [value]
 
         results = pd.DataFrame(results, index=[0])
 
