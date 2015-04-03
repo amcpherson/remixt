@@ -267,7 +267,87 @@ class CloneHDAnalysis(object):
 
         """
 
-        pass
+        segment_length = 1000
+
+        with open(self.get_analysis_filename('tumour.summary.txt'), 'r') as summary_file:
+
+            summary_info = dict()
+
+            names = list()
+            for line in summary_files:
+                if line.startswith('#'):
+                    names = line[1:].split()
+                    if len(names) == 2 and names[1] == 'clones':
+                        summary_info['num_clones'] = int(names[0])
+                        names = ['mass'] + ['frac_'+str(i+1) for i in xrange(int(names[0]))]
+                else:
+                    values = line.split()
+                    summary_info.update(dict(zip(names, values)))
+
+        with open(output_mix_filename, 'w') as output_mix_file:
+
+            mix = [float(summary_info['frac_'+str(i+1)]) for i in xrange(summary_info['num_clones'])]
+            mix = [1-sum(mix)] + mix
+
+            output_mix_file.write('\t'.join(mix))
+
+        cn_table = None
+
+        for clone_id in xrange(1, summary_info['num_clones']+1):
+
+            cna_filename = self.get_analysis_filename('tumour.cna.clone-{0}.txt'.format(clone_id))
+
+            cna_data = pd.read_csv(cna_filename, delim_whitespace=True)
+            cna_data.rename(columns={'#chr':'chromosome', 'first-locus':'start', 'last-locus':'end'}, inplace=True)
+            cna_data.drop(['nloci'], axis=1, inplace=True)
+            cna_data['start'] -= segment_length
+            cna_data.set_index(['chromosome', 'start', 'end'], inplace=True)
+            cna_data = cna_data.idxmax(axis=1).astype(int)
+            cna_data.name = 'total'
+            cna_data = cna_data.reset_index()
+
+            baf_filename = self.get_analysis_filename('tumour.baf.clone-{0}.txt'.format(clone_id))
+
+            baf_data = pd.read_csv(baf_filename, delim_whitespace=True)
+            baf_data.rename(columns={'#chr':'chromosome', 'first-locus':'start', 'last-locus':'end'}, inplace=True)
+            baf_data.drop(['nloci'], axis=1, inplace=True)
+            baf_data.set_index(['chromosome', 'start', 'end'], inplace=True)
+            baf_data = baf_data.idxmax(axis=1).astype(int)
+            baf_data.name = 'allele'
+            baf_data = baf_data.reset_index()
+
+            data = demix.segalg.reindex_segments(cna_data, baf_data)
+            data = data.merge(cna_data[['total']], left_on='idx_1', right_index=True)
+            data = data.merge(baf_data[['allele']], left_on='idx_2', right_index=True)
+
+            data['major'] = np.maximum(data['allele'], data['total'] - data['allele'])
+            data['minor'] = np.minimum(data['allele'], data['total'] - data['allele'])
+            data.drop(['idx_1', 'idx_2', 'allele'], axis=1, inplace=True)
+
+            assert (data['minor'] >= 0).all()
+
+            data.rename(inplace=True, columns={
+                'total':'total_{0}'.format(clone_id),
+                'minor':'minor_{0}'.format(clone_id),
+                'major':'major_{0}'.format(clone_id),
+            })
+
+            if cn_table is None:
+                cn_table = data
+
+            else:
+                cn_table_prev = cn_table
+                cn_table = reindex_segments(cn_table_prev, data)
+
+                cn_table_prev.drop(['chromosome', 'start', 'end'], axis=1, inplace=True)
+                data.drop(['chromosome', 'start', 'end'], axis=1, inplace=True)
+
+                cn_table = cn_table.merge(cn_table_prev, left_on='idx_1', right_index=True)
+                cn_table = cn_table.merge(data, left_on='idx_2', right_index=True)
+
+                cn_table.drop(['idx_1', 'idx_2'], axis=1, inplace=True)
+
+        cn_table.to_csv(output_cn_filename, sep='\t', index=False)
 
 
 if __name__ == '__main__':
