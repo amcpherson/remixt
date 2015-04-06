@@ -364,13 +364,17 @@ def evaluate_results(mixture_filename, cn_filename, mix_filename):
             ]
         ).swapaxes(0, 2).swapaxes(1, 2)
 
-    # Ensure true clones are consistent, largest first
-    order_true = np.argsort(mix_true)[::-1]
+    mix_true = gm.frac
+    with open(mix_filename, 'r') as mix_file:
+        mix_pred = np.array(mix_file.readline().split()).astype(float)
+
+    # Ensure true tumour clones are consistent, largest first
+    order_true = np.argsort(mix_true[1:])[::-1]
     mix_true = mix_true[order_true]
     cn_true = cn_true[:,order_true,:]
 
-    # Ensure predicted clones are consistent, largest first
-    order_pred = np.argsort(mix_pred)[::-1]
+    # Ensure predicted tumour clones are consistent, largest first
+    order_pred = np.argsort(mix_pred[1:])[::-1]
     mix_pred = mix_pred[order_pred]
     cn_pred = cn_pred[:,order_pred,:]
 
@@ -383,10 +387,6 @@ def evaluate_results(mixture_filename, cn_filename, mix_filename):
     cn_true = cn_true[cn_data_index['idx_1'].values,:,:]
     cn_pred = cn_pred[cn_data_index['idx_2'].values,:,:]
     segment_lengths = (cn_data_index['end'] - cn_data_index['start']).values
-
-    mix_true = gm.frac
-    with open(mix_filename, 'r') as mix_file:
-        mix_pred = np.array(mix_file.readline().split()).astype(float)
 
     proportion_cn_correct = demix.simulations.pipeline.compare_cn(
         mix_true[1:], mix_pred[1:], cn_true, cn_pred, segment_lengths)
