@@ -151,7 +151,7 @@ def infer_cn(
     mix = h / h.sum()
 
     with open(mix_filename, 'w') as mix_file:
-        mix_file.write('\t'.join([str(a) for a in mix]))
+        mix_file.write('\t'.join([str(a) for a in mix]) + '\n')
 
     cn, brk_cn = model.decode(experiment.x, experiment.l, h)
 

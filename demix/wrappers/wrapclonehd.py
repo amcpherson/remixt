@@ -289,7 +289,7 @@ class CloneHDAnalysis(object):
             mix = [float(summary_info['frac_'+str(i+1)]) for i in xrange(summary_info['num_clones'])]
             mix = [1-sum(mix)] + mix
 
-            output_mix_file.write('\t'.join([str(a) for a in mix]))
+            output_mix_file.write('\t'.join([str(a) for a in mix]) + '\n')
 
         cn_table = None
 

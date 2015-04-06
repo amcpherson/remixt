@@ -332,7 +332,7 @@ class TitanAnalysis(object):
             mix = [n, (1-n) * t_2, (1-n) * abs(t_1 - t_2)]
 
         with open(output_mix_filename, 'w') as output_mix_file:
-            output_mix_file.write('\t'.join([str(a) for a in mix]))
+            output_mix_file.write('\t'.join([str(a) for a in mix]) + '\n')
 
         subprocess.check_call([
             'python',

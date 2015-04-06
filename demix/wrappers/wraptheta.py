@@ -268,7 +268,7 @@ class ThetaAnalysis(object):
         best_frac = best_frac.split(',')
 
         with open(output_mix_filename, 'w') as output_mix_file:
-            output_mix_file.write('\t'.join(best_frac))
+            output_mix_file.write('\t'.join(best_frac) + '\n')
 
         best_cn = theta2_results.loc[best_idx, 'C']
         best_cn = [a.split(',') for a in best_cn.split(':')]
