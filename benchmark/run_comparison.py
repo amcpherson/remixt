@@ -54,7 +54,10 @@ if __name__ == '__main__':
 
     pyp = pypeliner.app.Pypeline([demix, run_comparison], config)
 
-    chromosomes = [str(a) for a in xrange(1, 23)]
+    params = dict()
+    execfile(args['sim_params'], {}, params)
+
+    chromosomes = params['chromosomes']
 
     chromosome_lengths = dict()
     for chromosome, length in demix.utils.read_chromosome_lengths(config['genome_fai']).iteritems():
@@ -62,18 +65,7 @@ if __name__ == '__main__':
             continue
         chromosome_lengths[chromosome] = length
 
-    defaults = {
-        'h_total':0.1,
-        'N':1000,
-        'M':3,
-        'fragment_mean':300.,
-        'fragment_stddev':30.,
-        'read_length':100,
-        'base_call_error':0.005,
-        'frac_normal':0.4,
-        'chromosomes':chromosomes,
-        'chromosome_lengths':chromosome_lengths,
-    }
+    defaults = params['defaults']
 
     def merge_params(params, defaults):
         merged = dict()
@@ -83,20 +75,13 @@ if __name__ == '__main__':
                 merged[idx][key] = value
         return merged
 
-    germline_params = dict()
-    germline_params['random_seed'] = range(10, 10+10)
+    germline_params = params['germline_params']
     germline_params = merge_params(germline_params, defaults)
 
-    genome_params = dict()
-    genome_params['random_seed'] = range(10, 10+4)
-    genome_params['num_descendent_events'] = [10, 10, 20, 30]
-    genome_params['proportion_subclonal'] = [0.15, 0.3, 0.45, 0.6]
+    genome_params = params['genome_params']
     genome_params = merge_params(genome_params, defaults)
 
-    mixture_params = dict()
-    mixture_params['random_seed'] = range(10, 10+4)
-    mixture_params['tumour_data_seed'] = range(10, 10+4)
-    mixture_params['frac_clone'] = [(0.55,0.05),(0.5,0.1),(0.4,0.2),(0.3,0.3)]
+    mixture_params = params['mixture_params']
     mixture_params = merge_params(mixture_params, defaults)
 
     # For each of n patients:
