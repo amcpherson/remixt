@@ -370,12 +370,12 @@ def evaluate_results(mixture_filename, cn_filename, mix_filename):
 
     # Ensure true tumour clones are consistent, largest first
     order_true = np.argsort(mix_true[1:])[::-1]
-    mix_true = mix_true[order_true]
+    mix_true[1:] = mix_true[order_true]
     cn_true = cn_true[:,order_true,:]
 
     # Ensure predicted tumour clones are consistent, largest first
     order_pred = np.argsort(mix_pred[1:])[::-1]
-    mix_pred = mix_pred[order_pred]
+    mix_pred[1:] = mix_pred[order_pred]
     cn_pred = cn_pred[:,order_pred,:]
 
     # Ensure major minor ordering is consistent
