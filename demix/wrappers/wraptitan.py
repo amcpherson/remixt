@@ -184,6 +184,14 @@ class TitanTool(object):
                 if sentinal.unfinished:
                     subprocess.check_call('R -q -e "source(\'http://bioconductor.org/biocLite.R\'); biocLite(\'{0}\')"'.format(pkg), shell=True)
 
+        with Sentinal('clone_titan') as sentinal:
+            if sentinal.unfinished:
+                with utils.CurrentDirectory(self.packages_directory):
+                    subprocess.check_call('git clone https://github.com/gavinha/TitanCNA', shell=True)
+                    with utils.CurrentDirectory('TitanCNA'):
+                        subprocess.check_call('git checkout 30fceb911b99a281ccbe3fac29d154f567127410', shell=True)
+                    subprocess.check_call('R CMD INSTALL TitanCNA', shell=True)
+
         with Sentinal('download_chrom_info') as sentinal:
             if sentinal.unfinished:
                 with utils.CurrentDirectory(self.data_directory):
