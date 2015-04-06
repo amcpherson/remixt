@@ -67,6 +67,9 @@ if __name__ == '__main__':
 
     defaults = params['defaults']
 
+    defaults['chromosomes'] = chromosomes
+    defaults['chromosome_lengths'] = chromosome_lengths
+
     def merge_params(params, defaults):
         merged = dict()
         for idx, values in enumerate(zip(*params.values())):
