@@ -221,6 +221,7 @@ class ThetaAnalysis(object):
             self.tool.theta_bin,
             count_data_filename,
             '--FORCE',
+            '--NUM_INTERVALS', '15',
             '--OUTPUT_PREFIX', theta_prefix
         ]
         subprocess.check_call(' '.join(theta_cmd), shell=True)
