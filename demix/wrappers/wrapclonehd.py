@@ -314,7 +314,7 @@ class CloneHDAnalysis(object):
             baf_data.rename(columns={'#chr':'chromosome', 'first-locus':'start', 'last-locus':'end'}, inplace=True)
             baf_data.drop(['nloci'], axis=1, inplace=True)
             baf_data.set_index(['chromosome', 'start', 'end'], inplace=True)
-            baf_data = baf_data.idxmax(axis=1).astype(int)
+            baf_data = baf_data.fillna(0).idxmax(axis=1).astype(int)
             baf_data.name = 'allele'
             baf_data = baf_data.reset_index()
 
