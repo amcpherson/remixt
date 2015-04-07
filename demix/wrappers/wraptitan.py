@@ -140,13 +140,13 @@ class TitanTool(object):
 
         self.packages_directory = os.path.join(self.install_directory, 'packages')
         self.data_directory = os.path.join(self.install_directory, 'data')
+        self.bin_directory = os.path.join(self.install_directory, 'bin')
 
         self.chrom_info_filename = os.path.join(self.data_directory, 'chromInfo.txt.gz')
 
         self.wrapper_directory = os.path.realpath(os.path.dirname(__file__))
-        self.bin_directory = os.path.join(self.wrapper_directory, 'bin')
-        self.run_titan_script = os.path.join(self.bin_directory, 'run_titan.R')
-        self.parse_segments_script = os.path.join(self.bin_directory, 'parse_titan_segments.py')
+        self.run_titan_script = os.path.join(self.wrapper_directory, 'bin', 'run_titan.R')
+        self.create_segments_script = os.path.join(self.bin_directory, 'createTITANsegmentfiles.pl')
 
         self.max_copy_number = 5
 
@@ -159,6 +159,7 @@ class TitanTool(object):
 
         utils.makedirs(self.install_directory)
         utils.makedirs(self.packages_directory)
+        utils.makedirs(self.bin_directory)
 
         Sentinal = utils.SentinalFactory(os.path.join(self.install_directory, 'sentinal_'), kwargs)
 
@@ -194,6 +195,14 @@ class TitanTool(object):
                     with utils.CurrentDirectory('TitanCNA'):
                         subprocess.check_call('git checkout 30fceb911b99a281ccbe3fac29d154f567127410', shell=True)
                     subprocess.check_call('R CMD INSTALL TitanCNA', shell=True)
+
+        with Sentinal('install_titan_tools') as sentinal:
+            if sentinal.unfinished:
+                with utils.CurrentDirectory(self.packages_directory):
+                    subprocess.check_call('git clone https://github.com/gavinha/TitanCNA-utils', shell=True)
+                    with utils.CurrentDirectory('TitanCNA-utils'):
+                        subprocess.check_call('git checkout 4cfd6155e620dade4090322d71f45f5a39cb688e', shell=True)
+                        utils.symlink('titan_scripts/createTITANsegmentfiles.pl', link_directory=self.bin_directory)
 
         with Sentinal('download_chrom_info') as sentinal:
             if sentinal.unfinished:
@@ -338,28 +347,37 @@ class TitanAnalysis(object):
             output_mix_file.write('\t'.join([str(a) for a in mix]) + '\n')
 
         subprocess.check_call([
-            'python',
-            self.tool.parse_segments_script,
-            self.get_analysis_filename('init_{0}'.format(best_idx), 'cn.tsv'),
-            self.get_analysis_filename('cn_best.tsv'),
-            '--max_copy_number', '{0}'.format(self.tool.max_copy_number),
+            'perl',
+            self.tool.create_segments_script,
+            '-i', self.get_analysis_filename('init_{0}'.format(best_idx), 'cn.tsv'),
+            '-o', self.get_analysis_filename('cn_best.tsv'),
+            '-igv', self.get_analysis_filename('cn_best.igv'),
         ])
 
-        cn_data = pd.read_csv(self.get_analysis_filename('cn_best.tsv'), sep='\t', converters={'chrom':str})
+        cn_data = pd.read_csv(
+            self.get_analysis_filename('cn_best.tsv'),
+            sep='\t', converters={'Chromosome':str}
+        )
 
         cn_columns = {
-            'chrom':'chromosome',
-            'beg':'start',
-            'end':'end',
-            'major_cn':'major_1',
-            'minor_cn':'minor_1',
-            'total_cn':'total_1',
-            'alt_major_cn':'major_2',
-            'alt_minor_cn':'minor_2',
-            'alt_total_cn':'total_2',
+            'Chromosome':'chromosome',
+            'Start_Position(bp)':'start',
+            'End_Position(bp)':'end',
+            'Copy_Number':'total_1',
+            'MajorCN':'major_1',
+            'MinorCN':'minor_1',
+            'Clonal_Cluster':'clone',
         }
 
-        cn_data = cn_data.rename(columns=cn_columns)
+        cn_data = cn_data.rename(columns=cn_columns)[cn_columns.values()]
+
+        cn_data['clone'] = cn_data['clone'].fillna(1).astype(int)
+
+        cn_data['total_2'] = np.where(cn_data['clone'] == 1, cn_data['total_1'], 2)
+        cn_data['major_2'] = np.where(cn_data['clone'] == 1, cn_data['major_1'], 1)
+        cn_data['minor_2'] = np.where(cn_data['clone'] == 1, cn_data['minor_1'], 1)
+
+        cn_data = cn_data.drop(['clone'], axis=1)
 
         cn_data.to_csv(output_cn_filename, sep='\t', index=False)
 
