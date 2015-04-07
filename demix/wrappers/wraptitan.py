@@ -113,6 +113,9 @@ def write_titan_format_alleles(allele_filename, allele_count):
         'NrefCount',
     ]]
 
+    allele_count['refCount'] = allele_count['refCount'].astype(int)
+    allele_count['NrefCount'] = allele_count['NrefCount'].astype(int)
+
     allele_count.to_csv(allele_filename, sep='\t', index=False, header=False)
 
 
