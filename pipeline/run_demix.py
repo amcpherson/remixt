@@ -1,6 +1,5 @@
 import os
 import sys
-import ConfigParser
 import itertools
 import argparse
 import pickle

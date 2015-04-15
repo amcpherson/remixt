@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import colorConverter
 from matplotlib.path import Path
 import matplotlib.patches as patches
+from matplotlib.patches import Rectangle
 
 import demix.analysis.experiment
 
@@ -35,6 +36,12 @@ def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor'):
 
     def plot_segment(ax, row, field, color):
         ax.plot([row['start'], row['end']], [row[field]]*2, color=color, lw=1)
+        ax.add_patch(
+            Rectangle((row['start'], 0), row['end'] - row['start'], row[field],
+                facecolor=colorConverter.to_rgba(color, alpha=0.5),
+                edgecolor=colorConverter.to_rgba(color, alpha=0.0),
+            )
+        )
 
     def plot_connectors(ax, row, next_row, field, color):
         mid = (row[field] + next_row[field]) / 2.0
@@ -101,13 +108,19 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', min
     cnv['start'] = cnv['start'] + cnv['chromosome_start']
     cnv['end'] = cnv['end'] + cnv['chromosome_start']
 
-    demix.cn_plot.plot_cnv_segments(ax, cnv, major_col=major_col, minor_col=minor_col)
+    plot_cnv_segments(ax, cnv, major_col=major_col, minor_col=minor_col)
 
-    ax.spines['left'].set_position(('outward', 10))
-    ax.spines['bottom'].set_position(('outward', 10))
+    ax.set_ylim((0, maxcopies+.6))
+    ax.set_yticks(range(0, maxcopies+1))
+    ax.set_yticklabels(ax.get_yticks(), ha='left')
+    ax.yaxis.tick_left()
+
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
         
+    ax.yaxis.set_tick_params(direction='out', labelsize=12)
+    ax.xaxis.set_tick_params(direction='out', labelsize=12)
+
     ax.xaxis.tick_bottom()
 
     if chromosome is not None:
@@ -118,13 +131,13 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', min
         plot_start = start + chromosome_info.loc[chromosome, 'start']
         plot_end = end + chromosome_info.loc[chromosome, 'start']
         ax.set_xlim((plot_start, plot_end))
-        ax.set_xlabel('chromosome ' + chromosome)
-        step = (end - start) / 16.
+        ax.set_xlabel('chromosome ' + chromosome, fontsize=20)
+        step = (end - start) / 12.
         step = np.round(step, decimals=-int(np.floor(np.log10(step))))
         xticks = np.arange(plot_start, plot_end, step)
         xticklabels = np.arange(start, end, step)
         ax.set_xticks(xticks)
-        ax.set_xticklabels([str(a/1e6) + 'Mb' for a in xticklabels])
+        ax.set_xticklabels(['{:g}'.format(a/1e6) + 'Mb' for a in xticklabels])
     else:
         ax.set_xlim((0, chromosome_info['end'].max()))
         ax.set_xlabel('chromosome')
@@ -133,9 +146,9 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', min
         ax.xaxis.set_minor_locator(matplotlib.ticker.FixedLocator(chromosome_info['mid']))
         ax.xaxis.set_minor_formatter(matplotlib.ticker.FixedFormatter(chromosome_info.index.values))
 
-    ax.set_ylim((-0.05*maxcopies, maxcopies+.6))
-    ax.set_yticks(range(0, maxcopies+1))
-    ax.yaxis.tick_left()
+    ax.yaxis.set_tick_params(pad=8)
+    ax.yaxis.set_tick_params(pad=8)
+    
     ax.xaxis.grid(True, which='major', linestyle=':')
     ax.yaxis.grid(True, which='major', linestyle=':')
     
@@ -182,7 +195,7 @@ def plot_breakpoints_genome(ax, breakpoint, chromosome_info, scale_height=1.0):
         verts = [(pos_1, 0.), (pos_1, height), (pos_2, height), (pos_2, 0.)]
 
         path = Path(verts, codes)
-        patch = patches.PathPatch(path, facecolor='none', edgecolor='#ff00ff', lw=1)
+        patch = patches.PathPatch(path, facecolor='none', edgecolor='#2eb036', lw=2)
         ax.add_patch(patch)
 
 
