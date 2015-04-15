@@ -75,7 +75,7 @@ Build the mappability file:
 
 where `$tmp_map` is a unique temporary directory.  If you need to stop and restart the script, using the same temporary directory will allow the script to restart where it left off.
 
-The `setup/mappability_bwa.py` script has options for parallelism, see the section "Parallelism using pypeliner" below.
+The `setup/mappability_bwa.py` script has options for parallelism, see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
 
 ## Run
 
@@ -126,7 +126,7 @@ To extract data from `$normal_bam` and `$tumour_bam` to `$normal_seqdata` and `$
 
 where `$tmp_seq_1` and `$tmp_seq_2` are unique temporary directories.  If you need to stop and restart the script, using the same temporary directory will allow the scripts to restart where it left off.
 
-For parallelism options see the section "Parallelism using pypeliner" below.
+For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
 
 ### Step 2 - Preparing Segment Read Counts
 
@@ -148,7 +148,7 @@ To create read counts for segments given in segment file `$segments` for normal 
 
 where `$tmp_counts` is a unique temporary directory.  If you need to stop and restart the script, using the same temporary directory will allow the scripts to restart where it left off.
 
-For parallelism options see the section "Parallelism using pypeliner" below.
+For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
 
 ### Step 3 - Running Demix
 
@@ -162,7 +162,7 @@ To run demix for tumour sample 1 from above with counts file `$tumour_1_counts`,
 
 where `$tmp_demix` is a unique temporary directory.  If you need to stop and restart the script, using the same temporary directory will allow the scripts to restart where it left off.
 
-For parallelism options see the section "Parallelism using pypeliner" below.
+For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
 
 ### Intermediate File Formats
 
