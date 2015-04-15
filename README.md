@@ -8,6 +8,14 @@ Demix is a tool for joint inference of clone specific segment and breakpoint cop
 
 Demix requires python and the numpy/scipy stack.  The recommended way to install python (also the easiest), is to download and install the latest (Anaconda Python](https://store.continuum.io/cshop/anaconda/) from the Continuum website.
 
+#### Python libraries
+
+If you do no use anaconda, you will be required to install the following python libraries.
+
+* [numpy/scipy](http://www.numpy.org)
+* [pandas](http://pandas.pydata.org)
+* [matplotlib](http://matplotlib.org)
+
 ### Scons
 
 Building the source requires scons, verson 2.3.4 can be installed as follows:
@@ -16,6 +24,18 @@ Building the source requires scons, verson 2.3.4 can be installed as follows:
     tar -xzvf scons-2.3.4.tar.gz
     cd scons-2.3.4
     python setup.py install
+
+### Samtools
+
+[Samtools](http://www.htslib.org) is required and should be on the path.
+
+### Shapeit
+
+[shapeit2](https://mathgen.stats.ox.ac.uk/genetics_software/shapeit/shapeit.html#download) is required and should be on the path.
+
+### BWA
+
+[BWA](http://bio-bwa.sourceforge.net) is used by the `mappability_bwa.py` script for generating a bwa mappability file, for the users whose bam files were created using BWA.
 
 ## Install
 
