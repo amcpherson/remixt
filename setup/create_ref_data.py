@@ -89,6 +89,10 @@ if __name__ == '__main__':
                         genome_file.write(line)
     auto_sentinal.run(wget_genome_fasta)
 
+    def bwa_index():
+        pypeliner.commandline.execute('bwa', 'index', config['genome_fasta'])
+    auto_sentinal.run(bwa_index)
+
     def samtools_faidx():
         pypeliner.commandline.execute('samtools', 'faidx', config['genome_fasta'])
     auto_sentinal.run(samtools_faidx)
