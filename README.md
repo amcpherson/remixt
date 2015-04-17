@@ -139,10 +139,12 @@ The first step in the process is to import the relevant concordant read data fro
 To extract data from `$normal_bam` and `$tumour_bam` to `$normal_seqdata` and `$tumour_seqdata` respectively:
 
     python pipeline/extract_seqdata.py $ref_data_dir \
-        $normal_bam $normal_seqdata
+        $normal_bam $normal_seqdata \
+        --tmpdir $tmp_seq_1
 
     python pipeline/extract_seqdata.py $ref_data_dir \
-        $tumour_bam $tumour_seqdata
+        $tumour_bam $tumour_seqdata \
+        --tmpdir $tmp_seq_2
 
 where `$tmp_seq_1` and `$tmp_seq_2` are unique temporary directories.  If you need to stop and restart the script, using the same temporary directory will allow the scripts to restart where it left off.
 
