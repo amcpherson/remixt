@@ -24,7 +24,7 @@ else:
     compression = None
 
 cnv = pd.read_csv(args.preds_filename, sep='\t', converters={'chromosome':str}, compression=compression)
-cnv.dropna(inplace=True)
+cnv = cnv.replace([np.inf, -np.inf], np.nan).dropna()
 
 cnv = cnv.loc[(cnv['chromosome'].isin(chromosomes))]
 
