@@ -126,7 +126,7 @@ class DemixAnalysis(object):
         demix.analysis.pipeline.tabulate_h(self.get_analysis_filename('h_table.tsv'), h_opt_filenames)
 
         demix.analysis.pipeline.infer_cn(
-            output_cn_filename,
+            self.get_analysis_filename('cn.tsv'),
             self.get_analysis_filename('brk_cn.tsv'),
             self.get_analysis_filename('experiment_plot.pdf'),
             output_mix_filename,
@@ -134,6 +134,28 @@ class DemixAnalysis(object):
             self.get_analysis_filename('model_infer.pickle'),
             self.get_analysis_filename('h_table.tsv'),
         )
+
+        cn_data = pd.read_csv(self.get_analysis_filename('cn.tsv'), sep='\t', converters={'chromosome':str})
+
+        cn_data['total_1'] = cn_data['major_1'] + cn_data['minor_1']
+        cn_data['total_2'] = cn_data['major_2'] + cn_data['minor_2']
+
+        cn_columns = [
+            'chromosome',
+            'start',
+            'end',
+            'major_1',
+            'minor_1',
+            'total_1',
+            'major_2',
+            'minor_2',
+            'total_2',
+        ]
+
+        cn_data = cn_data[cn_columns]
+
+        cn_data.to_csv(output_cn_filename, sep='\t', index=False)
+
 
 
 if __name__ == '__main__':

@@ -54,7 +54,10 @@ if __name__ == '__main__':
 
     pyp = pypeliner.app.Pypeline([demix, run_comparison], config)
 
-    chromosomes = [str(a) for a in xrange(1, 23)]
+    params = dict()
+    execfile(args['sim_params'], {}, params)
+
+    chromosomes = params['chromosomes']
 
     chromosome_lengths = dict()
     for chromosome, length in demix.utils.read_chromosome_lengths(config['genome_fai']).iteritems():
@@ -62,18 +65,10 @@ if __name__ == '__main__':
             continue
         chromosome_lengths[chromosome] = length
 
-    defaults = {
-        'h_total':0.1,
-        'N':1000,
-        'M':3,
-        'fragment_mean':300.,
-        'fragment_stddev':30.,
-        'read_length':100,
-        'base_call_error':0.005,
-        'frac_normal':0.4,
-        'chromosomes':chromosomes,
-        'chromosome_lengths':chromosome_lengths,
-    }
+    defaults = params['defaults']
+
+    defaults['chromosomes'] = chromosomes
+    defaults['chromosome_lengths'] = chromosome_lengths
 
     def merge_params(params, defaults):
         merged = dict()
@@ -83,20 +78,13 @@ if __name__ == '__main__':
                 merged[idx][key] = value
         return merged
 
-    germline_params = dict()
-    germline_params['random_seed'] = range(10, 10+10)
+    germline_params = params['germline_params']
     germline_params = merge_params(germline_params, defaults)
 
-    genome_params = dict()
-    genome_params['random_seed'] = range(10, 10+4)
-    genome_params['num_descendent_events'] = [10, 10, 20, 30]
-    genome_params['proportion_subclonal'] = [0.15, 0.3, 0.45, 0.6]
+    genome_params = params['genome_params']
     genome_params = merge_params(genome_params, defaults)
 
-    mixture_params = dict()
-    mixture_params['random_seed'] = range(10, 10+4)
-    mixture_params['tumour_data_seed'] = range(10, 10+4)
-    mixture_params['frac_clone'] = [(0.55,0.05),(0.5,0.1),(0.4,0.2),(0.3,0.3)]
+    mixture_params = params['mixture_params']
     mixture_params = merge_params(mixture_params, defaults)
 
     # For each of n patients:
@@ -187,7 +175,7 @@ if __name__ == '__main__':
         config,
     )
 
-    pyp.sch.transform('merge_haps', genome_axis, {'mem':1},
+    pyp.sch.transform('merge_haps', genome_axis, {'mem':8},
         demix.utils.merge_tables,
         None,
         mgd.TempOutputFile('haps.tsv', *genome_axis),
@@ -211,7 +199,7 @@ if __name__ == '__main__':
 
     init_axis = tool_axis + ('bytool',)
 
-    pyp.sch.transform('tool_prepare', tool_axis, {'mem':8},
+    pyp.sch.transform('tool_prepare', tool_axis, {'mem':16},
         run_comparison.tool_prepare,
         mgd.TempOutputObj('init_idx', *init_axis),
         mgd.TempInputObj('tool_analysis', *tool_axis),
@@ -223,14 +211,14 @@ if __name__ == '__main__':
         mgd.TempInputFile('haps.tsv', *genome_axis),
     )
 
-    pyp.sch.transform('tool_run', init_axis, {'mem':8},
+    pyp.sch.transform('tool_run', init_axis, {'mem':16},
         run_comparison.tool_run,
         mgd.TempOutputObj('run_result', *init_axis),
         mgd.TempInputObj('tool_analysis', *tool_axis),
         mgd.TempInputObj('init_idx', *init_axis),
     )
 
-    pyp.sch.transform('tool_report', tool_axis, {'mem':4},
+    pyp.sch.transform('tool_report', tool_axis, {'mem':16},
         run_comparison.tool_report,
         None,
         mgd.TempInputObj('tool_analysis', *tool_axis),
@@ -239,12 +227,45 @@ if __name__ == '__main__':
         mgd.TempOutputFile('mix.tsv', *tool_axis),
     )
 
-    pyp.sch.transform('tabulate_results', mixture_axis, {'mem':1},
-        run_comparison.tabulate_results,
+    pyp.sch.transform('evaluate_results', tool_axis, {'mem':1},
+        run_comparison.evaluate_results,
         None,
-        mgd.TempOutputFile('results.tsv', *mixture_axis),
+        mgd.TempOutputFile('results.tsv', *tool_axis),
+        mgd.TempInputFile('mixture', *mixture_axis),
         mgd.TempInputFile('cn.tsv', *tool_axis),
         mgd.TempInputFile('mix.tsv', *tool_axis),
+        mgd.InputInstance('bytool'),
+        germline=mgd.TempInputObj('germline_params', *germline_axis),
+        mixture=mgd.TempInputObj('mixture_params', *mixture_axis),
+        genome=mgd.TempInputObj('genome_params', *genome_axis),
+    )
+
+    pyp.sch.transform('merge_tool_results', mixture_axis, {'mem':1},
+        demix.utils.merge_tables,
+        None,
+        mgd.TempOutputFile('results.tsv', *mixture_axis),
+        mgd.TempInputFile('results.tsv', *tool_axis),
+    )
+
+    pyp.sch.transform('merge_mixture_results', genome_axis, {'mem':1},
+        demix.utils.merge_tables,
+        None,
+        mgd.TempOutputFile('results.tsv', *genome_axis),
+        mgd.TempInputFile('results.tsv', *mixture_axis),
+    )
+
+    pyp.sch.transform('merge_genome_results', germline_axis, {'mem':1},
+        demix.utils.merge_tables,
+        None,
+        mgd.TempOutputFile('results.tsv', *germline_axis),
+        mgd.TempInputFile('results.tsv', *genome_axis),
+    )
+
+    pyp.sch.transform('merge_germline_results', (), {'mem':1},
+        demix.utils.merge_tables,
+        None,
+        mgd.OutputFile(args['results_table']),
+        mgd.TempInputFile('results.tsv', *germline_axis),
     )
 
     pyp.run()
@@ -323,9 +344,19 @@ else:
         tool_analysis.report(cn_filename, mix_filename)
 
 
-    def tabulate_results(table_filename, cn_filenames, mix_filenames):
+    def evaluate_results(results_filename, mixture_filename, cn_filename, mix_filename, tool_name, **params):
 
-        with open(table_filename, 'w') as f:
-            pass
+        results = demix.simulations.pipeline.evaluate_results(
+            mixture_filename, cn_filename, mix_filename)
+
+        results['tool'] = tool_name
+
+        for param_group, param_values in params.iteritems():
+            for key, value in param_values.iteritems():
+                results[param_group + '_' + key] = [value]
+
+        results = pd.DataFrame(results, index=[0])
+
+        results.to_csv(results_filename, sep='\t', index=False)
 
 

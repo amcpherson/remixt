@@ -6,6 +6,7 @@ import subprocess
 import tarfile
 import argparse
 import itertools
+import collections
 import numpy as np
 import pandas as pd
 import scipy.stats
@@ -59,6 +60,7 @@ def write_segment_count_wig(wig_filename, seqdata_filename, chromosome_lengths, 
             )
 
             wig.write('\n'.join([str(c) for c in seg_count]))
+            wig.write('\n')
 
 
 def calculate_allele_counts(seqdata_filename):
@@ -84,9 +86,9 @@ def infer_het_positions(seqdata_filename):
 
     allele_count = calculate_allele_counts(seqdata_filename)
     
-    allele_count = demix.analysis.haplotype.infer_genotype(allele_count)
+    demix.analysis.haplotype.infer_snp_genotype(allele_count)
 
-    het_positions = normal_allele_count.loc[normal_allele_count['AB'] == 1, ['chromosome', 'position']]
+    het_positions = allele_count.loc[allele_count['AB'] == 1, ['chromosome', 'position']]
 
     return het_positions
 
@@ -110,6 +112,9 @@ def write_titan_format_alleles(allele_filename, allele_count):
         'NrefBase',
         'NrefCount',
     ]]
+
+    allele_count['refCount'] = allele_count['refCount'].astype(int)
+    allele_count['NrefCount'] = allele_count['NrefCount'].astype(int)
 
     allele_count.to_csv(allele_filename, sep='\t', index=False, header=False)
 
@@ -135,13 +140,13 @@ class TitanTool(object):
 
         self.packages_directory = os.path.join(self.install_directory, 'packages')
         self.data_directory = os.path.join(self.install_directory, 'data')
+        self.bin_directory = os.path.join(self.install_directory, 'bin')
 
         self.chrom_info_filename = os.path.join(self.data_directory, 'chromInfo.txt.gz')
 
         self.wrapper_directory = os.path.realpath(os.path.dirname(__file__))
-        self.bin_directory = os.path.join(self.wrapper_directory, 'bin')
-        self.run_titan_script = os.path.join(self.bin_directory, 'run_titan.R')
-        self.parse_segments_script = os.path.join(self.bin_directory, 'parse_titan_segments.py')
+        self.run_titan_script = os.path.join(self.wrapper_directory, 'bin', 'run_titan.R')
+        self.create_segments_script = os.path.join(self.bin_directory, 'createTITANsegmentfiles.pl')
 
         self.max_copy_number = 5
 
@@ -154,6 +159,7 @@ class TitanTool(object):
 
         utils.makedirs(self.install_directory)
         utils.makedirs(self.packages_directory)
+        utils.makedirs(self.bin_directory)
 
         Sentinal = utils.SentinalFactory(os.path.join(self.install_directory, 'sentinal_'), kwargs)
 
@@ -181,6 +187,22 @@ class TitanTool(object):
             with Sentinal('install_r_'+pkg) as sentinal:
                 if sentinal.unfinished:
                     subprocess.check_call('R -q -e "source(\'http://bioconductor.org/biocLite.R\'); biocLite(\'{0}\')"'.format(pkg), shell=True)
+
+        with Sentinal('clone_titan') as sentinal:
+            if sentinal.unfinished:
+                with utils.CurrentDirectory(self.packages_directory):
+                    subprocess.check_call('git clone https://github.com/gavinha/TitanCNA', shell=True)
+                    with utils.CurrentDirectory('TitanCNA'):
+                        subprocess.check_call('git checkout 30fceb911b99a281ccbe3fac29d154f567127410', shell=True)
+                    subprocess.check_call('R CMD INSTALL TitanCNA', shell=True)
+
+        with Sentinal('install_titan_tools') as sentinal:
+            if sentinal.unfinished:
+                with utils.CurrentDirectory(self.packages_directory):
+                    subprocess.check_call('git clone https://github.com/gavinha/TitanCNA-utils', shell=True)
+                    with utils.CurrentDirectory('TitanCNA-utils'):
+                        subprocess.check_call('git checkout 4cfd6155e620dade4090322d71f45f5a39cb688e', shell=True)
+                        utils.symlink('titan_scripts/createTITANsegmentfiles.pl', link_directory=self.bin_directory)
 
         with Sentinal('download_chrom_info') as sentinal:
             if sentinal.unfinished:
@@ -322,15 +344,42 @@ class TitanAnalysis(object):
             mix = [n, (1-n) * t_2, (1-n) * abs(t_1 - t_2)]
 
         with open(output_mix_filename, 'w') as output_mix_file:
-            output_mix_file.write('\t'.join([str(a) for a in mix]))
+            output_mix_file.write('\t'.join([str(a) for a in mix]) + '\n')
 
         subprocess.check_call([
-            'python',
-            self.tool.parse_segments_script,
-            self.get_analysis_filename('init_{0}'.format(best_idx), 'cn.tsv'),
-            output_cn_filename,
-            '--max_copy_number', '{0}'.format(self.tool.max_copy_number),
+            'perl',
+            self.tool.create_segments_script,
+            '-i', self.get_analysis_filename('init_{0}'.format(best_idx), 'cn.tsv'),
+            '-o', self.get_analysis_filename('cn_best.tsv'),
+            '-igv', self.get_analysis_filename('cn_best.igv'),
         ])
+
+        cn_data = pd.read_csv(
+            self.get_analysis_filename('cn_best.tsv'),
+            sep='\t', converters={'Chromosome':str}
+        )
+
+        cn_columns = {
+            'Chromosome':'chromosome',
+            'Start_Position(bp)':'start',
+            'End_Position(bp)':'end',
+            'Copy_Number':'total_1',
+            'MajorCN':'major_1',
+            'MinorCN':'minor_1',
+            'Clonal_Cluster':'clone',
+        }
+
+        cn_data = cn_data.rename(columns=cn_columns)[cn_columns.values()]
+
+        cn_data['clone'] = cn_data['clone'].fillna(1).astype(int)
+
+        cn_data['total_2'] = np.where(cn_data['clone'] == 1, cn_data['total_1'], 2)
+        cn_data['major_2'] = np.where(cn_data['clone'] == 1, cn_data['major_1'], 1)
+        cn_data['minor_2'] = np.where(cn_data['clone'] == 1, cn_data['minor_1'], 1)
+
+        cn_data = cn_data.drop(['clone'], axis=1)
+
+        cn_data.to_csv(output_cn_filename, sep='\t', index=False)
 
 
 

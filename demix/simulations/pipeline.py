@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+import demix.segalg
 import demix.simulations.experiment
 import demix.simulations.haplotype
 import demix.cn_plot
@@ -301,4 +302,123 @@ def write_breakpoints(breakpoint_filename, genomes_filename):
     breakpoint_table['prediction_id'] = xrange(len(breakpoint_table.index))
 
     breakpoint_table.to_csv(breakpoint_filename, sep='\t', header=True, index=False)
+
+
+def compare_cn(mix_true, mix_pred, cn_true, cn_pred, segment_lengths):
+    """ Compare copy number matrices
+
+    Args:
+        mix_true (numpy.array): real tumour clone mixture
+        mix_pred (numpy.array): predicted tumour clone mixture
+        cn_true (numpy.array): real tumour copy number
+        cn_pred (numpy.array): predicted tumour copy number
+        segment_lengths (numpy.array): predicted segment lengths
+
+    """
+
+    # Allow for clone copy number swapping if the mix fractions are close to equal
+    if mix_true.min() / mix_true.max() > 0.75:
+        cn_correct = (cn_true == cn_pred).all(axis=(1, 2)) | (cn_true == cn_pred[:,::-1,:]).all(axis=(1, 2))
+    else:
+        cn_correct = (cn_true == cn_pred).all(axis=(1, 2))
+
+    proportion_correct = float((cn_correct * segment_lengths).sum()) / float(segment_lengths.sum())
+
+    return proportion_correct
+
+
+def evaluate_results(mixture_filename, cn_filename, mix_filename):
+
+    with open(mixture_filename, 'r') as mixture_file:
+        gm = pickle.load(mixture_file)
+
+    cn_data = pd.read_csv(cn_filename, sep='\t', converters={'chromosome':str})
+
+    sim_segments = pd.DataFrame({
+        'chromosome':gm.segment_chromosome_id,
+        'start':gm.segment_start,
+        'end':gm.segment_end,
+    })
+
+    if 'major_1' in cn_data:
+
+        cn_true = gm.cn[:,1:,:]
+
+        cn_pred = np.array(
+            [
+                [cn_data['major_1'], cn_data['minor_1']],
+                [cn_data['major_2'], cn_data['minor_2']],
+            ]
+        ).swapaxes(0, 2).swapaxes(1, 2)
+
+    else:
+
+        cn_true = np.zeros((gm.cn.shape[0], gm.cn.shape[1]-1, 1))
+
+        cn_true[:,:,0] = gm.cn[:,1:,:].sum(axis=2)
+
+        cn_pred = np.array(
+            [
+                [cn_data['total_1']],
+                [cn_data['total_2']],
+            ]
+        ).swapaxes(0, 2).swapaxes(1, 2)
+
+    mix_true = gm.frac
+    with open(mix_filename, 'r') as mix_file:
+        mix_pred = np.array(mix_file.readline().split()).astype(float)
+
+    # Ensure true tumour clones are consistent, largest first
+    order_true = np.argsort(mix_true[1:])[::-1]
+    mix_true[1:] = mix_true[order_true]
+    cn_true = cn_true[:,order_true,:]
+
+    # Ensure predicted tumour clones are consistent, largest first
+    order_pred = np.argsort(mix_pred[1:])[::-1]
+    mix_pred[1:] = mix_pred[order_pred]
+    cn_pred = cn_pred[:,order_pred,:]
+
+    # Ensure major minor ordering is consistent
+    cn_true = np.sort(cn_true, axis=2)
+    cn_pred = np.sort(cn_pred, axis=2)
+
+    cn_data_index = demix.segalg.reindex_segments(sim_segments, cn_data)
+
+    cn_true = cn_true[cn_data_index['idx_1'].values,:,:]
+    cn_pred = cn_pred[cn_data_index['idx_2'].values,:,:]
+    segment_lengths = (cn_data_index['end'] - cn_data_index['start']).values
+
+    proportion_cn_correct = demix.simulations.pipeline.compare_cn(
+        mix_true[1:], mix_pred[1:], cn_true, cn_pred, segment_lengths)
+
+    is_dom_cn_correct = np.all(cn_true[:,0,:] == cn_pred[:,0,:], axis=1)
+
+    proportion_dom_cn_correct = float((is_dom_cn_correct * segment_lengths).sum()) / float(segment_lengths.sum())
+
+    is_clonal_true = np.all(cn_true[:,0:1,:].swapaxes(1, 2) == cn_true[:,:,:].swapaxes(1, 2), axis=(1, 2))
+    is_clonal_pred = np.all(cn_pred[:,0:1,:].swapaxes(1, 2) == cn_pred[:,:,:].swapaxes(1, 2), axis=(1, 2))
+    is_clonal_correct = is_clonal_true == is_clonal_pred
+    is_subclonal_correct = ~is_clonal_true == ~is_clonal_pred
+
+    proportion_clonal_correct = float((is_clonal_correct * segment_lengths).sum()) / float(segment_lengths.sum())
+    proportion_subclonal_correct = float((is_subclonal_correct * segment_lengths).sum()) / float(segment_lengths.sum())
+
+    results = dict()
+
+    results['proportion_cn_correct'] = proportion_cn_correct
+    results['proportion_dom_cn_correct'] = proportion_dom_cn_correct
+    results['proportion_clonal_correct'] = proportion_clonal_correct
+    results['proportion_subclonal_correct'] = proportion_subclonal_correct
+
+    for idx, f in enumerate(mix_true):
+        results['mix_true_'+str(idx)] = f
+
+    for idx, f in enumerate(mix_pred):
+        results['mix_pred_'+str(idx)] = f
+
+    return results
+
+
+
+
 

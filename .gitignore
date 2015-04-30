@@ -7,3 +7,4 @@ src/bamstats
 src/estimategc
 src/external/blossom5*
 src/samplegc
+bin

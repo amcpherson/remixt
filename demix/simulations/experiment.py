@@ -545,6 +545,26 @@ class RearrangementHistorySampler(object):
     """ Simulate a random rearrangement history, accounting for relative fitness
     """
 
+    hgs_major_cn_proportions = [
+        0.0009,
+        0.3749,
+        0.4091,
+        0.1246,
+        0.0291,
+        0.0161,
+        0.0453,
+    ]
+
+    hgs_minor_cn_proportions = [
+        0.2587,
+        0.5460,
+        0.1586,
+        0.0097,
+        0.0054,
+        0.0029,
+        0.0187,
+    ]
+
     def __init__(self, params):
 
         self.N = params.get('N', 1000)
@@ -555,25 +575,8 @@ class RearrangementHistorySampler(object):
             if key in params:
                 self.genome_params[key] = params[key]
 
-        self.major_cn_proportions = [
-                                     0.0009,
-                                     0.3749,
-                                     0.4091,
-                                     0.1246,
-                                     0.0291,
-                                     0.0161,
-                                     0.0453,
-                                    ]
-                                    
-        self.minor_cn_proportions = [
-                                     0.2587,
-                                     0.5460,
-                                     0.1586,
-                                     0.0097,
-                                     0.0054,
-                                     0.0029,
-                                     0.0187,
-                                    ]
+        self.major_cn_proportions = params.get('major_cn_proportions', self.hgs_major_cn_proportions)
+        self.minor_cn_proportions = params.get('minor_cn_proportions', self.hgs_minor_cn_proportions)
         
         self.num_swarm = 100
 

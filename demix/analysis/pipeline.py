@@ -151,7 +151,7 @@ def infer_cn(
     mix = h / h.sum()
 
     with open(mix_filename, 'w') as mix_file:
-        mix_file.write('\t'.join([str(a) for a in mix]))
+        mix_file.write('\t'.join([str(a) for a in mix]) + '\n')
 
     cn, brk_cn = model.decode(experiment.x, experiment.l, h)
 
@@ -163,6 +163,15 @@ def infer_cn(
 
     cn_table['log_likelihood'] = model.log_likelihood_cn(experiment.x, experiment.l, cn, h)
     cn_table['log_prior'] = model.log_prior_cn(experiment.l, cn)
+    cn_table['major_readcount'] = experiment.x[:,0]
+    cn_table['minor_readcount'] = experiment.x[:,1]
+    cn_table['total_readcount'] = experiment.x[:,2]
+    cn_table['major_expected'] = model.expected_read_count(experiment.l, cn, h, model.p)[:,0]
+    cn_table['minor_expected'] = model.expected_read_count(experiment.l, cn, h, model.p)[:,1]
+    cn_table['total_expected'] = model.expected_read_count(experiment.l, cn, h, model.p)[:,2]
+    cn_table['major_residual'] = np.absolute(cn_table['major_readcount'] - cn_table['major_expected'])
+    cn_table['minor_residual'] = np.absolute(cn_table['minor_readcount'] - cn_table['minor_expected'])
+    cn_table['total_residual'] = np.absolute(cn_table['total_readcount'] - cn_table['total_expected'])
 
     cn_table.to_csv(cn_table_filename, sep='\t', index=False, header=True)
 
