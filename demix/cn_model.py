@@ -78,6 +78,7 @@ class CopyNumberModel(object):
                 self.tmr_adj.add(frozenset([brkend_al_1, brkend_al_2]))
 
         self.transition_log_prob = -10.
+        self.transition_model = 'geometric'
 
         self.emission_model = 'negbin'
         self.total_cn = True
@@ -828,22 +829,42 @@ class CopyNumberModel(object):
             return self.log_trans_mat
 
         hmm_cns = self.build_hmm_cns(1)
+
+        num_standard_cns = hmm_cns.shape[0]
         num_wildcard_cns = self.count_wildcard_cns()
 
-        num_states = hmm_cns.shape[0] + num_wildcard_cns
+        num_states = num_standard_cns + num_wildcard_cns
 
         self.log_trans_mat = np.zeros((num_states, num_states))
 
-        for idx_1, cn_1 in enumerate(hmm_cns):
+        if self.transition_model == 'step':
 
-            for idx_2, cn_2 in enumerate(hmm_cns):
+            self.log_trans_mat[0:num_standard_cns, 0:num_states] = self.transition_log_prob
+            self.log_trans_mat[0:num_states, 0:num_standard_cns] = self.transition_log_prob
 
-                for ell in xrange(2):
+            self.log_trans_mat[xrange(num_states), xrange(num_states)] = 0.
 
-                    cn_diff = cn_1[0,1:,ell] - cn_2[0,1:,ell]
+        elif self.transition_model == 'geometric':
 
-                    if not np.all(cn_diff == 0):
-                        self.log_trans_mat[idx_1, idx_2] += self.transition_log_prob
+            def get_cn(idx):
+                if idx < num_standard_cns:
+                    return hmm_cns[idx]
+                else:
+                    return np.zeros(hmm_cns[0].shape) + self.cn_max + 1
+
+            for idx_1 in xrange(num_states):
+                cn_1 = get_cn(idx_1)
+
+                for idx_2 in xrange(num_states):
+                    cn_2 = get_cn(idx_2)
+
+                    for ell in xrange(2):
+
+                        cn_diff = np.absolute(cn_1[0,1:,ell] - cn_2[0,1:,ell]).sum()
+                        self.log_trans_mat[idx_1, idx_2] = self.transition_log_prob * cn_diff
+
+        else:
+            raise ValueError('Unknown transition model {0}'.format(self.transition_model))
 
         self.log_trans_mat -= scipy.misc.logsumexp(self.log_trans_mat, axis=0)
 
