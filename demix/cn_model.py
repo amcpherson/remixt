@@ -85,6 +85,8 @@ class CopyNumberModel(object):
 
         self.e_step_method = 'independent'
 
+        self.min_length_likelihood = 10000
+
         self.cn_max = 6
         self.cn_dev_max = 1
 
@@ -568,6 +570,8 @@ class CopyNumberModel(object):
             raise ProbabilityError('ll is nan', n=n, x=x[n], cn=cn[n], l=l[n], h=h, p=p[n], mu=mu[n])
 
         ll[np.where(np.any(cn < 0, axis=(-1, -2)))] = -np.inf
+
+        ll[l < self.min_length_likelihood] = 0.0
         
         return ll
 
@@ -634,6 +638,8 @@ class CopyNumberModel(object):
             ll_partial_h = self.log_likelihood_cn_poisson_partial_h(x, l, cn, h, p)
         elif self.emission_model == 'negbin':
             ll_partial_h = self.log_likelihood_cn_negbin_partial_h(x, l, cn, h, p, r)
+
+        ll[l < self.min_length_likelihood,:] = 0.0
 
         for n in zip(*np.where(np.isnan(ll_partial_h))):
             raise ProbabilityError('ll derivative is nan', n=n, x=x[n], cn=cn[n], l=l[n], h=h, p=p[n], mu=mu[n])

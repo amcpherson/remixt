@@ -51,7 +51,7 @@ if __name__ == '__main__':
 
     pyp.sch.setobj(mgd.OutputChunks('chromosome'), config['chromosomes'])
 
-    pyp.sch.commandline('read_concordant', ('chromosome',), {'mem':4},
+    pyp.sch.commandline('read_concordant', ('chromosome',), {'mem':16},
         os.path.join(bin_directory, 'bamconcordantreads'),
         '--clipmax', '8',
         '--flen', '1000',
