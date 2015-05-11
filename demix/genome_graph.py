@@ -373,8 +373,8 @@ class GenomeGraph(object):
             mod_edge_costs = mod_edge_costs.merge(self.matching_vertices,
                                                   left_on=['n'+a, 'ell'+a, 'side'+a, 'color'],
                                                   right_on=['n', 'ell', 'side', 'color'], how='left')
-            mod_edge_costs = mod_edge_costs.drop(['n', 'ell', 'side'], axis=1) \
-                                           .rename(columns={'vertex_id':'vertex_id'+a})
+            mod_edge_costs.drop(['n', 'ell', 'side'], axis=1, inplace=True)
+            mod_edge_costs.rename(columns={'vertex_id':'vertex_id'+a}, inplace=True)
 
         # Drop infinte cost edges
         mod_edge_costs = mod_edge_costs[mod_edge_costs['cost'].replace(np.inf, np.nan).notnull()]
