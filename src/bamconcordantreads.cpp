@@ -411,6 +411,29 @@ int main(int argc, char* argv[])
 	}
 	
 	int refID = bamReader.GetReferenceID(chromosome);
+
+	if (refID < 0)
+	{
+		string altChromosome;
+
+		if (chromosome.substr(0, 3) == "chr")
+		{
+			altChromosome = chromosome.substr(3);
+		}
+		else
+		{
+			altChromosome = "chr" + chromosome;
+		}
+
+		refID = bamReader.GetReferenceID(altChromosome);
+
+		if (refID < 0)
+		{
+			cerr << "Error: Unable to find chromosome " << chromosome << " or " << altChromosome << endl;
+			exit(1);
+		}
+	}
+
 	bamReader.SetRegion(BamRegion(refID, 0, refID+1, 1));
 	
 	ofstream readsFile(readsFilename.c_str(), ios_base::binary);
