@@ -572,7 +572,7 @@ class CopyNumberModel(object):
         ll[np.where(np.any(cn < 0, axis=(-1, -2)))] = -np.inf
 
         ll[l < self.min_length_likelihood] = 0.0
-        
+
         return ll
 
 
@@ -605,6 +605,8 @@ class CopyNumberModel(object):
         subclonal_prob = self.divergence_probs[subclonal]
 
         lp += (np.sum(np.log(subclonal_prob), axis=1)) * l * self.prior_cn_scale
+
+        lp[l < self.min_length_likelihood] = 0.0
 
         return lp
 
@@ -639,7 +641,7 @@ class CopyNumberModel(object):
         elif self.emission_model == 'negbin':
             ll_partial_h = self.log_likelihood_cn_negbin_partial_h(x, l, cn, h, p, r)
 
-        ll[l < self.min_length_likelihood,:] = 0.0
+        ll_partial_h[l < self.min_length_likelihood,:] = 0.0
 
         for n in zip(*np.where(np.isnan(ll_partial_h))):
             raise ProbabilityError('ll derivative is nan', n=n, x=x[n], cn=cn[n], l=l[n], h=h, p=p[n], mu=mu[n])
