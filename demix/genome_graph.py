@@ -373,8 +373,8 @@ class GenomeGraph(object):
             mod_edge_costs = mod_edge_costs.merge(self.matching_vertices,
                                                   left_on=['n'+a, 'ell'+a, 'side'+a, 'color'],
                                                   right_on=['n', 'ell', 'side', 'color'], how='left')
-            mod_edge_costs = mod_edge_costs.drop(['n', 'ell', 'side'], axis=1) \
-                                           .rename(columns={'vertex_id':'vertex_id'+a})
+            mod_edge_costs.drop(['n', 'ell', 'side'], axis=1, inplace=True)
+            mod_edge_costs.rename(columns={'vertex_id':'vertex_id'+a}, inplace=True)
 
         # Drop infinte cost edges
         mod_edge_costs = mod_edge_costs[mod_edge_costs['cost'].replace(np.inf, np.nan).notnull()]
@@ -568,11 +568,14 @@ class GenomeGraph(object):
         return log_posterior
 
 
-    def optimize(self, h):
+    def optimize(self, h, max_iter=1000):
         """ Calculate optimal segment/bond copy number.
 
         Args:
             h (numpy.array): haploid read depths
+
+        KwArgs:
+            max_iter (int): maximum iterations
 
         Returns:
             numpy.array: optimized segment copy number
@@ -584,6 +587,8 @@ class GenomeGraph(object):
         deltas = [np.array([0, 1, 0]), np.array([0, 0, 1]), np.array([0, 1, -1]), np.array([0, 1, 1])]
 
         log_posterior_prev = self.calculate_log_posterior(h)
+
+        iter = 0
 
         while True:
 
@@ -612,6 +617,10 @@ class GenomeGraph(object):
                 raise Exception('decreased log posterior')
 
             log_posterior_prev = log_posterior
+
+            iter += 1
+            if iter > max_iter:
+                break
 
         return self.cn, log_posterior_prev
 
