@@ -1,9 +1,9 @@
 [submodule "src/external/bamtools"]
 	path = src/external/bamtools
-	url = http://github.com/amcpherson/bamtools.git
+	url = https://github.com/amcpherson/bamtools.git
 [submodule "src/external/tclap"]
 	path = src/external/tclap
 	url = git://git.code.sf.net/p/tclap/code
 [submodule "pypeliner"]
 	path = pypeliner
-	url = http://dranew@bitbucket.org/dranew/pypeliner.git
+	url = https://bitbucket.org/dranew/pypeliner.git
