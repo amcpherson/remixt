@@ -6,4 +6,4 @@
 	url = git://git.code.sf.net/p/tclap/code
 [submodule "pypeliner"]
 	path = pypeliner
-	url = https://dranew@bitbucket.org/dranew/pypeliner.git
+	url = https://bitbucket.org/dranew/pypeliner.git
