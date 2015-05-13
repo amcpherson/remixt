@@ -43,7 +43,7 @@ Building the source requires scons, verson 2.3.4 can be installed as follows:
 
 To install the code, first clone from bitbucket.  A recursive clone is preferred to pull in all submodules.
 
-    git clone --recursive git@bitbucket.org:dranew/demix.git
+    git clone --recursive https://bitbucket.org/dranew/demix.git
 
 The following steps will assume you are in the `demix` directory.
 
