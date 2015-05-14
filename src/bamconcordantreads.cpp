@@ -71,24 +71,42 @@ struct SNPInfo
 
 struct AlleleReader : PileupVisitor, DiscardAlignmentVisitor
 {
-	AlleleReader(BamReader& bamReader, ostream& readsFile, ostream& allelesFile, int maxFragmentLength, int maxSoftClipped)
+	AlleleReader(BamReader& bamReader, const string& chromosome, ostream& readsFile, ostream& allelesFile, int maxFragmentLength, int maxSoftClipped)
 		: mBamReader(bamReader),
+		  mChromosome(chromosome),
 		  mReadsFile(readsFile),
 		  mAllelesFile(allelesFile),
 		  mMaxFragmentLength(maxFragmentLength),
 		  mMaxSoftClipped(maxSoftClipped),
-		  mSNPStageRefID(-1),
+		  mRefID(-1),
 		  mNextReadID(0)
 	{
-		// Fill list of reference names, create map from name to index
-		for (int refID = 0; refID < bamReader.GetReferenceCount(); refID++)
+		// Alternate chromosome, ucsc or ensembl
+		if (mChromosome.substr(0, 3) == "chr")
 		{
-			mRefNames.push_back(bamReader.GetReferenceData()[refID].RefName);
-			mRefIDMap[bamReader.GetReferenceData()[refID].RefName] = refID;
+			mAlternateChromosome = mChromosome.substr(3);
 		}
-		
-		// SNPs table is indexed by bam ref id
-		mSNPs.resize(mRefNames.size());
+		else
+		{
+			mAlternateChromosome = "chr" + mChromosome;
+		}
+
+		// Querty bam for either chromosome
+		mRefID = bamReader.GetReferenceID(mChromosome);
+
+		if (mRefID < 0)
+		{
+			mRefID = bamReader.GetReferenceID(mAlternateChromosome);
+
+			if (mRefID < 0)
+			{
+				cerr << "Error: Unable to find chromosome " << mChromosome << " or " << mAlternateChromosome << endl;
+				exit(1);
+			}
+		}
+
+		// Set region in bam
+		bamReader.SetRegion(BamRegion(mRefID, 0, mRefID+1, 1));
 	}
 
 	void ReadSNPs(const string& snpFilename)
@@ -97,9 +115,8 @@ struct AlleleReader : PileupVisitor, DiscardAlignmentVisitor
 		ifstream snpFile(snpFilename.c_str());
 		CheckFile(snpFile, snpFilename);
 		
-		// SNPs table is indexed by bam ref id
+		// clear SNPs table
 		mSNPs.clear();
-		mSNPs.resize(mRefNames.size());
 		
 		vector<string> fields;
 		while (ReadTSV(snpFile, fields))
@@ -111,9 +128,8 @@ struct AlleleReader : PileupVisitor, DiscardAlignmentVisitor
 			}
 			
 			const string& chromosome = fields[0];
-			
-			unordered_map<string,int>::const_iterator refIDIter = mRefIDMap.find(chromosome);
-			if (refIDIter == mRefIDMap.end())
+
+			if (chromosome != mChromosome && chromosome != mAlternateChromosome)
 			{
 				continue;
 			}
@@ -126,14 +142,14 @@ struct AlleleReader : PileupVisitor, DiscardAlignmentVisitor
 			// Convert to 0-based position
 			snp.position -= 1;
 			
-			mSNPs[refIDIter->second].push_back(snp);
+			mSNPs.push_back(snp);
 		}
 		
-		// Sorting required for streaming 
-		for (int refID = 0; refID < mSNPs.size(); refID++)
-		{
-			sort(mSNPs[refID].begin(), mSNPs[refID].end());
-		}
+		// Sorting required for streaming
+		sort(mSNPs.begin(), mSNPs.end());
+
+		// Initialize iterators for sequential access
+		mSNPIter = mSNPs.begin();
 	}
 	
 	void ProcessBam()
@@ -274,23 +290,20 @@ struct AlleleReader : PileupVisitor, DiscardAlignmentVisitor
 	
 	void Visit(const PileupPosition& pileupData)
 	{
-		// Check if we have switched chromosomes
-		if (pileupData.RefId != mSNPStageRefID)
+		// Check if we are on the correct chromosome
+		if (pileupData.RefId != mRefID)
 		{
-			mSNPIter = mSNPs[pileupData.RefId].begin();
-			mSNPIterEnd = mSNPs[pileupData.RefId].end();
-			
-			mSNPStageRefID = pileupData.RefId;
+			return;
 		}
-		
+
 		// Catch up to the current pileup position
-		while (mSNPIter != mSNPIterEnd && mSNPIter->position < pileupData.Position)
+		while (mSNPIter != mSNPs.end() && mSNPIter->position < pileupData.Position)
 		{
 			mSNPIter++;
 		}
 		
 		// Return if we passed the current pileup position
-		if (mSNPIter == mSNPIterEnd || mSNPIter->position > pileupData.Position)
+		if (mSNPIter == mSNPs.end() || mSNPIter->position > pileupData.Position)
 		{
 			return;
 		}
@@ -338,14 +351,13 @@ struct AlleleReader : PileupVisitor, DiscardAlignmentVisitor
 	}
 	
 	BamReader& mBamReader;
+	const string& mChromosome;
+	string mAlternateChromosome;
 	ostream& mReadsFile;
 	ostream& mAllelesFile;
 	
 	int mMaxFragmentLength;
 	int mMaxSoftClipped;
-	
-	vector<string> mRefNames;
-	unordered_map<string,int> mRefIDMap;
 	
 	deque<BamAlignment> mReadQueue;
 	unordered_map<string,BamAlignment> mReadBuffer[2];
@@ -353,11 +365,10 @@ struct AlleleReader : PileupVisitor, DiscardAlignmentVisitor
 	unordered_map<string,int> mReadID[2];
 	
 	uint32_t mNextReadID;
-	int mSNPStageRefID;
+	int mRefID;
 	
-	vector<vector<SNPInfo> > mSNPs;
+	vector<SNPInfo> mSNPs;
 	vector<SNPInfo>::const_iterator mSNPIter;
-	vector<SNPInfo>::const_iterator mSNPIterEnd;
 };
 
 
@@ -410,32 +421,6 @@ int main(int argc, char* argv[])
 		exit(1);
 	}
 	
-	int refID = bamReader.GetReferenceID(chromosome);
-
-	if (refID < 0)
-	{
-		string altChromosome;
-
-		if (chromosome.substr(0, 3) == "chr")
-		{
-			altChromosome = chromosome.substr(3);
-		}
-		else
-		{
-			altChromosome = "chr" + chromosome;
-		}
-
-		refID = bamReader.GetReferenceID(altChromosome);
-
-		if (refID < 0)
-		{
-			cerr << "Error: Unable to find chromosome " << chromosome << " or " << altChromosome << endl;
-			exit(1);
-		}
-	}
-
-	bamReader.SetRegion(BamRegion(refID, 0, refID+1, 1));
-	
 	ofstream readsFile(readsFilename.c_str(), ios_base::binary);
 	CheckFile(readsFile, readsFilename);
 	iostreams::filtering_stream<iostreams::output> readsFilter;
@@ -453,7 +438,7 @@ int main(int argc, char* argv[])
 	readsFilter.component<iostreams::gzip_compressor>(0)->write(readsFile, &dummy, 0);
 	allelesFilter.component<iostreams::gzip_compressor>(0)->write(allelesFile, &dummy, 0);
 	
-	AlleleReader alleleReader(bamReader, readsFilter, allelesFilter, maxFragmentLength, maxSoftClipped);
+	AlleleReader alleleReader(bamReader, chromosome, readsFilter, allelesFilter, maxFragmentLength, maxSoftClipped);
 
 	if (!snpFilename.empty())
 	{
