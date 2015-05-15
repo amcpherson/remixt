@@ -610,7 +610,7 @@ class GenomeGraph(object):
                 break
 
             if self.debug_prefix is not None:
-                with open(self.debug_prefix + str(iter) + '.debug') as debug_file:
+                with open(self.debug_prefix + str(iter) + '.debug', 'w') as debug_file:
                     pickle.dump((best_cost, best_delta, best_modification), debug_file)
 
             self.apply_modification(best_delta, best_modification)
