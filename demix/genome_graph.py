@@ -97,6 +97,8 @@ class GenomeGraph(object):
         self.cn = cn_init.copy()
         self.model = model
 
+        self.debug_prefix = None
+
         self.integral_cost_scale = 100.
 
         # If some tumour adjacencies are also wild type adjacencies, we will
@@ -606,6 +608,10 @@ class GenomeGraph(object):
 
             if best_cost == 0:
                 break
+
+            if self.debug_prefix is not None:
+                with open(self.debug_prefix + str(iter) + '.debug') as debug_file:
+                    pickle.dump((best_cost, best_delta, best_modification), debug_file)
 
             self.apply_modification(best_delta, best_modification)
 
