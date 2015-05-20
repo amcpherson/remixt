@@ -567,8 +567,8 @@ class GenomeGraph(object):
 
         log_likelihood = log_likelihood.sum()
 
-        telomere_copies = self.bond_cn.loc[(~self.bond_cn['is_telomere']), self.tumour_cn_cols].values.sum()
-        breakpoint_copies = self.bond_cn.loc[(~self.bond_cn['is_breakpoint']), self.tumour_cn_cols].values.sum()
+        telomere_copies = self.bond_cn.loc[self.bond_cn['is_telomere'], self.tumour_cn_cols].values.sum()
+        breakpoint_copies = self.bond_cn.loc[self.bond_cn['is_breakpoint'], self.tumour_cn_cols].values.sum()
 
         log_posterior = (log_likelihood - self.telomere_cost * telomere_copies - self.breakpoint_cost * breakpoint_copies)
 
@@ -625,7 +625,7 @@ class GenomeGraph(object):
             log_posterior = self.calculate_log_posterior(h)
 
             if log_posterior < log_posterior_prev:
-                raise Exception('decreased log posterior')
+                raise Exception('decreased log posterior from {0} to {1}'.format(log_posterior_prev, log_posterior))
 
             log_posterior_prev = log_posterior
 
