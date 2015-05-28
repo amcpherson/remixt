@@ -1276,6 +1276,8 @@ class CopyNumberModel(object):
 
         h_tumour_candidates = list()
 
+        h_candidates = list()
+
         for h_tumour in means:
             
             if h_tumour <= h_normal:
@@ -1285,10 +1287,10 @@ class CopyNumberModel(object):
 
             h_tumour_candidates.append(h_tumour)
 
+            h_candidates.append(np.array([h_normal, h_tumour]))
+
         if ax is not None:
             self.plot_depth(ax, x, l, p, annotated=means)
-
-        h_candidates = list()
 
         mix_iter = itertools.product(xrange(1, self.mix_frac_resolution+1), repeat=self.M-1)
 
