@@ -28,7 +28,7 @@ def init(
         pickle.dump(experiment, f)
 
     # Prepare learning model file
-    model = demix.cn_model.CopyNumberModel(3, experiment.adjacencies, experiment.breakpoints)
+    model = demix.cn_model.CopyNumberModel(experiment.adjacencies, experiment.breakpoints)
     model.emission_model = 'negbin'
     model.e_step_method = 'forwardbackward'
     model.total_cn = True
@@ -49,7 +49,7 @@ def init(
         pickle.dump(experiment, f)
 
     # Prepare inference model file
-    model = demix.cn_model.CopyNumberModel(3, experiment.adjacencies, experiment.breakpoints)
+    model = demix.cn_model.CopyNumberModel(experiment.adjacencies, experiment.breakpoints)
     model.emission_model = 'negbin'
     model.e_step_method = 'genomegraph'
     model.total_cn = False
