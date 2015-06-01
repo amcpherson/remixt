@@ -568,6 +568,23 @@ class GenomeGraph(object):
         return log_posterior
 
 
+    def build_deltas(self, M):
+        """ Build list of non-redundant single copy changes
+
+        Args:
+            M (int): number of clones
+
+        Returns:
+            list: possible non-redundant single copy changes across clones
+
+        """
+
+        if M == 2:
+            return [np.array([0, 1])]
+        elif M == 3:
+            return [np.array([0, 1, 0]), np.array([0, 0, 1]), np.array([0, 1, -1]), np.array([0, 1, 1])]
+
+
     def optimize(self, h):
         """ Calculate optimal segment/bond copy number.
 
@@ -579,9 +596,11 @@ class GenomeGraph(object):
 
         """
 
+        M = h.shape[0]
+
         self.test_circulation()
 
-        deltas = [np.array([0, 1, 0]), np.array([0, 0, 1]), np.array([0, 1, -1]), np.array([0, 1, 1])]
+        deltas = self.build_deltas(M)
 
         log_posterior_prev = self.calculate_log_posterior(h)
 
