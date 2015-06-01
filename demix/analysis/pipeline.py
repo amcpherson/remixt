@@ -124,7 +124,7 @@ def tabulate_h(h_table_filename, h_opt_filenames):
 
     h_table = pd.DataFrame(h_table)
 
-    h_table.to_csv(h_table_filename, sep='\t', index=False)
+    h_table.to_csv(h_table_filename, sep='\t', index=False, na_rep='NA')
 
 
 def infer_cn(
@@ -147,6 +147,7 @@ def infer_cn(
     h_table = pd.read_csv(h_table_filename, sep='\t')
 
     h = h_table.sort('log_posterior', ascending=False).iloc[0][['h_{0}'.format(idx) for idx in xrange(3)]].values.astype(float)
+    h = h[~np.isnan(h)]
 
     mix = h / h.sum()
 
