@@ -831,7 +831,7 @@ class CopyNumberModel(object):
 
         """
 
-        if self.log_trans_mat is not None and M == self.log_trans_mat_M
+        if self.log_trans_mat is not None and M == self.log_trans_mat_M:
             return self.log_trans_mat
 
         hmm_cns = self.build_hmm_cns(1, M)
