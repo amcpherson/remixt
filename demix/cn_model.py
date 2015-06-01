@@ -770,6 +770,7 @@ class CopyNumberModel(object):
 
         """
 
+        N = x.shape[0]
         M = h.shape[0]
 
         # Calculate the total haploid depth of the tumour clones
@@ -791,7 +792,7 @@ class CopyNumberModel(object):
 
         wildcard_cns = list()
 
-        for cn in self.build_cns(x.shape[0], self.wildcard_cn_max, self.cn_dev_max, bounded=False):
+        for cn in self.build_cns(N, M, self.wildcard_cn_max, self.cn_dev_max, bounded=False):
 
             # Center around dominant cn prediction
             cn[:,1:,:] += dom_cn - self.wildcard_cn_max/2
@@ -873,12 +874,13 @@ class CopyNumberModel(object):
 
         """
 
+        N = x.shape[0]
         M = h.shape[0]
 
         cns = list()
         probs = list()
 
-        for cn in self.build_hmm_cns(x.shape[0], M):
+        for cn in self.build_hmm_cns(N, M):
 
             log_prob = self.log_likelihood_cn(x, l, cn, h) + self.log_prior_cn(l, cn)
 
