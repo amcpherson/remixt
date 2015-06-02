@@ -78,7 +78,7 @@ class CopyNumberModel(object):
                 self.tmr_adj.add(frozenset([brkend_al_1, brkend_al_2]))
 
         self.transition_log_prob = -10.
-        self.transition_model = 'geometric'
+        self.transition_model = 'step'
 
         self.emission_model = 'negbin'
         self.total_cn = True
