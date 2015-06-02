@@ -55,6 +55,11 @@ run.titan <- function(args)
 	
 	data <- loadAlleleCounts(args$counts_file)
 
+	params <- loadDefaultParameters(data=data, copyNumber=args$max_copy_number, numberClonalClusters=args$num_clusters)
+	
+	params$normalParams$n_0 <- args$normal_contamination
+	params$ploidyParams$phi_0 <- args$ploidy
+	
 	if (args$gc_wig_file != '' & args$map_wig_file != '') {
 	    message("GC and mappability correction enabled")
 		depth.data <- correctReadDepth(args$tumour_wig_file, args$normal_wig_file, args$gc_wig_file, args$map_wig_file)
@@ -83,12 +88,6 @@ run.titan <- function(args)
 						   mapThres=0.9)
 	}
 
-	params <- loadDefaultParameters(copyNumber=args$max_copy_number, numberClonalClusters=args$num_clusters)
-	
-	params$normalParams$n_0 <- args$normal_contamination
-	
-	params$ploidyParams$phi_0 <- args$ploidy
-	
 	# adjust the heterozygous to account for noise if symmetric genotypes
 	if (args$symmetric){
 		params$genotypeParams$rt[c(4, 9)] <- args$het_allelic_ratio
