@@ -3,6 +3,7 @@ import time
 import itertools
 import uuid
 import os
+import pickle
 import numpy as np
 import pandas as pd
 
@@ -97,13 +98,16 @@ class GenomeGraph(object):
         self.cn = cn_init.copy()
         self.model = model
 
+        self.debug_prefix = None
+
         self.integral_cost_scale = 100.
 
         # If some tumour adjacencies are also wild type adjacencies, we will
         # get problems with maintenence of the copy balance condition
         assert len(wt_adj.intersection(tmr_adj)) == 0
 
-        self.unobserved_cost = 10.
+        self.telomere_cost = 10.
+        self.breakpoint_cost = 2.
 
         self.N = self.cn.shape[0]
         self.M = self.cn.shape[1]
@@ -139,9 +143,6 @@ class GenomeGraph(object):
         self.bond_cn['is_breakpoint'] = self.bond_cn['is_breakpoint'].fillna(False)
         self.bond_cn['is_telomere'] = self.bond_cn['is_telomere'].fillna(False)
 
-        # Mark breakpoint and reference edges as observed
-        self.bond_cn['is_observed'] = self.bond_cn['is_reference'] | self.bond_cn['is_breakpoint']
-
         # Initialize bond copy number to 0
         for m in xrange(self.M):
             self.bond_cn[f_cn_col(m)] = 0
@@ -174,15 +175,19 @@ class GenomeGraph(object):
 
                 for side in xrange(2):
 
+                    telomere_row = (
+                        (self.bond_cn['n_1'] == n) &
+                        (self.bond_cn['n_2'] == self.tel_segment_idx) &
+                        (self.bond_cn['ell_1'] == ell) &
+                        (self.bond_cn['ell_2'] == ell) &
+                        (self.bond_cn['side_1'] == side) &
+                        (self.bond_cn['side_2'] == side)
+                    )
+
                     if not vertex_bond_cn.loc[(n,ell,side),'is_reference']:
 
-                        self.bond_cn.loc[(self.bond_cn['n_1'] == n) &
-                                         (self.bond_cn['n_2'] == self.tel_segment_idx) &
-                                         (self.bond_cn['ell_1'] == ell) &
-                                         (self.bond_cn['ell_2'] == ell) &
-                                         (self.bond_cn['side_1'] == side) &
-                                         (self.bond_cn['side_2'] == side),
-                                         'is_observed'] = True
+                        self.bond_cn.loc[telomere_row, 'is_telomere'] = False
+                        self.bond_cn.loc[telomere_row, 'is_reference'] = True
 
                     for m in xrange(self.M):
 
@@ -190,13 +195,7 @@ class GenomeGraph(object):
                         cn_bond = vertex_bond_cn.loc[(n,ell,side),f_cn_col(m)]
                         cn_tel = cn_seg - cn_bond
 
-                        self.bond_cn.loc[(self.bond_cn['n_1'] == n) &
-                                         (self.bond_cn['n_2'] == self.tel_segment_idx) &
-                                         (self.bond_cn['ell_1'] == ell) &
-                                         (self.bond_cn['ell_2'] == ell) &
-                                         (self.bond_cn['side_1'] == side) &
-                                         (self.bond_cn['side_2'] == side),
-                                         f_cn_col(m)] = cn_tel
+                        self.bond_cn.loc[telomere_row, f_cn_col(m)] = cn_tel
 
                         self.tel_segment_cn[m,ell] += cn_tel
 
@@ -326,11 +325,18 @@ class GenomeGraph(object):
         for m in xrange(self.M):
             mod_bond_edge_costs[f_cn_col(m)] += mod_bond_edge_costs['sign'] * delta[m]
 
-        # Calculate copy number cost
-        mod_bond_edge_costs['cost'] = self.unobserved_cost * mod_bond_edge_costs['sign'] * delta.sum()
+        # Set default edge cost to zero
+        mod_bond_edge_costs['cost'] = 0
 
-        # Set cost to zero for observed edges
-        mod_bond_edge_costs.loc[(mod_bond_edge_costs['is_observed']), 'cost'] = 0
+        # Set cost for telomere edges
+        is_telomere = (mod_bond_edge_costs['is_telomere'])
+        mod_bond_edge_costs.loc[is_telomere, 'cost'] = (
+            self.telomere_cost * mod_bond_edge_costs.loc[is_telomere, 'sign'] * delta.sum())
+
+        # Set cost for breakpoint edges
+        is_breakpoint = (mod_bond_edge_costs['is_breakpoint'])
+        mod_bond_edge_costs.loc[is_breakpoint, 'cost'] = (
+            self.breakpoint_cost * mod_bond_edge_costs.loc[is_breakpoint, 'sign'] * delta.sum())
 
         # Set cost to infinite for edges with negative copy number
         for m in xrange(self.M):
@@ -373,8 +379,8 @@ class GenomeGraph(object):
             mod_edge_costs = mod_edge_costs.merge(self.matching_vertices,
                                                   left_on=['n'+a, 'ell'+a, 'side'+a, 'color'],
                                                   right_on=['n', 'ell', 'side', 'color'], how='left')
-            mod_edge_costs = mod_edge_costs.drop(['n', 'ell', 'side'], axis=1) \
-                                           .rename(columns={'vertex_id':'vertex_id'+a})
+            mod_edge_costs.drop(['n', 'ell', 'side'], axis=1, inplace=True)
+            mod_edge_costs.rename(columns={'vertex_id':'vertex_id'+a}, inplace=True)
 
         # Drop infinte cost edges
         mod_edge_costs = mod_edge_costs[mod_edge_costs['cost'].replace(np.inf, np.nan).notnull()]
@@ -561,9 +567,10 @@ class GenomeGraph(object):
 
         log_likelihood = log_likelihood.sum()
 
-        unobserved_copies = self.bond_cn.loc[(~self.bond_cn['is_observed']), self.tumour_cn_cols].values.sum()
+        telomere_copies = self.bond_cn.loc[self.bond_cn['is_telomere'], self.tumour_cn_cols].values.sum()
+        breakpoint_copies = self.bond_cn.loc[self.bond_cn['is_breakpoint'], self.tumour_cn_cols].values.sum()
 
-        log_posterior = log_likelihood - self.unobserved_cost * unobserved_copies
+        log_posterior = (log_likelihood - self.telomere_cost * telomere_copies - self.breakpoint_cost * breakpoint_copies)
 
         return log_posterior
 
@@ -585,11 +592,14 @@ class GenomeGraph(object):
             return [np.array([0, 1, 0]), np.array([0, 0, 1]), np.array([0, 1, -1]), np.array([0, 1, 1])]
 
 
-    def optimize(self, h):
+    def optimize(self, h, max_iter=1000):
         """ Calculate optimal segment/bond copy number.
 
         Args:
             h (numpy.array): haploid read depths
+
+        KwArgs:
+            max_iter (int): maximum iterations
 
         Returns:
             numpy.array: optimized segment copy number
@@ -603,6 +613,8 @@ class GenomeGraph(object):
         deltas = self.build_deltas(M)
 
         log_posterior_prev = self.calculate_log_posterior(h)
+
+        iter = 0
 
         while True:
 
@@ -621,6 +633,10 @@ class GenomeGraph(object):
             if best_cost == 0:
                 break
 
+            if self.debug_prefix is not None:
+                with open(self.debug_prefix + str(iter) + '.debug', 'w') as debug_file:
+                    pickle.dump((best_cost, best_delta, best_modification), debug_file)
+
             self.apply_modification(best_delta, best_modification)
 
             self.test_circulation()
@@ -628,9 +644,13 @@ class GenomeGraph(object):
             log_posterior = self.calculate_log_posterior(h)
 
             if log_posterior < log_posterior_prev:
-                raise Exception('decreased log posterior')
+                raise Exception('decreased log posterior from {0} to {1}'.format(log_posterior_prev, log_posterior))
 
             log_posterior_prev = log_posterior
+
+            iter += 1
+            if iter > max_iter:
+                break
 
         return self.cn, log_posterior_prev
 

@@ -315,21 +315,21 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
         if chrom_id not in chromosomes:
             continue
 
-        chrom_reads = next(demix.seqdataio.read_read_data(seqdata_filename, chromosome=chrom_id))
+        for chrom_reads in demix.seqdataio.read_read_data(seqdata_filename, chromosome=chrom_id, num_rows=1000000):
 
-        # Calculate read start in concatenated genome
-        chrom_reads['start'] += chrom_info.loc[chrom_id, 'chrom_start']
+            # Calculate read start in concatenated genome
+            chrom_reads['start'] += chrom_info.loc[chrom_id, 'chrom_start']
 
-        # Add reads at each start
-        sample_read_count += (
-            chrom_reads
-            .groupby('start')['end']
-            .count()
-            .reindex(sample_pos)
-            .fillna(0)
-            .astype(int)
-            .values
-        )
+            # Add reads at each start
+            sample_read_count += (
+                chrom_reads
+                .groupby('start')['end']
+                .count()
+                .reindex(sample_pos)
+                .fillna(0)
+                .astype(int)
+                .values
+            )
 
     # Calculate position in non-concatenated genome
     sample_chrom_idx = np.searchsorted(chrom_info['chrom_end'].values, sample_pos, side='right')
