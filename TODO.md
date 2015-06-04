@@ -17,3 +17,5 @@
 
 * Learn parameters based on large amounts of real data
 * Revisit parameter settings
+* Mixing proportion output as DNA proportion and also cell proportion
+
