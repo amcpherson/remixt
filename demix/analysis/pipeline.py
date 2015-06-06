@@ -29,7 +29,7 @@ def init(
         pickle.dump(experiment, f)
 
     # Prepare learning model file
-    model = demix.cn_model.CopyNumberModel(3, experiment.adjacencies, experiment.breakpoints)
+    model = demix.cn_model.CopyNumberModel(experiment.adjacencies, experiment.breakpoints)
     model.emission_model = 'negbin'
     model.e_step_method = 'forwardbackward'
     model.total_cn = True
@@ -50,7 +50,7 @@ def init(
         pickle.dump(experiment, f)
 
     # Prepare inference model file
-    model = demix.cn_model.CopyNumberModel(3, experiment.adjacencies, experiment.breakpoints)
+    model = demix.cn_model.CopyNumberModel(experiment.adjacencies, experiment.breakpoints)
     model.emission_model = 'negbin'
     model.e_step_method = 'genomegraph'
     model.total_cn = False
@@ -125,7 +125,7 @@ def tabulate_h(h_table_filename, h_opt_filenames):
 
     h_table = pd.DataFrame(h_table)
 
-    h_table.to_csv(h_table_filename, sep='\t', index=False)
+    h_table.to_csv(h_table_filename, sep='\t', index=False, na_rep='NA')
 
 
 def infer_cn(
@@ -148,8 +148,11 @@ def infer_cn(
     h_table = pd.read_csv(h_table_filename, sep='\t')
 
     h = h_table.sort('log_posterior', ascending=False).iloc[0][['h_{0}'.format(idx) for idx in xrange(3)]].values.astype(float)
+    h = h[~np.isnan(h)]
 
     mix = h / h.sum()
+
+    M = h.shape[0]
 
     with open(mix_filename, 'w') as mix_file:
         mix_file.write('\t'.join([str(a) for a in mix]) + '\n')
@@ -188,7 +191,7 @@ def infer_cn(
         brk_cn_table.append([bp_id, ell_1, ell_2] + list(bp_cn[1:]))
 
     brk_cn_cols = ['prediction_id', 'allele_1', 'allele_2']
-    for m in xrange(1, model.M):
+    for m in xrange(1, M):
         brk_cn_cols.append('cn_{0}'.format(m))
     brk_cn_table = pd.DataFrame(brk_cn_table, columns=brk_cn_cols)
 

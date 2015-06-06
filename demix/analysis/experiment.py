@@ -258,8 +258,9 @@ def create_cn_table(experiment, cn, h, p):
         data['major_{0}'.format(m)] = cn[:,m,0]
         data['minor_{0}'.format(m)] = cn[:,m,1]
 
-    data['major_diff'] = np.absolute(data['major_1'] - data['major_2'])
-    data['minor_diff'] = np.absolute(data['minor_1'] - data['minor_2'])
+    if 'major_2' in data:
+        data['major_diff'] = np.absolute(data['major_1'] - data['major_2'])
+        data['minor_diff'] = np.absolute(data['minor_1'] - data['minor_2'])
 
     return data
 

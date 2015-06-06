@@ -39,11 +39,10 @@ class ProbabilityError(ValueError):
 
 class CopyNumberModel(object):
 
-    def __init__(self, M, adjacencies, breakpoints):
+    def __init__(self, adjacencies, breakpoints):
         """Create a copy number model.
 
         Args:
-            M (int): number of clones including normal
             adjacencies (list of tuple): ordered pairs of segments representing wild type adjacencies
             breakpoints (list of frozenset of tuple): list of pairs of segment/side pairs representing detected breakpoints
 
@@ -56,8 +55,6 @@ class CopyNumberModel(object):
         A 'breakpoint' is represented as the frozenset (['breakend_1', 'breakend_2']).
 
         """
-
-        self.M = M
 
         self.wt_adj = set()
         self.wt_neighbour = dict()
@@ -714,11 +711,12 @@ class CopyNumberModel(object):
         return -q_derivative
 
 
-    def build_cns(self, N, cn_max, cn_dev_max, bounded=True):
+    def build_cns(self, N, M, cn_max, cn_dev_max, bounded=True):
         """ Generate a list of copy number states.
 
         Args:
             N (int): number of segments
+            M (int): number of clones including normal
             cn_max (int): max copy number
             cn_dev_max (int): max clonal deviation of copy number
 
@@ -731,12 +729,12 @@ class CopyNumberModel(object):
         """
 
         base_cn_iter = itertools.product(np.arange(0.0, cn_max + 1.0, 1.0), repeat=2)
-        dev_cn_iter = itertools.product(np.arange(-cn_dev_max, cn_dev_max + 1.0, 1.0), repeat=2*(self.M-2))
+        dev_cn_iter = itertools.product(np.arange(-cn_dev_max, cn_dev_max + 1.0, 1.0), repeat=2*(M-2))
 
         for base_cn, dev_cn in itertools.product(base_cn_iter, dev_cn_iter):
 
             base_cn = np.array(base_cn).reshape(2)
-            dev_cn = np.array(dev_cn).reshape((self.M-2,2))
+            dev_cn = np.array(dev_cn).reshape((M-2,2))
             
             subclone_cn = dev_cn + base_cn
             
@@ -750,11 +748,12 @@ class CopyNumberModel(object):
             yield cn
 
 
-    def build_hmm_cns(self, N):
+    def build_hmm_cns(self, N, M):
         """ Build a list of hmm copy number states.
 
         Args:
             N (int): number of segments
+            M (int): number of clones including normal
 
         Returns:
             numpy.array: array of hmm copy number states
@@ -762,7 +761,7 @@ class CopyNumberModel(object):
         """
 
         if self.hmm_cns is None:
-            self.hmm_cns = np.array(list(self.build_cns(N, self.cn_max, self.cn_dev_max)))
+            self.hmm_cns = np.array(list(self.build_cns(N, M, self.cn_max, self.cn_dev_max)))
 
         return self.hmm_cns
 
@@ -780,6 +779,9 @@ class CopyNumberModel(object):
 
         """
 
+        N = x.shape[0]
+        M = h.shape[0]
+
         # Calculate the total haploid depth of the tumour clones
         h_t = (((x[:,0:2] + 1e-16) / (self.p[:,0:2] + 1e-16)).T / l).T
 
@@ -794,12 +796,12 @@ class CopyNumberModel(object):
         dom_cn[np.all(dom_cn < self.cn_max, axis=1),:] += 100
 
         # Reshape from N,L to N,M,L
-        dom_cn = np.array([dom_cn] * (self.M-1))
+        dom_cn = np.array([dom_cn] * (M-1))
         dom_cn = dom_cn.swapaxes(0, 1)
 
         wildcard_cns = list()
 
-        for cn in self.build_cns(x.shape[0], self.wildcard_cn_max, self.cn_dev_max, bounded=False):
+        for cn in self.build_cns(N, M, self.wildcard_cn_max, self.cn_dev_max, bounded=False):
 
             # Center around dominant cn prediction
             cn[:,1:,:] += dom_cn - self.wildcard_cn_max/2
@@ -814,32 +816,38 @@ class CopyNumberModel(object):
         return wildcard_cns
 
 
-    def count_wildcard_cns(self):
+    def count_wildcard_cns(self, M):
         """ Count the number of wild card copy number states that will be used
+
+        Args:
+            M (int): number of clones including normal
 
         Returns:
             int: number of wild card copy number states
 
         """
         
-        return len(list(self.build_cns(0, self.wildcard_cn_max, self.cn_dev_max, bounded=False)))
+        return len(list(self.build_cns(0, M, self.wildcard_cn_max, self.cn_dev_max, bounded=False)))
 
 
-    def build_log_trans_mat(self):
+    def build_log_trans_mat(self, M):
         """ Build the log transition matrix.
+
+        Args:
+            M (int): number of clones including normal
 
         Returns:
             numpy.array: transition matrix
 
         """
 
-        if self.log_trans_mat is not None:
+        if self.log_trans_mat is not None and M == self.log_trans_mat_M:
             return self.log_trans_mat
 
-        hmm_cns = self.build_hmm_cns(1)
+        hmm_cns = self.build_hmm_cns(1, M)
 
         num_standard_cns = hmm_cns.shape[0]
-        num_wildcard_cns = self.count_wildcard_cns()
+        num_wildcard_cns = self.count_wildcard_cns(M)
 
         num_states = num_standard_cns + num_wildcard_cns
 
@@ -876,6 +884,8 @@ class CopyNumberModel(object):
 
         self.log_trans_mat -= scipy.misc.logsumexp(self.log_trans_mat, axis=0)
 
+        self.log_trans_mat_M = M
+
         return self.log_trans_mat
 
 
@@ -893,10 +903,13 @@ class CopyNumberModel(object):
 
         """
 
+        N = x.shape[0]
+        M = h.shape[0]
+
         cns = list()
         probs = list()
 
-        for cn in self.build_hmm_cns(x.shape[0]):
+        for cn in self.build_hmm_cns(N, M):
 
             log_prob = self.log_likelihood_cn(x, l, cn, h) + self.log_prior_cn(l, cn)
 
@@ -957,11 +970,13 @@ class CopyNumberModel(object):
 
         """
 
+        M = h.shape[0]
+
         cns, probs = self.emission_probabilities(x, l, h)
 
         log_start_prob = np.zeros((cns.shape[0],))
         log_start_prob -= scipy.misc.logsumexp(log_start_prob)
-        log_trans_mat = self.build_log_trans_mat()
+        log_trans_mat = self.build_log_trans_mat(M)
         frame_log_prob = probs.T
 
         state_sequence, log_prob = hmm_viterbi(frame_log_prob.shape[0], frame_log_prob.shape[1],
@@ -988,10 +1003,12 @@ class CopyNumberModel(object):
 
         """
 
+        M = h.shape[0]
+
         cns, probs = self.emission_probabilities(x, l, h)
 
         log_start_prob = np.zeros((cns.shape[0],))
-        log_trans_mat = self.build_log_trans_mat()
+        log_trans_mat = self.build_log_trans_mat(M)
         frame_log_prob = probs.T
 
         n_observations, n_components = frame_log_prob.shape
@@ -1095,11 +1112,13 @@ class CopyNumberModel(object):
 
         """
 
+        M = h_init.shape[0]
+
         result = scipy.optimize.minimize(self.evaluate_q, h_init,
                                          method='L-BFGS-B',
                                          jac=self.evaluate_q_derivative,
                                          args=(x, l, cns, resps),
-                                         bounds=((0., 1.),)*self.M,
+                                         bounds=((0., 1.),)*M,
                                          options={'ftol':1e-3})
 
         if not result.success:
@@ -1305,6 +1324,8 @@ class CopyNumberModel(object):
 
         h_tumour_candidates = list()
 
+        h_candidates = list()
+
         for h_tumour in means:
             
             if h_tumour <= h_normal:
@@ -1314,12 +1335,14 @@ class CopyNumberModel(object):
 
             h_tumour_candidates.append(h_tumour)
 
+            h_candidates.append(np.array([h_normal, h_tumour]))
+
         if ax is not None:
             self.plot_depth(ax, x, l, p, annotated=means)
 
-        h_candidates = list()
+        # Maximum of 3 clones
 
-        mix_iter = itertools.product(xrange(1, self.mix_frac_resolution+1), repeat=self.M-1)
+        mix_iter = itertools.product(xrange(1, self.mix_frac_resolution+1), repeat=2)
 
         for mix in mix_iter:
             

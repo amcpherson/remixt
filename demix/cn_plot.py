@@ -215,42 +215,58 @@ def experiment_plot(experiment, cn, h, p):
 
     data = demix.analysis.experiment.create_cn_table(experiment, cn, h, p)
 
-    fig = plt.figure(figsize=(20, 10))
+    num_plots = 3
+    width = 20
+    height = 6
+    if 'major_2' in data:
+        num_plots = 5
+        height = 10
 
-    ax = plt.subplot(5, 1, 1)
+    plot_idx = 1
+
+    fig = plt.figure(figsize=(width, height))
+
+    ax = plt.subplot(num_plots, 1, plot_idx)
+    plot_idx += 1
 
     plot_cnv_genome(ax, data, maxcopies=4, major_col='major_raw', minor_col='minor_raw')
 
     ax.set_xlabel('')
     ax.set_ylabel('raw')
 
-    ax = plt.subplot(5, 1, 2)
+    ax = plt.subplot(num_plots, 1, plot_idx)
+    plot_idx += 1
 
     plot_cnv_genome(ax, data, maxcopies=4, major_col='major_raw_e', minor_col='minor_raw_e')
 
     ax.set_xlabel('')
     ax.set_ylabel('expected')
 
-    ax = plt.subplot(5, 1, 3)
+    ax = plt.subplot(num_plots, 1, plot_idx)
+    plot_idx += 1
 
     plot_cnv_genome(ax, data, maxcopies=4, major_col='major_1', minor_col='minor_1')
 
     ax.set_xlabel('')
     ax.set_ylabel('clone 1')
 
-    ax = plt.subplot(5, 1, 4)
+    if 'major_2' in data:
 
-    plot_cnv_genome(ax, data, maxcopies=4, major_col='major_2', minor_col='minor_2')
+        ax = plt.subplot(num_plots, 1, plot_idx)
+        plot_idx += 1
 
-    ax.set_xlabel('')
-    ax.set_ylabel('clone 2')
+        plot_cnv_genome(ax, data, maxcopies=4, major_col='major_2', minor_col='minor_2')
 
-    ax = plt.subplot(5, 1, 5)
+        ax.set_xlabel('')
+        ax.set_ylabel('clone 2')
 
-    plot_cnv_genome(ax, data, maxcopies=2, major_col='major_diff', minor_col='minor_diff')
+        ax = plt.subplot(num_plots, 1, plot_idx)
+        plot_idx += 1
 
-    ax.set_xlabel('chromosome')
-    ax.set_ylabel('clone diff')
+        plot_cnv_genome(ax, data, maxcopies=2, major_col='major_diff', minor_col='minor_diff')
+
+        ax.set_xlabel('chromosome')
+        ax.set_ylabel('clone diff')
 
     plt.tight_layout()
 
