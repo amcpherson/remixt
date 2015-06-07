@@ -1363,7 +1363,17 @@ class CopyNumberModel(object):
 
 
     def plot_depth(self, ax, x, l, p, annotated=()):
-        """ 
+        """ Plot read depth of major minor and total as a density
+
+        Args:
+            ax (matplotlib.axis): optional axis for plotting major/minor/total read depth
+            x (numpy.array): observed major, minor, and total read counts
+            l (numpy.array): observed lengths of segments
+            p (numpy.array): proportion genotypable reads
+
+        KwArgs:
+            annotated (list): depths to annotate with verticle lines
+
         """
 
         rd = ((x.T / p.T) / l.T)
