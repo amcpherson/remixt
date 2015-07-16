@@ -135,8 +135,11 @@ if args.breakpoints is not None:
     # breakpoints = breakpoints.loc[(breakpoints['normal_blood_count'] == 0)]
 
     for idx, row in breakpoints.iterrows():
-        info = repr((row['chromosome_1'], row['strand_1'], row['position_1'],
-                     row['chromosome_2'], row['strand_2'], row['position_2']))
+        info = repr((
+            row['prediction_id'],
+            row['chromosome_1'], row['strand_1'], row['position_1'],
+            row['chromosome_2'], row['strand_2'], row['position_2'],
+        ))
         for side in ('1', '2'):
             if row['chromosome_'+side] not in chromosomes:
                 continue
