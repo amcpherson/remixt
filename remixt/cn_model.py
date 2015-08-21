@@ -84,7 +84,7 @@ class CopyNumberModel(object):
 
         self.min_length_likelihood = 10000
 
-        self.cn_max = 6
+        self.cn_max = 4
         self.cn_dev_max = 1
 
         self.hmm_cns = None
@@ -107,8 +107,6 @@ class CopyNumberModel(object):
             0.4239,
             0.1231,
             0.0262,
-            0.0126,
-            0.0066,
         ])
 
         self.minor_cn_proportions = np.array([
@@ -117,8 +115,6 @@ class CopyNumberModel(object):
             0.1561,
             0.0052,
             0.0032,
-            0.0015,
-            0.0007,
         ])
 
         self.prior_cn_scale = 5e-8
@@ -1320,6 +1316,7 @@ class CopyNumberModel(object):
         kmm.fit(rd_min_samples.reshape((rd_min_samples.size, 1)))
         means = kmm.cluster_centers_[:,0]
 
+
         h_normal = means.min()
 
         h_tumour_candidates = list()
@@ -1334,8 +1331,6 @@ class CopyNumberModel(object):
             h_tumour -= h_normal
 
             h_tumour_candidates.append(h_tumour)
-
-            h_candidates.append(np.array([h_normal, h_tumour]))
 
         if ax is not None:
             self.plot_depth(ax, x, l, p, annotated=means)
