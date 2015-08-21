@@ -12,28 +12,28 @@ import pandas as pd
 import utils
 import cmdline
 
-import demix.seqdataio
-import demix.segalg
-import demix.analysis.haplotype
+import remixt.seqdataio
+import remixt.segalg
+import remixt.analysis.haplotype
 
 
 def calculate_segment_counts(seqdata_filename, segments):
 
     segment_counts = list()
     
-    chromosomes = demix.seqdataio.read_chromosomes(seqdata_filename)
+    chromosomes = remixt.seqdataio.read_chromosomes(seqdata_filename)
 
     for chrom, chrom_segs in segments.groupby('chromosome'):
 
         try:
-            chrom_reads = next(demix.seqdataio.read_read_data(seqdata_filename, chromosome=chrom))
+            chrom_reads = next(remixt.seqdataio.read_read_data(seqdata_filename, chromosome=chrom))
         except StopIteration:
             chrom_reads = pd.DataFrame(columns=['start', 'end'])
 
         chrom_segs.sort('start', inplace=True)
         chrom_reads.sort('start', inplace=True)
 
-        chrom_segs['count'] = demix.segalg.contained_counts(
+        chrom_segs['count'] = remixt.segalg.contained_counts(
             chrom_segs[['start', 'end']].values,
             chrom_reads[['start', 'end']].values,
         )
@@ -51,11 +51,11 @@ def calculate_allele_counts(seqdata_filename):
 
     allele_counts = list()
     
-    chromosomes = demix.seqdataio.read_chromosomes(seqdata_filename)
+    chromosomes = remixt.seqdataio.read_chromosomes(seqdata_filename)
 
     for chrom in chromosomes:
 
-        chrom_allele_counts = demix.analysis.haplotype.read_snp_counts(seqdata_filename, chrom)
+        chrom_allele_counts = remixt.analysis.haplotype.read_snp_counts(seqdata_filename, chrom)
 
         chrom_allele_counts['chromosome'] = chrom
 

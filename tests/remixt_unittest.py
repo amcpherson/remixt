@@ -8,22 +8,22 @@ import pandas as pd
 import scipy
 import scipy.optimize
 
-demix_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+remixt_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 
-sys.path.append(demix_directory)
+sys.path.append(remixt_directory)
 
-import demix.simulations.simple as sim_simple
-import demix.simulations.experiment as sim_experiment
-import demix.cn_model as cn_model
-import demix.genome_graph as genome_graph
-import demix.seqdataio
+import remixt.simulations.simple as sim_simple
+import remixt.simulations.experiment as sim_experiment
+import remixt.cn_model as cn_model
+import remixt.genome_graph as genome_graph
+import remixt.seqdataio
 
 np.random.seed(2014)
 
 
 if __name__ == '__main__':
 
-    class demix_unittest(unittest.TestCase):
+    class remixt_unittest(unittest.TestCase):
 
         def generate_simple_data(self, total_cn):
 
@@ -423,7 +423,7 @@ if __name__ == '__main__':
 
         def test_seqdataio(self):
 
-            writer = demix.seqdataio.Writer('./test.seqdata', './')
+            writer = remixt.seqdataio.Writer('./test.seqdata', './')
 
             chromosome = '1'
 
@@ -459,8 +459,8 @@ if __name__ == '__main__':
 
             writer.close()
 
-            fragments_test = next(demix.seqdataio.read_read_data('./test.seqdata', chromosome='1', num_rows=None))
-            alleles_test = next(demix.seqdataio.read_allele_data('./test.seqdata', chromosome='1', num_rows=None))
+            fragments_test = next(remixt.seqdataio.read_read_data('./test.seqdata', chromosome='1', num_rows=None))
+            alleles_test = next(remixt.seqdataio.read_allele_data('./test.seqdata', chromosome='1', num_rows=None))
 
             self.assertEqual(fragments.values.shape, fragments_test.values.shape)
             self.assertEqual(alleles.values.shape, alleles_test.values.shape)

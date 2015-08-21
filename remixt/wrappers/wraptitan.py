@@ -14,9 +14,9 @@ import scipy.stats
 import utils
 import cmdline
 
-import demix.seqdataio
-import demix.segalg
-import demix.analysis.haplotype
+import remixt.seqdataio
+import remixt.segalg
+import remixt.analysis.haplotype
 
 
 def read_chromosome_lengths(chrom_info_filename):
@@ -42,19 +42,19 @@ def write_segment_count_wig(wig_filename, seqdata_filename, chromosome_lengths, 
 
     with open(wig_filename, 'w') as wig:
 
-        chromosomes = demix.seqdataio.read_chromosomes(seqdata_filename)
+        chromosomes = remixt.seqdataio.read_chromosomes(seqdata_filename)
 
         for chrom in chromosomes:
 
             wig.write('fixedStep chrom={0} start=1 step={1} span={1}\n'.format(chrom, segment_length))
 
-            chrom_reads = next(demix.seqdataio.read_read_data(seqdata_filename, chromosome=chrom))
+            chrom_reads = next(remixt.seqdataio.read_read_data(seqdata_filename, chromosome=chrom))
 
             chrom_reads.sort('start', inplace=True)
 
             chrom_segments = create_segments(chromosome_lengths[chrom], segment_length)
 
-            seg_count = demix.segalg.contained_counts(
+            seg_count = remixt.segalg.contained_counts(
                 chrom_segments,
                 chrom_reads[['start', 'end']].values,
             )
@@ -67,11 +67,11 @@ def calculate_allele_counts(seqdata_filename):
 
     allele_counts = list()
     
-    chromosomes = demix.seqdataio.read_chromosomes(seqdata_filename)
+    chromosomes = remixt.seqdataio.read_chromosomes(seqdata_filename)
 
     for chrom in chromosomes:
 
-        chrom_allele_counts = demix.analysis.haplotype.read_snp_counts(seqdata_filename, chrom)
+        chrom_allele_counts = remixt.analysis.haplotype.read_snp_counts(seqdata_filename, chrom)
         
         chrom_allele_counts['chromosome'] = chrom
 
@@ -86,7 +86,7 @@ def infer_het_positions(seqdata_filename):
 
     allele_count = calculate_allele_counts(seqdata_filename)
     
-    demix.analysis.haplotype.infer_snp_genotype(allele_count)
+    remixt.analysis.haplotype.infer_snp_genotype(allele_count)
 
     het_positions = allele_count.loc[allele_count['AB'] == 1, ['chromosome', 'position']]
 

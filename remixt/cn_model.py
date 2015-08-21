@@ -14,9 +14,9 @@ from hmmlearn._hmmc import _viterbi as hmm_viterbi
 from hmmlearn._hmmc import _forward as hmm_forward
 from hmmlearn._hmmc import _backward as hmm_backward
 
-import demix.genome_graph
-import demix.nb_overdispersion
-import demix.utils
+import remixt.genome_graph
+import remixt.nb_overdispersion
+import remixt.utils
 
 
 class ProbabilityError(ValueError):
@@ -1059,7 +1059,7 @@ class CopyNumberModel(object):
             opt = posteriors.argmax(axis=0)
             cn = cns[opt,xrange(len(opt)),:,:]
 
-            self.graph = demix.genome_graph.GenomeGraph(self, x, l, cn, self.wt_adj, self.tmr_adj)
+            self.graph = remixt.genome_graph.GenomeGraph(self, x, l, cn, self.wt_adj, self.tmr_adj)
 
         cn, log_prob = self.graph.optimize(h)
 
@@ -1269,7 +1269,7 @@ class CopyNumberModel(object):
         """
 
         K = (2, 3)[self.total_cn]
-        self.r = np.array([demix.nb_overdispersion.infer_disperion(x[:,k], l*self.p[:,k]) for k in xrange(K)])
+        self.r = np.array([remixt.nb_overdispersion.infer_disperion(x[:,k], l*self.p[:,k]) for k in xrange(K)])
 
 
     def infer_offline_parameters(self, x, l):
@@ -1315,7 +1315,7 @@ class CopyNumberModel(object):
         rd_max = np.maximum(rd[0], rd[1])
 
         # Cluster minor read depths using kmeans
-        rd_min_samples = demix.utils.weighted_resample(rd_min, l)
+        rd_min_samples = remixt.utils.weighted_resample(rd_min, l)
         kmm = sklearn.cluster.KMeans(n_clusters=5)
         kmm.fit(rd_min_samples.reshape((rd_min_samples.size, 1)))
         means = kmm.cluster_centers_[:,0]
@@ -1382,9 +1382,9 @@ class CopyNumberModel(object):
         depth_max = np.percentile(rd[2], 95)
         cov = 0.0000001
 
-        demix.utils.filled_density_weighted(ax, rd[0], l, 'blue', 0.5, 0.0, depth_max, cov)
-        demix.utils.filled_density_weighted(ax, rd[1], l, 'red', 0.5, 0.0, depth_max, cov)
-        demix.utils.filled_density_weighted(ax, rd[2], l, 'grey', 0.5, 0.0, depth_max, cov)
+        remixt.utils.filled_density_weighted(ax, rd[0], l, 'blue', 0.5, 0.0, depth_max, cov)
+        remixt.utils.filled_density_weighted(ax, rd[1], l, 'red', 0.5, 0.0, depth_max, cov)
+        remixt.utils.filled_density_weighted(ax, rd[2], l, 'grey', 0.5, 0.0, depth_max, cov)
 
         ylim = ax.get_ylim()
         for depth in annotated:

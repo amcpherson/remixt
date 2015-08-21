@@ -9,12 +9,12 @@ import tarfile
 import pypeliner
 import pypeliner.managed as mgd
 
-import demix.seqdataio as seqdataio
+import remixt.seqdataio as seqdataio
 
 
-demix_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
-bin_directory = os.path.join(demix_directory, 'bin')
-default_config_filename = os.path.join(demix_directory, 'defaultconfig.py')
+remixt_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
+bin_directory = os.path.join(remixt_directory, 'bin')
+default_config_filename = os.path.join(remixt_directory, 'defaultconfig.py')
 
 
 if __name__ == '__main__':

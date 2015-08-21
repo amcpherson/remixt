@@ -13,9 +13,9 @@ import scipy.stats
 import utils
 import cmdline
 
-import demix.seqdataio
-import demix.segalg
-import demix.analysis.haplotype
+import remixt.seqdataio
+import remixt.segalg
+import remixt.analysis.haplotype
 
 
 def read_chromosome_lengths(chrom_info_filename):
@@ -41,17 +41,17 @@ def write_cna(cna_filename, seqdata_filename, chromosome_lengths, segment_length
 
     with open(cna_filename, 'w') as cna:
 
-        chromosomes = demix.seqdataio.read_chromosomes(seqdata_filename)
+        chromosomes = remixt.seqdataio.read_chromosomes(seqdata_filename)
 
         for chrom in chromosomes:
 
-            reads = next(demix.seqdataio.read_read_data(seqdata_filename, chromosome=chrom))
+            reads = next(remixt.seqdataio.read_read_data(seqdata_filename, chromosome=chrom))
 
             reads.sort('start', inplace=True)
 
             segments = create_segments(chromosome_lengths[chrom], segment_length)
 
-            segments['count'] = demix.segalg.contained_counts(
+            segments['count'] = remixt.segalg.contained_counts(
                 segments[['start', 'end']].values,
                 reads[['start', 'end']].values,
             )
@@ -67,17 +67,17 @@ def write_tumour_baf(baf_filename, normal_filename, tumour_filename):
 
     with open(baf_filename, 'w') as baf_file:
 
-        chromosomes = demix.seqdataio.read_chromosomes(normal_filename)
+        chromosomes = remixt.seqdataio.read_chromosomes(normal_filename)
 
         for chrom in chromosomes:
 
-            normal_allele_count = demix.analysis.haplotype.read_snp_counts(normal_filename, chrom)
+            normal_allele_count = remixt.analysis.haplotype.read_snp_counts(normal_filename, chrom)
 
-            demix.analysis.haplotype.infer_snp_genotype(normal_allele_count)
+            remixt.analysis.haplotype.infer_snp_genotype(normal_allele_count)
 
             het_positions = normal_allele_count.loc[normal_allele_count['AB'] == 1, ['position']]
 
-            tumour_allele_count = demix.analysis.haplotype.read_snp_counts(tumour_filename, chrom)
+            tumour_allele_count = remixt.analysis.haplotype.read_snp_counts(tumour_filename, chrom)
             tumour_allele_count = tumour_allele_count.merge(het_positions)
 
             tumour_allele_count['ref_count'] = tumour_allele_count['ref_count'].astype(int)
@@ -318,7 +318,7 @@ class CloneHDAnalysis(object):
             baf_data.name = 'allele'
             baf_data = baf_data.reset_index()
 
-            data = demix.segalg.reindex_segments(cna_data, baf_data)
+            data = remixt.segalg.reindex_segments(cna_data, baf_data)
             data = data.merge(cna_data[['total']], left_on='idx_1', right_index=True)
             data = data.merge(baf_data[['allele']], left_on='idx_2', right_index=True)
 
@@ -346,7 +346,7 @@ class CloneHDAnalysis(object):
 
             else:
                 cn_table_prev = cn_table
-                cn_table = demix.segalg.reindex_segments(cn_table_prev, data)
+                cn_table = remixt.segalg.reindex_segments(cn_table_prev, data)
 
                 cn_table_prev.drop(['chromosome', 'start', 'end'], axis=1, inplace=True)
                 data.drop(['chromosome', 'start', 'end'], axis=1, inplace=True)

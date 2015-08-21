@@ -13,9 +13,9 @@ from collections import *
 import pypeliner
 
 
-demix_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
+remixt_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
 
-default_config_filename = os.path.join(demix_directory, 'defaultconfig.py')
+default_config_filename = os.path.join(remixt_directory, 'defaultconfig.py')
 
 
 def wget_gunzip(url, filename):

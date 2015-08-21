@@ -14,13 +14,13 @@ import itertools
 import pypeliner
 import pypeliner.managed as mgd
 
-import demix
-import demix.utils
+import remixt
+import remixt.utils
 
 
-demix_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
+remixt_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
 
-default_config_filename = os.path.join(demix_directory, 'defaultconfig.py')
+default_config_filename = os.path.join(remixt_directory, 'defaultconfig.py')
 
 
 if __name__ == '__main__':
@@ -98,7 +98,7 @@ if __name__ == '__main__':
     
 def create_kmers(genome_fasta, k, kmers_filename):
     with open(kmers_filename, 'w') as kmers_file:
-        genome_sequences = dict(demix.utils.read_sequences(genome_fasta, 'r'))
+        genome_sequences = dict(remixt.utils.read_sequences(genome_fasta, 'r'))
         for chromosome, sequence in genome_sequences.iteritems():
             chromosome = chromosome.split()[0]
             for start in xrange(len(sequence)):

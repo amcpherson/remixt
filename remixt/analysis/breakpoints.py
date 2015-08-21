@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-import demix.segalg
+import remixt.segalg
 
 
 def create_breakends(bp):
@@ -57,7 +57,7 @@ def match_breakpoints(bp1, bp2, search_range=400):
         be2.sort('position', inplace=True)
         be2.reset_index(drop=True, inplace=True)
 
-        idx1, idx2 = demix.segalg.interval_position_overlap(
+        idx1, idx2 = remixt.segalg.interval_position_overlap(
             be1[['search_start', 'search_end']].values,
             be2['position'].values,
         )

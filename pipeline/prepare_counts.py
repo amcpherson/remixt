@@ -14,17 +14,17 @@ import matplotlib.pyplot as plt
 import pypeliner
 import pypeliner.managed as mgd
 
-import demix
-import demix.seqdataio
-import demix.segalg
-import demix.utils
-import demix.analysis.haplotype
-import demix.analysis.segment
+import remixt
+import remixt.seqdataio
+import remixt.segalg
+import remixt.utils
+import remixt.analysis.haplotype
+import remixt.analysis.segment
 
 
-demix_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
-bin_directory = os.path.join(demix_directory, 'bin')
-default_config_filename = os.path.join(demix_directory, 'defaultconfig.py')
+remixt_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
+bin_directory = os.path.join(remixt_directory, 'bin')
+default_config_filename = os.path.join(remixt_directory, 'defaultconfig.py')
 
 
 if __name__ == '__main__':
@@ -66,7 +66,7 @@ if __name__ == '__main__':
 
     config.update(args)
 
-    pyp = pypeliner.app.Pypeline([demix, prepare_counts], config)
+    pyp = pypeliner.app.Pypeline([remixt, prepare_counts], config)
 
     tumour_fnames = dict(enumerate(args['tumour_files']))
     count_fnames = dict(enumerate(args['count_files']))
@@ -82,7 +82,7 @@ if __name__ == '__main__':
     pyp.sch.setobj(mgd.OutputChunks('bychromosome'), config['chromosomes'])
 
     pyp.sch.transform('infer_haps', ('bychromosome',), {'mem':16},
-        demix.analysis.haplotype.infer_haps,
+        remixt.analysis.haplotype.infer_haps,
         None,
         mgd.TempOutputFile('haps.tsv', 'bychromosome'),
         mgd.InputFile(args['normal_file']),
@@ -92,7 +92,7 @@ if __name__ == '__main__':
     )
 
     pyp.sch.transform('merge_haps', (), {'mem':16},
-        demix.utils.merge_tables,
+        remixt.utils.merge_tables,
         None,
         mgd.TempOutputFile('haps.tsv'),
         mgd.TempInputFile('haps.tsv', 'bychromosome'),
@@ -173,11 +173,11 @@ def calculate_fragment_stats(seqdata_filename):
     sum_x2 = 0.
     n = 0.
 
-    chromosomes = demix.seqdataio.read_chromosomes(seqdata_filename)
+    chromosomes = remixt.seqdataio.read_chromosomes(seqdata_filename)
 
     for chrom in chromosomes:
 
-        chrom_reads = next(demix.seqdataio.read_read_data(seqdata_filename, chromosome=chrom))
+        chrom_reads = next(remixt.seqdataio.read_read_data(seqdata_filename, chromosome=chrom))
 
         length = chrom_reads['end'].values - chrom_reads['start'].values
 
@@ -195,14 +195,14 @@ def create_counts(segment_counts_filename, allele_counts_filename, segment_filen
 
     segments = pd.read_csv(segment_filename, sep='\t', converters={'chromosome':str})
 
-    segment_counts = demix.analysis.segment.create_segment_counts(
+    segment_counts = remixt.analysis.segment.create_segment_counts(
         segments,
         seqdata_filename,
     )
 
     segment_counts.to_csv(segment_counts_filename, sep='\t', index=False)
 
-    allele_counts = demix.analysis.haplotype.create_allele_counts(
+    allele_counts = remixt.analysis.haplotype.create_allele_counts(
         segments,
         seqdata_filename,
         haps_filename,
@@ -219,7 +219,7 @@ def phase_segments(allele_counts_filenames, phased_allele_counts_filename_callba
     for allele_counts_filename in allele_counts_filenames.itervalues():
         allele_count_tables.append(pd.read_csv(allele_counts_filename, sep='\t', converters={'chromosome':str}))
 
-    phased_allele_counts_tables = demix.analysis.haplotype.phase_segments(*allele_count_tables)
+    phased_allele_counts_tables = remixt.analysis.haplotype.phase_segments(*allele_count_tables)
 
     for tumour_id, phased_allele_counts in zip(tumour_ids, phased_allele_counts_tables):
         phased_allele_counts_filename = phased_allele_counts_filename_callback(tumour_id)
@@ -238,7 +238,7 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
     fragment_length = int(fragment_length)
     gc_window = fragment_length - 2 * position_offset
 
-    chrom_info = pd.DataFrame({'chrom_length':demix.utils.read_chromosome_lengths(genome_fai)})
+    chrom_info = pd.DataFrame({'chrom_length':remixt.utils.read_chromosome_lengths(genome_fai)})
     chrom_info = chrom_info.reindex(chromosomes)
     chrom_info['chrom_end'] = chrom_info['chrom_length'].cumsum()
     chrom_info['chrom_start'] = chrom_info['chrom_end'] - chrom_info['chrom_length']
@@ -267,14 +267,14 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
         mappability['end'] += mappability['chrom_start']
 
         # Add mappability for current iteration
-        sample_mappability += demix.segalg.overlapping_counts(sample_pos, mappability[['start', 'end']].values)
+        sample_mappability += remixt.segalg.overlapping_counts(sample_pos, mappability[['start', 'end']].values)
 
     # Filter unmappable positions
     sample_pos = sample_pos[sample_mappability > 0]
 
     # Calculate GC for each position
     sample_gc_count = np.zeros(sample_pos.shape)
-    for chrom_id, sequence in demix.utils.read_sequences(genome_fasta):
+    for chrom_id, sequence in remixt.utils.read_sequences(genome_fasta):
 
         # Ignore extraneous chromosomes
         if chrom_id not in chromosomes:
@@ -309,13 +309,13 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
 
     # Count number of reads at each position
     sample_read_count = np.zeros(sample_pos.shape, dtype=int)
-    for chrom_id in demix.seqdataio.read_chromosomes(seqdata_filename):
+    for chrom_id in remixt.seqdataio.read_chromosomes(seqdata_filename):
 
         # Ignore extraneous chromosomes
         if chrom_id not in chromosomes:
             continue
 
-        for chrom_reads in demix.seqdataio.read_read_data(seqdata_filename, chromosome=chrom_id, num_rows=1000000):
+        for chrom_reads in remixt.seqdataio.read_read_data(seqdata_filename, chromosome=chrom_id, num_rows=1000000):
 
             # Calculate read start in concatenated genome
             chrom_reads['start'] += chrom_info.loc[chrom_id, 'chrom_start']
@@ -397,7 +397,7 @@ def prepare_counts(segments_filename, alleles_filename, count_filename):
     segment_data = pd.read_csv(segments_filename, sep='\t', converters={'chromosome':str})
     allele_data = pd.read_csv(alleles_filename, sep='\t', converters={'chromosome':str})
 
-    segment_allele_counts = demix.analysis.segment.create_segment_allele_counts(segment_data, allele_data)
+    segment_allele_counts = remixt.analysis.segment.create_segment_allele_counts(segment_data, allele_data)
 
     segment_allele_counts.to_csv(count_filename, sep='\t', index=False)
 

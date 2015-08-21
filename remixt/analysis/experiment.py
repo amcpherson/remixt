@@ -3,7 +3,7 @@ import itertools
 import numpy as np
 import pandas as pd
 
-import demix.cn_model
+import remixt.cn_model
 
 
 Experiment = collections.namedtuple('Experiment', [
@@ -243,7 +243,7 @@ def create_cn_table(experiment, cn, h, p):
     data['major_raw'] = (data['major_cov'] - h[0]) / h[1:].sum()
     data['minor_raw'] = (data['minor_cov'] - h[0]) / h[1:].sum()
 
-    x_e = demix.cn_model.CopyNumberModel.expected_read_count(experiment.l, cn, h, p)
+    x_e = remixt.cn_model.CopyNumberModel.expected_read_count(experiment.l, cn, h, p)
 
     major_cov_e = x_e[:,2] * x_e[:,0] / ((x_e[:,0] + x_e[:,1]) * experiment.l)
     minor_cov_e = x_e[:,2] * x_e[:,1] / ((x_e[:,0] + x_e[:,1]) * experiment.l)

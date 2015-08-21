@@ -1,6 +1,6 @@
 from distutils.core import setup
 
-setup(name='demix',
+setup(name='remixt',
       version='1.0',
-      packages=['demix'],
+      packages=['remixt'],
       )

@@ -6,7 +6,7 @@ import scipy
 import scipy.stats
 import pypeliner
 
-import demix.seqdataio
+import remixt.seqdataio
 
 
 def infer_snp_genotype(data, base_call_error=0.005, call_threshold=0.9):
@@ -60,7 +60,7 @@ def read_snp_counts(seqdata_filename, chromosome, num_rows=1000000):
     """
 
     snp_counts = list()
-    for alleles_chunk in demix.seqdataio.read_allele_data(seqdata_filename, chromosome=chromosome, num_rows=num_rows):
+    for alleles_chunk in remixt.seqdataio.read_allele_data(seqdata_filename, chromosome=chromosome, num_rows=num_rows):
 
         snp_counts_chunk = (
             alleles_chunk
@@ -265,13 +265,13 @@ def count_allele_reads(seqdata_filename, haps, chromosome, segments):
 
     # Merge haplotype information into read alleles table
     alleles = list()
-    for alleles_chunk in demix.seqdataio.read_allele_data(seqdata_filename, chromosome=chromosome, num_rows=1000000):
+    for alleles_chunk in remixt.seqdataio.read_allele_data(seqdata_filename, chromosome=chromosome, num_rows=1000000):
         alleles_chunk = alleles_chunk.merge(haps, left_on=['position', 'is_alt'], right_on=['position', 'allele'], how='inner')
         alleles.append(alleles_chunk)
     alleles = pd.concat(alleles, ignore_index=True)
 
     # Merge read start and end into read alleles table
-    reads = next(demix.seqdataio.read_read_data(seqdata_filename, chromosome=chromosome))
+    reads = next(remixt.seqdataio.read_read_data(seqdata_filename, chromosome=chromosome))
     alleles = alleles.merge(reads, left_on='fragment_id', right_index=True)
 
     # Arbitrarily assign a haplotype/allele label to each read
@@ -282,12 +282,12 @@ def count_allele_reads(seqdata_filename, haps, chromosome, segments):
 
     # Annotate segment for start and end of each read
     alleles.sort('start', inplace=True)
-    alleles['segment_idx'] = demix.segalg.find_contained(
+    alleles['segment_idx'] = remixt.segalg.find_contained(
         segments[['start', 'end']].values,
         alleles['start'].values
     )
     alleles.sort('end', inplace=True)
-    alleles['end_segment_idx'] = demix.segalg.find_contained(
+    alleles['end_segment_idx'] = remixt.segalg.find_contained(
         segments[['start', 'end']].values,
         alleles['end'].values
     )

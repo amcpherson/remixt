@@ -10,7 +10,7 @@ from matplotlib.path import Path
 import matplotlib.patches as patches
 from matplotlib.patches import Rectangle
 
-import demix.analysis.experiment
+import remixt.analysis.experiment
 
 
 def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor'):
@@ -213,7 +213,7 @@ def experiment_plot(experiment, cn, h, p):
 
     """
 
-    data = demix.analysis.experiment.create_cn_table(experiment, cn, h, p)
+    data = remixt.analysis.experiment.create_cn_table(experiment, cn, h, p)
 
     num_plots = 3
     width = 20

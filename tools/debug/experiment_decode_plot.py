@@ -4,7 +4,7 @@ import os
 import pickle
 import numpy as np
 
-import demix.cn_plot
+import remixt.cn_plot
 
 argparser = argparse.ArgumentParser()
 
@@ -35,6 +35,6 @@ else:
 
 cn, brk_cn = model.decode(experiment.x, experiment.l, h)
 
-fig = demix.cn_plot.experiment_plot(experiment, cn=cn, h=h, p=model.p)
+fig = remixt.cn_plot.experiment_plot(experiment, cn=cn, h=h, p=model.p)
 
 fig.savefig(args['plotpdf'], format='pdf', bbox_inches='tight', dpi=300)

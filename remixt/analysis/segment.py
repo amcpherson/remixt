@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-import demix.seqdataio
+import remixt.seqdataio
 
 
 def count_segment_reads(seqdata_filename, chromosome, segments):
@@ -23,14 +23,14 @@ def count_segment_reads(seqdata_filename, chromosome, segments):
     """
 
     # Read read data for selected chromosome
-    reads = next(demix.seqdataio.read_read_data(seqdata_filename, chromosome=chromosome))
+    reads = next(remixt.seqdataio.read_read_data(seqdata_filename, chromosome=chromosome))
         
     # Sort in preparation for search
     reads.sort('start', inplace=True)
     segments.sort('start', inplace=True)
     
      # Count segment reads
-    segments['readcount'] = demix.segalg.contained_counts(
+    segments['readcount'] = remixt.segalg.contained_counts(
         segments[['start', 'end']].values,
         reads[['start', 'end']].values
     )

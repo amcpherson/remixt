@@ -9,7 +9,7 @@ import seaborn
 import argparse
 
 argparser = argparse.ArgumentParser()
-argparser.add_argument('preds_filename', help='deMix Predictions Filename')
+argparser.add_argument('preds_filename', help='ReMixT Predictions Filename')
 argparser.add_argument('--positions', help='annotate positions')
 argparser.add_argument('--breakpoints', help='annotate breakpoints')
 argparser.add_argument('--max_copies', help='maximum copies to display', type=float, default=5.0)

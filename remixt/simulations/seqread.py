@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
-import demix.segalg
-import demix.seqdataio
+import remixt.segalg
+import remixt.seqdataio
 
 
 def simulate_fragment_intervals(genome_length, num_fragments, read_length, fragment_mean, fragment_stddev):
@@ -99,7 +99,7 @@ def simulate_mixture_read_data(read_data_filename, genomes, read_depths, snps, t
         chrom_snps.reset_index(drop=True, inplace=True)
         chrom_snps.drop('chromosome', axis=1, inplace=True)
 
-    writer = demix.seqdataio.Writer(read_data_filename, temp_dir)
+    writer = remixt.seqdataio.Writer(read_data_filename, temp_dir)
 
     for genome, read_depth in zip(genomes, read_depths):
 
@@ -204,7 +204,7 @@ def simulate_mixture_read_data(read_data_filename, genomes, read_depths, snps, t
                 chrom_snps = snps[chromosome]
 
                 # Overlap snp positions and fragment intervals
-                fragment_idx, snp_idx = demix.segalg.interval_position_overlap(
+                fragment_idx, snp_idx = remixt.segalg.interval_position_overlap(
                     chrom_fragments[['start', 'end']].values,
                     chrom_snps['position'].values,
                 )

@@ -8,10 +8,10 @@ import matplotlib.pyplot as plt
 import pypeliner
 import pypeliner.managed as mgd
 
-import demix_paths
-import demix.simulations.experiment as sim_experiment
-import demix.cn_model as cn_model
-import demix.cn_plot as cn_plot
+import remixt_paths
+import remixt.simulations.experiment as sim_experiment
+import remixt.cn_model as cn_model
+import remixt.cn_plot as cn_plot
 import sim_pipeline
 
 if __name__ == '__main__':

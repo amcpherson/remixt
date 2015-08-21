@@ -1,5 +1,5 @@
 ################################################
-# Default configuration for destruct/demix
+# Default configuration for ReMixT
 ################################################
 
 ###
@@ -15,7 +15,7 @@ ensembl_genome_version                      = 'GRCh37'
 # Ensemble assemblies to include in the reference genome
 ensembl_assemblies                          = ['chromosome.1', 'chromosome.2', 'chromosome.3', 'chromosome.4', 'chromosome.5', 'chromosome.6', 'chromosome.7', 'chromosome.8', 'chromosome.9', 'chromosome.10', 'chromosome.11', 'chromosome.12', 'chromosome.13', 'chromosome.14', 'chromosome.15', 'chromosome.16', 'chromosome.17', 'chromosome.18', 'chromosome.19', 'chromosome.20', 'chromosome.21', 'chromosome.22', 'chromosome.X', 'chromosome.Y', 'chromosome.MT', 'nonchromosomal']
 
-# Base chromosomes, used for parallelization and by demix
+# Base chromosomes
 chromosomes                                 = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', 'X']
 
 # Ensemble reference genome chromosome assemblies

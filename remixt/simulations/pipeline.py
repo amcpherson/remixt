@@ -4,11 +4,11 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-import demix.segalg
-import demix.simulations.experiment
-import demix.simulations.haplotype
-import demix.cn_plot
-import demix.simulations.seqread
+import remixt.segalg
+import remixt.simulations.experiment
+import remixt.simulations.haplotype
+import remixt.cn_plot
+import remixt.simulations.seqread
 
 
 def read_sim_defs(sim_defs_filename):
@@ -71,8 +71,8 @@ def read_sim_defs(sim_defs_filename):
 
 def simulate_genomes(genomes_filename, params):
 
-    rh_sampler = demix.simulations.experiment.RearrangementHistorySampler(params)
-    gc_sampler = demix.simulations.experiment.GenomeCollectionSampler(rh_sampler, params)
+    rh_sampler = remixt.simulations.experiment.RearrangementHistorySampler(params)
+    gc_sampler = remixt.simulations.experiment.GenomeCollectionSampler(rh_sampler, params)
 
     np.random.seed(params['random_seed'])
 
@@ -84,7 +84,7 @@ def simulate_genomes(genomes_filename, params):
 
 def simulate_mixture(mixture_filename, genomes_filename, params):
 
-    gm_sampler = demix.simulations.experiment.GenomeMixtureSampler(params)
+    gm_sampler = remixt.simulations.experiment.GenomeMixtureSampler(params)
 
     with open(genomes_filename, 'r') as genomes_file:
         gc = pickle.load(genomes_file)
@@ -99,7 +99,7 @@ def simulate_mixture(mixture_filename, genomes_filename, params):
 
 def simulate_experiment(experiment_filename, mixture_filename, params):
 
-    exp_sampler = demix.simulations.experiment.ExperimentSampler(params)
+    exp_sampler = remixt.simulations.experiment.ExperimentSampler(params)
 
     with open(mixture_filename, 'r') as mixture_file:
         gm = pickle.load(mixture_file)
@@ -119,7 +119,7 @@ def simulate_germline_alleles(germline_alleles_filename, params, chromosomes, co
 
     np.random.seed(params['random_seed'])
 
-    alleles_table = demix.simulations.haplotype.create_sim_alleles(haplotypes_template, legend_template, chromosomes)
+    alleles_table = remixt.simulations.haplotype.create_sim_alleles(haplotypes_template, legend_template, chromosomes)
 
     alleles_table.to_csv(germline_alleles_filename, sep='\t', index=False, header=True)
 
@@ -133,7 +133,7 @@ def simulate_normal_data(read_data_filename, genome_filename, germline_alleles_f
 
     np.random.seed(params['random_seed'])
 
-    demix.simulations.seqread.simulate_mixture_read_data(
+    remixt.simulations.seqread.simulate_mixture_read_data(
         read_data_filename,
         [gc.genomes[0]],
         [params['h_total']],
@@ -151,7 +151,7 @@ def simulate_tumour_data(read_data_filename, mixture_filename, germline_alleles_
 
     np.random.seed(params['random_seed'])
 
-    demix.simulations.seqread.simulate_mixture_read_data(
+    remixt.simulations.seqread.simulate_mixture_read_data(
         read_data_filename,
         gm.genome_collection.genomes,
         gm.frac * params['h_total'],
@@ -189,7 +189,7 @@ def plot_experiment(experiment_plot_filename, experiment_filename):
     with open(experiment_filename, 'r') as experiment_file:
         exp = pickle.load(experiment_file)
 
-    fig = demix.cn_plot.experiment_plot(exp, exp.cn, exp.h, exp.p)
+    fig = remixt.cn_plot.experiment_plot(exp, exp.cn, exp.h, exp.p)
 
     fig.savefig(experiment_plot_filename, format='pdf', bbox_inches='tight', dpi=300)
 
@@ -199,7 +199,7 @@ def plot_mixture(mixture_plot_filename, mixture_filename):
     with open(mixture_filename, 'r') as mixture_file:
         mixture = pickle.load(mixture_file)
 
-    fig = demix.cn_plot.mixture_plot(mixture)
+    fig = remixt.cn_plot.mixture_plot(mixture)
 
     fig.savefig(mixture_plot_filename, format='pdf', bbox_inches='tight', dpi=300)
 
@@ -382,13 +382,13 @@ def evaluate_results(mixture_filename, cn_filename, mix_filename):
     cn_true = np.sort(cn_true, axis=2)
     cn_pred = np.sort(cn_pred, axis=2)
 
-    cn_data_index = demix.segalg.reindex_segments(sim_segments, cn_data)
+    cn_data_index = remixt.segalg.reindex_segments(sim_segments, cn_data)
 
     cn_true = cn_true[cn_data_index['idx_1'].values,:,:]
     cn_pred = cn_pred[cn_data_index['idx_2'].values,:,:]
     segment_lengths = (cn_data_index['end'] - cn_data_index['start']).values
 
-    proportion_cn_correct = demix.simulations.pipeline.compare_cn(
+    proportion_cn_correct = remixt.simulations.pipeline.compare_cn(
         mix_true[1:], mix_pred[1:], cn_true, cn_pred, segment_lengths)
 
     is_dom_cn_correct = np.all(cn_true[:,0,:] == cn_pred[:,0,:], axis=1)

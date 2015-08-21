@@ -4,9 +4,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-import demix.cn_model
-import demix.cn_plot
-import demix.analysis.experiment
+import remixt.cn_model
+import remixt.cn_plot
+import remixt.analysis.experiment
 
 def init(
         learn_experiment_filename,
@@ -20,7 +20,7 @@ def init(
     ):
 
     # Prepare learning experiment file
-    experiment = demix.analysis.experiment.create_experiment(
+    experiment = remixt.analysis.experiment.create_experiment(
         segment_allele_count_filename,
         breakpoint_filename,
     )
@@ -29,7 +29,7 @@ def init(
         pickle.dump(experiment, f)
 
     # Prepare learning model file
-    model = demix.cn_model.CopyNumberModel(experiment.adjacencies, experiment.breakpoints)
+    model = remixt.cn_model.CopyNumberModel(experiment.adjacencies, experiment.breakpoints)
     model.emission_model = 'negbin'
     model.e_step_method = 'forwardbackward'
     model.total_cn = True
@@ -40,7 +40,7 @@ def init(
         pickle.dump(model, f)
 
     # Prepare inference experiment file
-    experiment = demix.analysis.experiment.create_experiment(
+    experiment = remixt.analysis.experiment.create_experiment(
         segment_allele_count_filename,
         breakpoint_filename,
         min_length=None,
@@ -50,7 +50,7 @@ def init(
         pickle.dump(experiment, f)
 
     # Prepare inference model file
-    model = demix.cn_model.CopyNumberModel(experiment.adjacencies, experiment.breakpoints)
+    model = remixt.cn_model.CopyNumberModel(experiment.adjacencies, experiment.breakpoints)
     model.emission_model = 'negbin'
     model.e_step_method = 'genomegraph'
     model.total_cn = False
@@ -163,7 +163,7 @@ def infer_cn(
         with open(model_debug_filename, 'w') as model_debug_file:
             pickle.dump(model, model_debug_file)
 
-    cn_table = demix.analysis.experiment.create_cn_table(experiment, cn, h, model.p)
+    cn_table = remixt.analysis.experiment.create_cn_table(experiment, cn, h, model.p)
 
     cn_table['log_likelihood'] = model.log_likelihood_cn(experiment.x, experiment.l, cn, h)
     cn_table['log_prior'] = model.log_prior_cn(experiment.l, cn)
@@ -179,7 +179,7 @@ def infer_cn(
 
     cn_table.to_csv(cn_table_filename, sep='\t', index=False, header=True)
 
-    fig = demix.cn_plot.experiment_plot(experiment, cn, h, model.p)
+    fig = remixt.cn_plot.experiment_plot(experiment, cn, h, model.p)
 
     fig.savefig(experiment_plot_filename, format='pdf', bbox_inches='tight')
 

@@ -9,14 +9,14 @@ import matplotlib.pyplot as plt
 import pypeliner
 import pypeliner.managed as mgd
 
-import demix.simulations.pipeline
-import demix.analysis.haplotype
-import demix.wrappers
-import demix.utils
+import remixt.simulations.pipeline
+import remixt.analysis.haplotype
+import remixt.wrappers
+import remixt.utils
 
 
-demix_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
-default_config_filename = os.path.join(demix_directory, 'defaultconfig.py')
+remixt_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
+default_config_filename = os.path.join(remixt_directory, 'defaultconfig.py')
 
 
 if __name__ == '__main__':
@@ -52,7 +52,7 @@ if __name__ == '__main__':
 
     config.update(args)
 
-    pyp = pypeliner.app.Pypeline([demix, run_comparison], config)
+    pyp = pypeliner.app.Pypeline([remixt, run_comparison], config)
 
     params = dict()
     execfile(args['sim_params'], {}, params)
@@ -60,7 +60,7 @@ if __name__ == '__main__':
     chromosomes = params['chromosomes']
 
     chromosome_lengths = dict()
-    for chromosome, length in demix.utils.read_chromosome_lengths(config['genome_fai']).iteritems():
+    for chromosome, length in remixt.utils.read_chromosome_lengths(config['genome_fai']).iteritems():
         if chromosome not in chromosomes:
             continue
         chromosome_lengths[chromosome] = length
@@ -96,7 +96,7 @@ if __name__ == '__main__':
     pyp.sch.setobj(mgd.TempOutputObj('chromosomes'), chromosomes)
 
     pyp.sch.transform('simulate_germline_alleles', germline_axis, {'mem':8},
-        demix.simulations.pipeline.simulate_germline_alleles,
+        remixt.simulations.pipeline.simulate_germline_alleles,
         None,
         mgd.TempOutputFile('germline_alleles', *germline_axis),
         mgd.TempInputObj('germline_params', *germline_axis),
@@ -124,7 +124,7 @@ if __name__ == '__main__':
     )
 
     pyp.sch.transform('simulate_normal_data', genome_axis, {'mem':16},
-        demix.simulations.pipeline.simulate_normal_data,
+        remixt.simulations.pipeline.simulate_normal_data,
         None,
         mgd.TempOutputFile('normal', *genome_axis),
         mgd.TempInputFile('genomes', *genome_axis),
@@ -152,7 +152,7 @@ if __name__ == '__main__':
     )
 
     pyp.sch.transform('simulate_tumour_data', mixture_axis, {'mem':16},
-        demix.simulations.pipeline.simulate_tumour_data,
+        remixt.simulations.pipeline.simulate_tumour_data,
         None,
         mgd.TempOutputFile('tumour', *mixture_axis),
         mgd.TempInputFile('mixture', *mixture_axis),
@@ -166,7 +166,7 @@ if __name__ == '__main__':
     pyp.sch.setobj(mgd.OutputChunks(*haps_axis), chromosomes, haps_axis[:-1])
 
     pyp.sch.transform('infer_haps', haps_axis, {'mem':16},
-        demix.analysis.haplotype.infer_haps,
+        remixt.analysis.haplotype.infer_haps,
         None,
         mgd.TempOutputFile('haps.tsv', *haps_axis),
         mgd.TempInputFile('normal', *genome_axis),
@@ -176,7 +176,7 @@ if __name__ == '__main__':
     )
 
     pyp.sch.transform('merge_haps', genome_axis, {'mem':8},
-        demix.utils.merge_tables,
+        remixt.utils.merge_tables,
         None,
         mgd.TempOutputFile('haps.tsv', *genome_axis),
         mgd.TempInputFile('haps.tsv', *haps_axis),
@@ -241,28 +241,28 @@ if __name__ == '__main__':
     )
 
     pyp.sch.transform('merge_tool_results', mixture_axis, {'mem':1},
-        demix.utils.merge_tables,
+        remixt.utils.merge_tables,
         None,
         mgd.TempOutputFile('results.tsv', *mixture_axis),
         mgd.TempInputFile('results.tsv', *tool_axis),
     )
 
     pyp.sch.transform('merge_mixture_results', genome_axis, {'mem':1},
-        demix.utils.merge_tables,
+        remixt.utils.merge_tables,
         None,
         mgd.TempOutputFile('results.tsv', *genome_axis),
         mgd.TempInputFile('results.tsv', *mixture_axis),
     )
 
     pyp.sch.transform('merge_genome_results', germline_axis, {'mem':1},
-        demix.utils.merge_tables,
+        remixt.utils.merge_tables,
         None,
         mgd.TempOutputFile('results.tsv', *germline_axis),
         mgd.TempInputFile('results.tsv', *genome_axis),
     )
 
     pyp.sch.transform('merge_germline_results', (), {'mem':1},
-        demix.utils.merge_tables,
+        remixt.utils.merge_tables,
         None,
         mgd.OutputFile(args['results_table']),
         mgd.TempInputFile('results.tsv', *germline_axis),
@@ -278,7 +278,7 @@ else:
         execfile(params_filename, {}, params)
 
         params['chromosome_lengths'] = dict()
-        for seq_id, sequence in demix.utils.read_sequences(config['genome_fasta']):
+        for seq_id, sequence in remixt.utils.read_sequences(config['genome_fasta']):
             if seq_id not in params['chromosomes']:
                 continue
             params['chromosome_lengths'][seq_id] = len(sequence)
@@ -288,16 +288,16 @@ else:
 
     def simulate_genomes(genomes_filename, segment_filename, perfect_segment_filename, breakpoint_filename, params):
 
-        demix.simulations.pipeline.simulate_genomes(genomes_filename, params)
-        demix.simulations.pipeline.write_segments(segment_filename, genomes_filename)
-        demix.simulations.pipeline.write_perfect_segments(perfect_segment_filename, genomes_filename)
-        demix.simulations.pipeline.write_breakpoints(breakpoint_filename, genomes_filename)
+        remixt.simulations.pipeline.simulate_genomes(genomes_filename, params)
+        remixt.simulations.pipeline.write_segments(segment_filename, genomes_filename)
+        remixt.simulations.pipeline.write_perfect_segments(perfect_segment_filename, genomes_filename)
+        remixt.simulations.pipeline.write_breakpoints(breakpoint_filename, genomes_filename)
 
 
     def simulate_mixture(mixture_filename, plot_filename, genome_filename, params):
 
-        demix.simulations.pipeline.simulate_mixture(mixture_filename, genome_filename, params)
-        demix.simulations.pipeline.plot_mixture(plot_filename, mixture_filename)
+        remixt.simulations.pipeline.simulate_mixture(mixture_filename, genome_filename, params)
+        remixt.simulations.pipeline.plot_mixture(plot_filename, mixture_filename)
 
     def set_chromosomes(sim_defs):
 
@@ -307,7 +307,7 @@ else:
     def create_tools(install_directory):
 
         tools = dict()
-        for tool_name, Tool in demix.wrappers.catalog.iteritems():
+        for tool_name, Tool in remixt.wrappers.catalog.iteritems():
             tools[tool_name] = Tool(os.path.join(install_directory, tool_name))
 
         return tools
@@ -346,7 +346,7 @@ else:
 
     def evaluate_results(results_filename, mixture_filename, cn_filename, mix_filename, tool_name, **params):
 
-        results = demix.simulations.pipeline.evaluate_results(
+        results = remixt.simulations.pipeline.evaluate_results(
             mixture_filename, cn_filename, mix_filename)
 
         results['tool'] = tool_name

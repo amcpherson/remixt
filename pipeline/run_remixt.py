@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt
 import pypeliner
 import pypeliner.managed as mgd
 
-import demix
-import demix.analysis.pipeline
+import remixt
+import remixt.analysis.pipeline
 
 
 if __name__ == '__main__':
@@ -41,10 +41,10 @@ if __name__ == '__main__':
 
     args = vars(argparser.parse_args())
 
-    pyp = pypeliner.app.Pypeline([demix], args)
+    pyp = pypeliner.app.Pypeline([remixt], args)
 
     pyp.sch.transform('init', (), {'mem':8},
-        demix.analysis.pipeline.init,
+        remixt.analysis.pipeline.init,
         None,
         mgd.TempOutputFile('experiment_learn.pickle'),
         mgd.TempOutputFile('model_learn.pickle'),
@@ -57,7 +57,7 @@ if __name__ == '__main__':
     )
 
     pyp.sch.transform('learn_h', ('byh',), {'mem':8},
-        demix.analysis.pipeline.learn_h,
+        remixt.analysis.pipeline.learn_h,
         None,
         mgd.TempOutputFile('h_opt', 'byh'),
         mgd.TempInputFile('experiment_learn.pickle'),
@@ -66,14 +66,14 @@ if __name__ == '__main__':
     )
 
     pyp.sch.transform('tabulate_h', (), {'mem':1},
-        demix.analysis.pipeline.tabulate_h,
+        remixt.analysis.pipeline.tabulate_h,
         None,
         mgd.TempOutputFile('h_table.tsv'),
         mgd.TempInputFile('h_opt', 'byh'),
     )
 
     pyp.sch.transform('infer_cn', (), {'mem':24},
-        demix.analysis.pipeline.infer_cn,
+        remixt.analysis.pipeline.infer_cn,
         None,
         mgd.OutputFile(args['cn']),
         mgd.OutputFile(args['brk_cn']),

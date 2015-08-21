@@ -1,12 +1,12 @@
-# Demix
+# ReMixT
 
-Demix is a tool for joint inference of clone specific segment and breakpoint copy number in whole genome sequencing data.  The input for the tool is a set of segments, a set of breakpoints predicted from the sequencing data, and normal and tumour bam files.  Where multiple tumour samples are available, they can be analyzed jointly for additional benefit.
+ReMixT is a tool for joint inference of clone specific segment and breakpoint copy number in whole genome sequencing data.  The input for the tool is a set of segments, a set of breakpoints predicted from the sequencing data, and normal and tumour bam files.  Where multiple tumour samples are available, they can be analyzed jointly for additional benefit.
 
 ## Prerequisites
 
 ### Python
 
-Demix requires python and the numpy/scipy stack.  The recommended way to install python (also the easiest), is to download and install the latest (Anaconda Python](https://store.continuum.io/cshop/anaconda/) from the Continuum website.
+ReMixT requires python and the numpy/scipy stack.  The recommended way to install python (also the easiest), is to download and install the latest (Anaconda Python](https://store.continuum.io/cshop/anaconda/) from the Continuum website.
 
 #### Python libraries
 
@@ -43,15 +43,15 @@ Building the source requires scons, verson 2.3.4 can be installed as follows:
 
 To install the code, first clone from bitbucket.  A recursive clone is preferred to pull in all submodules.
 
-    git clone --recursive https://bitbucket.org/dranew/demix.git
+    git clone --recursive https://bitbucket.org/dranew/remixt.git
 
-The following steps will assume you are in the `demix` directory.
+The following steps will assume you are in the `remixt` directory.
 
-    cd demix
+    cd remixt
 
 ### Build Executables
 
-Demix requires compilation of a number of executables using scons.
+ReMixT requires compilation of a number of executables using scons.
 
     cd src
     scons install
@@ -70,7 +70,7 @@ A temporary solution is to modify the python path to point to the location of th
 
 A more permanent solution is to install the libraries into your python site packages.  Note that if you are using python installed on your system, you may need admin privileges.
 
-To install demix:
+To install remixt:
 
     python setup.py install
 
@@ -81,13 +81,13 @@ To install pypeliner, a pipeline management system:
 
 ## Setup
 
-Download and setup of the reference genome and 1000 genomes dataset is automated.  Select a directory on your system that will contain the reference data, herein referred to as `$ref_data_dir`.  The `$ref_data_dir` directory will be used in many of the subsequent scripts when running demix.
+Download and setup of the reference genome and 1000 genomes dataset is automated.  Select a directory on your system that will contain the reference data, herein referred to as `$ref_data_dir`.  The `$ref_data_dir` directory will be used in many of the subsequent scripts when running remixt.
 
 Download the reference data and build the required indexes:
 
     python setup/create_ref_data.py $ref_data_dir
 
-Demix also requires a mappability file, which can be time consuming to build.  The script `setup/mappability_bwa.py` will build a mappability file compatible with the bwa aligner.  If your bam files are produced using a different aligner, you may want to consider generating a mappability file for your aligner by writing a modified the `setup/mappability_bwa.py` script.
+ReMixT also requires a mappability file, which can be time consuming to build.  The script `setup/mappability_bwa.py` will build a mappability file compatible with the bwa aligner.  If your bam files are produced using a different aligner, you may want to consider generating a mappability file for your aligner by writing a modified the `setup/mappability_bwa.py` script.
 
 Build the mappability file:
 
@@ -101,7 +101,7 @@ The `setup/mappability_bwa.py` script has options for parallelism, see the secti
 
 ### Input Data
 
-Demix takes the following as input:
+ReMixT takes the following as input:
 
 * Normal bam file
 * Multiple Tumour bam files from the same individual
@@ -134,7 +134,7 @@ The first line should be the column names, which should be identical to the abov
 
 ### Step 1 - Importing the Data
 
-The first step in the process is to import the relevant concordant read data from each bam file into a demix specific format.  This is accomplished using the `pipeline/extract_seqdata.py` script, which should be applied independently to each input file.  
+The first step in the process is to import the relevant concordant read data from each bam file into a ReMixT specific format.  This is accomplished using the `pipeline/extract_seqdata.py` script, which should be applied independently to each input file.  
 
 To extract data from `$normal_bam` and `$tumour_bam` to `$normal_seqdata` and `$tumour_seqdata` respectively:
 
@@ -172,17 +172,17 @@ where `$tmp_counts` is a unique temporary directory.  If you need to stop and re
 
 For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
 
-### Step 3 - Running Demix
+### Step 3 - Running ReMixT
 
-Demix is run on each sample individually, and takes as input the sample specific segment read counts and breakpoints.  The outputs are a segment copy number file (`$cn` below), a breakpoint copy number file (`$brk_cn` below), a segment copy number plot pdf (`$cn_plot` below), and a mixture file (`$mix` below).
+ReMixT is run on each sample individually, and takes as input the sample specific segment read counts and breakpoints.  The outputs are a segment copy number file (`$cn` below), a breakpoint copy number file (`$brk_cn` below), a segment copy number plot pdf (`$cn_plot` below), and a mixture file (`$mix` below).
 
-To run demix for tumour sample 1 from above with counts file `$tumour_1_counts`, use the `pipeline/run_demix.py` script as follows:
+To run ReMixT for tumour sample 1 from above with counts file `$tumour_1_counts`, use the `pipeline/run_remixt.py` script as follows:
 
-    python pipeline/run_demix.py $tumour_1_counts $breakpoints \
+    python pipeline/run_remixt.py $tumour_1_counts $breakpoints \
         $cn $brk_cn $cn_plot $mix \
-        --tmpdir $tmp_demix
+        --tmpdir $tmp_remixt
 
-where `$tmp_demix` is a unique temporary directory.  If you need to stop and restart the script, using the same temporary directory will allow the scripts to restart where it left off.
+where `$tmp_remixt` is a unique temporary directory.  If you need to stop and restart the script, using the same temporary directory will allow the scripts to restart where it left off.
 
 For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
 
@@ -190,7 +190,7 @@ For parallelism options see the section [Parallelism using pypeliner](#markdown-
 
 #### Sequence Data Format
 
-The files produced by the `extract_seqdata.py` script are tar files raw data matrices produced for easy and efficient reading by numpy.  They contain information per chromosome about concordant alignment and SNP alleles for each fragment.  They are not intended to be usable except by demix.
+The files produced by the `extract_seqdata.py` script are tar files raw data matrices produced for easy and efficient reading by numpy.  They contain information per chromosome about concordant alignment and SNP alleles for each fragment.  They are not intended to be usable except by ReMixT.
 
 #### Segment Counts Format
 
@@ -205,7 +205,7 @@ The segment counts files are tab separated with the first line as the header.  T
 * `minor_readcount`
 * `major_is_allele_a`
 
-The `chromosome`, `start` and `end` columns define the segment.  The `readcount` column is the total reads contained within the segment, and `major_readcount` and `minor_readcount` are the total allele specific reads contained within the segment and only include the reads that can be counted as one allele vs the other using heterozygous SNPs.  The length is the segment length scaled by a factor that takes into account mappability and GC content.  The `major_is_allele_a` column is useful if you have run demix on multiple samples from the same individual.  This column is a binary indicator and will tell you if the major allele from one sample is the same as the major allele from another sample.
+The `chromosome`, `start` and `end` columns define the segment.  The `readcount` column is the total reads contained within the segment, and `major_readcount` and `minor_readcount` are the total allele specific reads contained within the segment and only include the reads that can be counted as one allele vs the other using heterozygous SNPs.  The length is the segment length scaled by a factor that takes into account mappability and GC content.  The `major_is_allele_a` column is useful if you have run ReMixT on multiple samples from the same individual.  This column is a binary indicator and will tell you if the major allele from one sample is the same as the major allele from another sample.
 
 ### Output File Formats
 
@@ -252,7 +252,7 @@ Currently this file contains 3 numbers, tab separated.  These numbers, respectiv
 
 ## Parallelism Using Pypeliner
 
-Demix uses the pypeliner python library for parallelism.  Several of the scripts described above will complete more quickly on a multi-core machine or on a cluster.
+ReMixT uses the pypeliner python library for parallelism.  Several of the scripts described above will complete more quickly on a multi-core machine or on a cluster.
 
 To run a script in multicore mode, using a maximum of 4 cpus, add the following command line option:
 

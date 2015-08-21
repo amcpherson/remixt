@@ -3,12 +3,12 @@ import os
 import numpy as np
 import pandas as pd
 
-import demix.utils
+import remixt.utils
 
 
 def create_segments(segment_filename, breakpoint_filename, segment_length, chromosomes, genome_fai_filename):
 
-    chromosome_lengths = demix.utils.read_chromosome_lengths(genome_fai_filename)
+    chromosome_lengths = remixt.utils.read_chromosome_lengths(genome_fai_filename)
 
     changepoints = list()
 
@@ -68,8 +68,8 @@ if __name__ == '__main__':
 
     args = vars(argparser.parse_args())
 
-    demix_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
-    default_config_filename = os.path.join(demix_directory, 'defaultconfig.py')
+    remixt_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
+    default_config_filename = os.path.join(remixt_directory, 'defaultconfig.py')
 
     config = {'ref_data_directory':args['ref_data_dir']}
     execfile(default_config_filename, {}, config)

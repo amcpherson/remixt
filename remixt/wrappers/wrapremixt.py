@@ -13,14 +13,14 @@ import pandas as pd
 import utils
 import cmdline
 
-import demix.analysis.segment
-import demix.analysis.haplotype
-import demix.analysis.pipeline
-import demix.utils
+import remixt.analysis.segment
+import remixt.analysis.haplotype
+import remixt.analysis.pipeline
+import remixt.utils
 
 
 
-class DemixTool(object):
+class ReMixTTool(object):
 
     def __init__(self, install_directory):
 
@@ -34,11 +34,11 @@ class DemixTool(object):
         pass
 
     def create_analysis(self, analysis_directory):
-        return DemixAnalysis(self, analysis_directory)
+        return ReMixTAnalysis(self, analysis_directory)
 
 
 
-class DemixAnalysis(object):
+class ReMixTAnalysis(object):
 
     def __init__(self, tool, analysis_directory):
         self.tool = tool
@@ -54,22 +54,22 @@ class DemixAnalysis(object):
 
         segments = pd.read_csv(segment_filename, sep='\t', converters={'chromosome':str})
 
-        segment_counts = demix.analysis.segment.create_segment_counts(
+        segment_counts = remixt.analysis.segment.create_segment_counts(
             segments,
             tumour_filename,
         )
 
         segment_counts['length'] = segment_counts['end'] - segment_counts['start']
 
-        allele_counts = demix.analysis.haplotype.create_allele_counts(
+        allele_counts = remixt.analysis.haplotype.create_allele_counts(
             segments,
             tumour_filename,
             haplotype_filename,
         )
 
-        phased_allele_counts, = demix.analysis.haplotype.phase_segments(allele_counts)
+        phased_allele_counts, = remixt.analysis.haplotype.phase_segments(allele_counts)
 
-        segment_allele_counts = demix.analysis.segment.create_segment_allele_counts(
+        segment_allele_counts = remixt.analysis.segment.create_segment_allele_counts(
             segment_counts,
             phased_allele_counts,
         )
@@ -81,7 +81,7 @@ class DemixAnalysis(object):
             h_idxs.add(h_idx)
             return self.get_analysis_filename('h_init_{0}.pickle'.format(h_idx))
 
-        demix.analysis.pipeline.init(
+        remixt.analysis.pipeline.init(
             self.get_analysis_filename('experiment_learn.pickle'),
             self.get_analysis_filename('model_learn.pickle'),
             self.get_analysis_filename('experiment_infer.pickle'),
@@ -106,7 +106,7 @@ class DemixAnalysis(object):
         if init_param_idx not in h_idxs:
             raise utils.InvalidInitParam()
 
-        demix.analysis.pipeline.learn_h(
+        remixt.analysis.pipeline.learn_h(
             self.get_analysis_filename('h_opt_{0}.pickle'.format(init_param_idx)),
             self.get_analysis_filename('experiment_learn.pickle'),
             self.get_analysis_filename('model_learn.pickle'),
@@ -123,9 +123,9 @@ class DemixAnalysis(object):
         for h_idx in h_idxs:
             h_opt_filenames[h_idx] = self.get_analysis_filename('h_opt_{0}.pickle'.format(h_idx))
 
-        demix.analysis.pipeline.tabulate_h(self.get_analysis_filename('h_table.tsv'), h_opt_filenames)
+        remixt.analysis.pipeline.tabulate_h(self.get_analysis_filename('h_table.tsv'), h_opt_filenames)
 
-        demix.analysis.pipeline.infer_cn(
+        remixt.analysis.pipeline.infer_cn(
             self.get_analysis_filename('cn.tsv'),
             self.get_analysis_filename('brk_cn.tsv'),
             self.get_analysis_filename('experiment_plot.pdf'),
@@ -160,7 +160,7 @@ class DemixAnalysis(object):
 
 if __name__ == '__main__':
 
-    cmdline.interface(DemixTool)
+    cmdline.interface(ReMixTTool)
 
 
 
