@@ -3,7 +3,7 @@ import itertools
 import numpy as np
 import pandas as pd
 
-import remixt.cn_model
+import remixt.likelihood
 
 
 Experiment = collections.namedtuple('Experiment', [
@@ -14,7 +14,7 @@ Experiment = collections.namedtuple('Experiment', [
      'l',
      'adjacencies',
      'breakpoints',
-     'breakpoint_ids',
+     'breakpoint_table',
 ])
 
 
@@ -134,7 +134,7 @@ def find_closest_segment_end(segment_data, breakpoint_data):
     return break_segment_table
 
 
-def create_experiment(count_filename, breakpoint_filename, min_length=100000, min_brk_dist=2000):
+def create_experiment(count_filename, breakpoint_filename, min_brk_dist=2000, min_length=None):
 
     count_data = pd.read_csv(count_filename, sep='\t')
 
@@ -172,11 +172,14 @@ def create_experiment(count_filename, breakpoint_filename, min_length=100000, mi
     )
 
     # Breakpoints as segment index, segment side (0/1)
-    breakpoint_ids = dict()
+    breakpoints = set()
+    breakpoint_table = list()
     for idx, row in break_segment_table.iterrows():
 
         if row['dist'].sum() > min_brk_dist:
             continue
+
+        prediction_id = row['prediction_id'].iloc[0]
 
         n_1 = row['segment_idx'][0]
         n_2 = row['segment_idx'][1]
@@ -194,7 +197,11 @@ def create_experiment(count_filename, breakpoint_filename, min_length=100000, mi
         if (n_1, side_1) == (n_2, side_2):
             continue
 
-        breakpoint_ids[frozenset([(n_1, side_1), (n_2, side_2)])] = row['prediction_id'].iloc[0]
+        breakpoints.add(frozenset([(n_1, side_1), (n_2, side_2)]))
+        breakpoint_table.append((prediction_id, n_1, side_1, n_2, side_2))
+
+    breakpoint_table = pd.DataFrame(breakpoint_table, 
+        columns=['prediction_id', 'n_1', 'side_1', 'n_2', 'side_2'])
 
     x = count_data[['major_readcount', 'minor_readcount', 'readcount']].values
     l = count_data['length'].values
@@ -206,21 +213,21 @@ def create_experiment(count_filename, breakpoint_filename, min_length=100000, mi
         x,
         l,
         adjacencies,
-        breakpoint_ids.keys(),
-        breakpoint_ids,
+        breakpoints,
+        breakpoint_table,
     )
 
     return experiment
 
 
-def create_cn_table(experiment, cn, h, p):
+def create_cn_table(experiment, likelihood, cn, h):
     """ Create a table of relevant copy number data
 
     Args:
         experiment (Experiment): experiment object containing simulation information
+        likelihood (ReadCountLikelihood): likelihood model
         cn (numpy.array): segment copy number
         h (numpy.array): haploid depths
-        p (numpy.array): measurable read proportion
 
     Returns:
         pandas.DataFrame: table of copy number information
@@ -237,16 +244,16 @@ def create_cn_table(experiment, cn, h, p):
             'readcount':experiment.x[:,2],
         })    
 
-    data['major_cov'] = data['readcount'] * data['major_readcount'] / ((data['major_readcount'] + data['minor_readcount']) * data['length'])
-    data['minor_cov'] = data['readcount'] * data['minor_readcount'] / ((data['major_readcount'] + data['minor_readcount']) * data['length'])
+    data['major_cov'] = data['major_readcount'] / (likelihood.phi * data['length'])
+    data['minor_cov'] = data['minor_readcount'] / (likelihood.phi * data['length'])
 
     data['major_raw'] = (data['major_cov'] - h[0]) / h[1:].sum()
     data['minor_raw'] = (data['minor_cov'] - h[0]) / h[1:].sum()
 
-    x_e = remixt.cn_model.CopyNumberModel.expected_read_count(experiment.l, cn, h, p)
+    x_e = likelihood.expected_read_count(experiment.l, cn)
 
-    major_cov_e = x_e[:,2] * x_e[:,0] / ((x_e[:,0] + x_e[:,1]) * experiment.l)
-    minor_cov_e = x_e[:,2] * x_e[:,1] / ((x_e[:,0] + x_e[:,1]) * experiment.l)
+    major_cov_e = x_e[:,0] / (likelihood.phi * experiment.l)
+    minor_cov_e = x_e[:,1] / (likelihood.phi * experiment.l)
 
     major_raw_e = (major_cov_e - h[0]) / h[1:].sum()
     minor_raw_e = (minor_cov_e - h[0]) / h[1:].sum()

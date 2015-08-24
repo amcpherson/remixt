@@ -7,7 +7,7 @@ import scipy
 import scipy.stats
 
 import remixt.utils
-import remixt.cn_model
+import remixt.likelihood
 
 
 MAX_SEED = 2**32
@@ -898,12 +898,12 @@ class Experiment(object):
     """ Sequencing experiment read counts.
     """
 
-    def __init__(self, genome_mixture, h, x, p, breakpoints, h_pred, **kwargs):
+    def __init__(self, genome_mixture, h, phi, x, breakpoints, h_pred, **kwargs):
 
         self.genome_mixture = genome_mixture
         self.h = h
+        self.phi = phi
         self.x = x
-        self.p = p
         self.breakpoints = breakpoints
         self.h_pred = h_pred
 
@@ -950,17 +950,18 @@ class ExperimentSampler(object):
 
         self.h_total = params.get('h_total', 0.1)
 
-        self.p_min = params.get('p_min', 0.05)
-        self.p_max = params.get('p_max', 0.2)
+        self.phi_min = params.get('phi_min', 0.05)
+        self.phi_max = params.get('phi_max', 0.2)
 
         self.emission_model = params.get('emission_model', 'negbin')
 
         if self.emission_model not in ('poisson', 'negbin'):
             raise ValueError('emission_model must be one of "poisson", "negbin"')
 
-        self.nbinom_r = [params.get('nbinom_r_allele', 200.0),
-                         params.get('nbinom_r_allele', 200.0),
-                         params.get('nbinom_r_total', 200.0)]
+        self.negbin_r = np.array([
+            params.get('negbin_r_allele', 200.0),
+            params.get('negbin_r_allele', 200.0),
+            params.get('negbin_r_total', 200.0)])
 
         self.num_false_breakpoints = params.get('num_false_breakpoints', 50)
 
@@ -984,10 +985,13 @@ class ExperimentSampler(object):
 
         h = genome_mixture.frac * self.h_total
 
-        p = np.random.uniform(low=self.p_min, high=self.p_max, size=N)
-        p = np.vstack([p, p, np.ones(p.shape)]).T
+        phi = np.random.uniform(low=self.phi_min, high=self.phi_max, size=N)
 
-        mu = cn_model.CopyNumberModel.expected_read_count(l, cn, h, p)
+        model = remixt.likelihood.ReadCountLikelihood()
+        model.h = h
+        model.phi = phi
+
+        mu = model.expected_read_count(l, cn)
 
         extra_params = dict()
 
@@ -997,11 +1001,11 @@ class ExperimentSampler(object):
 
         elif self.emission_model == 'negbin':
 
-            nb_inv_p = self.nbinom_r / (self.nbinom_r + mu)
+            nb_inv_p = self.negbin_r / (self.negbin_r + mu)
 
-            x = np.array([np.random.negative_binomial(self.nbinom_r, a) for a in nb_inv_p]).reshape(mu.shape)
+            x = np.array([np.random.negative_binomial(self.negbin_r, a) for a in nb_inv_p]).reshape(mu.shape)
 
-            extra_params['nbinom_r'] = self.nbinom_r
+            extra_params['negbin_r'] = self.negbin_r
 
         breakpoints = genome_mixture.breakpoints.copy()
 
@@ -1042,7 +1046,7 @@ class ExperimentSampler(object):
 
         h_pred = frac * self.h_total
 
-        return Experiment(genome_mixture, h, x, p, breakpoints, h_pred, **extra_params)
+        return Experiment(genome_mixture, h, phi, x, breakpoints, h_pred, **extra_params)
 
 
 def compare_segment_copy_number(true_cn, pred_cn):

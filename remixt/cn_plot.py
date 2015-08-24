@@ -199,21 +199,21 @@ def plot_breakpoints_genome(ax, breakpoint, chromosome_info, scale_height=1.0):
         ax.add_patch(patch)
 
 
-def experiment_plot(experiment, cn, h, p):
+def experiment_plot(experiment, likelihood, cn, h):
     """ Plot a sequencing experiment
 
     Args:
         experiment (Experiment): experiment object containing simulation information
+        likelihood (ReadCountLikelihood): likelihood model
         cn (numpy.array): segment copy number
         h (numpy.array): haploid depths
-        p (numpy.array): measurable read proportion
 
     Returns:
         matplotlib.Figure: figure object of plots
 
     """
 
-    data = remixt.analysis.experiment.create_cn_table(experiment, cn, h, p)
+    data = remixt.analysis.experiment.create_cn_table(experiment, likelihood, cn, h)
 
     num_plots = 3
     width = 20

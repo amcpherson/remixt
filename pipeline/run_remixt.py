@@ -15,6 +15,11 @@ import remixt
 import remixt.analysis.pipeline
 
 
+remixt_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
+data_directory = os.path.join(remixt_directory, 'data')
+default_cn_proportions_filename = os.path.join(data_directory, 'cn_proportions.tsv')
+
+
 if __name__ == '__main__':
 
     argparser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -27,17 +32,15 @@ if __name__ == '__main__':
     argparser.add_argument('breakpoints',
         help='Input breakpoints filename')
 
-    argparser.add_argument('cn',
-        help='Output segment copy number filename')
+    argparser.add_argument('results',
+        help='Output results filename')
 
-    argparser.add_argument('brk_cn',
-        help='Output breakpoint copy number filename')
+    argparser.add_argument('--num_clones', type=int,
+        help='Number of clones')
 
-    argparser.add_argument('cn_plot',
-        help='Output segment copy number plot pdf filename')
-
-    argparser.add_argument('mix',
-        help='Output mixture filename')
+    argparser.add_argument('--cn_proportions',
+        default=default_cn_proportions_filename,
+        help='Number of clones')
 
     args = vars(argparser.parse_args())
 
@@ -46,43 +49,30 @@ if __name__ == '__main__':
     pyp.sch.transform('init', (), {'mem':8},
         remixt.analysis.pipeline.init,
         None,
-        mgd.TempOutputFile('experiment_learn.pickle'),
-        mgd.TempOutputFile('model_learn.pickle'),
-        mgd.TempOutputFile('experiment_infer.pickle'),
-        mgd.TempOutputFile('model_infer.pickle'),
+        mgd.TempOutputFile('experiment.pickle'),
         mgd.TempOutputFile('h_init', 'byh'),
         mgd.TempOutputFile('h_plot.pdf'),
         mgd.InputFile(args['counts']),
         mgd.InputFile(args['breakpoints']),
+        num_clones=args['num_clones'],
     )
 
-    pyp.sch.transform('learn_h', ('byh',), {'mem':8},
-        remixt.analysis.pipeline.learn_h,
+    pyp.sch.transform('fit', ('byh',), {'mem':8},
+        remixt.analysis.pipeline.fit,
         None,
-        mgd.TempOutputFile('h_opt', 'byh'),
-        mgd.TempInputFile('experiment_learn.pickle'),
-        mgd.TempInputFile('model_learn.pickle'),
+        mgd.TempOutputFile('results', 'byh'),
+        mgd.TempInputFile('experiment.pickle'),
         mgd.TempInputFile('h_init', 'byh'),
+        args['cn_proportions'],
     )
 
-    pyp.sch.transform('tabulate_h', (), {'mem':1},
-        remixt.analysis.pipeline.tabulate_h,
+    pyp.sch.transform('collate', (), {'mem':1},
+        remixt.analysis.pipeline.collate,
         None,
-        mgd.TempOutputFile('h_table.tsv'),
-        mgd.TempInputFile('h_opt', 'byh'),
-    )
-
-    pyp.sch.transform('infer_cn', (), {'mem':24},
-        remixt.analysis.pipeline.infer_cn,
-        None,
-        mgd.OutputFile(args['cn']),
-        mgd.OutputFile(args['brk_cn']),
-        mgd.OutputFile(args['cn_plot']),
-        mgd.OutputFile(args['mix']),
-        mgd.TempInputFile('experiment_infer.pickle'),
-        mgd.TempInputFile('model_infer.pickle'),
-        mgd.TempInputFile('h_table.tsv'),
-        mgd.TempOutputFile('model_infer_debug.pickle'),
+        mgd.OutputFile(args['results']),
+        mgd.InputFile(args['breakpoints']),
+        mgd.TempInputFile('experiment.pickle'),
+        mgd.TempInputFile('results', 'byh'),
     )
 
     pyp.run()

@@ -75,17 +75,18 @@ def f_cn_col(m):
 
 class GenomeGraph(object):
 
-    def __init__(self, model, x, l, cn_init, wt_adj, tmr_adj):
+    def __init__(self, emission, prior, adjacencies, breakpoints):
         """ Create a GenomeGraph.
 
         Args:
-            model (CopyNumberModel): model used to calculate edge likelihoods
-            x (numpy.array): observed read counts
-            l (numpy.array): observed lengths of segments
-            cn_init (numpy.array): initial copy number matrix
-            wt_adj (list of 'breakpoint'): list of wild type adjacencies
-            tmr_adj (list of 'breakpoint'): list of tumour adjacencies
-            params (dict): parameters of the copy number model
+            emission (ReadCountLikelihood): read count likelihood
+            prior (CopyNumberPrior): copy number prior 
+            adjacencies (list of tuple): ordered pairs of segments representing wild type adjacencies
+            breakpoints (list of frozenset of tuple): list of pairs of segment/side pairs representing detected breakpoints
+
+        Attributes:
+            wt_adj (list of 'breakpoints'): list of 'breakpoint' representing wild type adjacencies
+            tmr_adj (list of 'breakpoints'): list of 'breakpoint' representing detected tumour specific breakpoints
 
         A 'breakpoint' is represented as the frozenset (['breakend_1', 'breakend_2'])
 
@@ -93,21 +94,71 @@ class GenomeGraph(object):
 
         """
 
-        self.x = x
-        self.l = l
-        self.cn = cn_init.copy()
-        self.model = model
+        self.emission = emission
+        self.prior = prior
 
-        self.debug_prefix = None
+        self.wt_adj = set()
+        for seg_1, seg_2 in adjacencies:
+            for allele in (0, 1):
+                breakend_1 = ((seg_1, allele), 1)
+                breakend_2 = ((seg_2, allele), 0)
+                self.wt_adj.add(frozenset([breakend_1, breakend_2]))
+
+        self.tmr_adj = set()
+        for brkend_1, brkend_2 in breakpoints:
+            for allele_1, allele_2 in itertools.product((0, 1), repeat=2):
+                brkend_al_1 = ((brkend_1[0], allele_1), brkend_1[1])
+                brkend_al_2 = ((brkend_2[0], allele_2), brkend_2[1])
+                self.tmr_adj.add(frozenset([brkend_al_1, brkend_al_2]))
 
         self.integral_cost_scale = 100.
 
         # If some tumour adjacencies are also wild type adjacencies, we will
         # get problems with maintenence of the copy balance condition
-        assert len(wt_adj.intersection(tmr_adj)) == 0
+        assert len(self.wt_adj.intersection(self.tmr_adj)) == 0
 
         self.telomere_cost = 10.
         self.breakpoint_cost = 2.
+
+        self.opt_iter = None
+        self.decreased_log_posterior = None
+
+
+    def set_observed_data(self, x, l):
+        """ Set observed data
+
+        Args:
+            x (numpy.array): observed major, minor, and total read counts
+            l (numpy.array): observed lengths of segments
+
+        """
+
+        self.x = x
+        self.l = l
+
+
+    def init_copy_number(self, cn):
+        """ Initialize copy number
+
+        Args:
+            cn (numpy.array): initial copy number matrix
+
+        """
+
+        self.M = cn.shape[1]
+
+        self.build_edge_tables(cn)
+
+
+    def build_edge_tables(self, cn):
+        """ Build the edge table
+
+        Args:
+            cn (numpy.array): initial copy number matrix
+
+        """
+
+        self.cn = cn.copy()
 
         self.N = self.cn.shape[0]
         self.M = self.cn.shape[1]
@@ -116,11 +167,11 @@ class GenomeGraph(object):
         self.tumour_cn_cols = [f_cn_col(m) for m in xrange(1, self.M)]
 
         # Create reference bond edges
-        wt_table = create_adj_table(wt_adj)
+        wt_table = create_adj_table(self.wt_adj)
         wt_table['is_reference'] = True
 
         # Create breakpoint bond edges
-        tmr_table = create_adj_table(tmr_adj)
+        tmr_table = create_adj_table(self.tmr_adj)
         tmr_table['is_breakpoint'] = True
 
         # Create telomere bond edges
@@ -228,12 +279,11 @@ class GenomeGraph(object):
         self.matching_vertex_edges['cost'] = -1e-8
 
 
-    def build_mod_seg_edge_costs(self, delta, h):
+    def build_mod_seg_edge_costs(self, delta):
         """ Create a table of segment edge costs
         
         Args:
             delta (numpy.array): copy number modification
-            h (numpy.array): haploid read depths
 
         Returns:
             pandas.DataFrame: segment edge modification costs table
@@ -245,7 +295,7 @@ class GenomeGraph(object):
 
         mod_seg_edge_costs = list()
 
-        log_likelihood = self.model.log_likelihood_cn(self.x, self.l, self.cn, h)
+        log_likelihood = self.emission.log_likelihood(self.x, self.l, self.cn) + self.prior.log_prior(self.cn, allele_specific=False)
 
         for sign in self.signs:
 
@@ -257,7 +307,7 @@ class GenomeGraph(object):
                 invalid_cn_delta = np.any(cn_delta < 0, axis=(1, 2))
                 cn_delta[invalid_cn_delta] = 1
 
-                log_likelihood_delta = self.model.log_likelihood_cn(self.x, self.l, cn_delta, h)
+                log_likelihood_delta = self.emission.log_likelihood(self.x, self.l, cn_delta) + self.prior.log_prior(cn_delta, allele_specific=False)
 
                 log_likelihood_delta[invalid_cn_delta] = -np.inf
 
@@ -303,12 +353,11 @@ class GenomeGraph(object):
         return mod_seg_edge_costs
 
 
-    def build_mod_bond_edge_costs(self, delta, h):
+    def build_mod_bond_edge_costs(self, delta):
         """ Create a table of bond edge costs
         
         Args:
             delta (numpy.array): copy number modification
-            h (numpy.array): haploid read depths
 
         Returns:
             pandas.DataFrame: bond edge modification costs table
@@ -345,12 +394,11 @@ class GenomeGraph(object):
         return mod_bond_edge_costs
 
 
-    def build_mod_edge_costs(self, delta, h):
+    def build_mod_edge_costs(self, delta):
         """ Build a table of bond and segment edge costs
         
         Args:
             delta (numpy.array): copy number modification
-            h (numpy.array): haploid read depths
 
         Returns:
             pandas.DataFrame: edge modification costs table
@@ -360,11 +408,14 @@ class GenomeGraph(object):
 
         """
 
-        mod_seg_edge_costs = self.build_mod_seg_edge_costs(delta, h)
-        mod_bond_edge_costs = self.build_mod_bond_edge_costs(delta, h)
+        mod_seg_edge_costs = self.build_mod_seg_edge_costs(delta)
+        mod_bond_edge_costs = self.build_mod_bond_edge_costs(delta)
 
         # Label edges as segment or bond
         mod_seg_edge_costs['is_seg'] = True
+        mod_seg_edge_costs['is_reference'] = False
+        mod_seg_edge_costs['is_breakpoint'] = False
+        mod_seg_edge_costs['is_telomere'] = False
         mod_bond_edge_costs['is_seg'] = False
 
         # Label color of edges, invert bond edges
@@ -395,19 +446,18 @@ class GenomeGraph(object):
         return mod_edge_costs
 
 
-    def optimize_modification(self, delta, h):
+    def optimize_modification(self, delta):
         """ Calculate optimal modification moving by +/- delta.
 
         Args:
             delta (numpy.array): copy number modification
-            h (numpy.array): haploid read depths
 
         Returns:
             float, list: minimized cost, list of edges in minimum cost modification
 
         """
 
-        mod_edge_costs = self.build_mod_edge_costs(delta, h)
+        mod_edge_costs = self.build_mod_edge_costs(delta)
 
         blossom_input_filename = str(uuid.uuid4())
         blossom_output_filename = str(uuid.uuid4())
@@ -552,18 +602,66 @@ class GenomeGraph(object):
                 raise Exception('vertex {0} has nonzero sum {1}'.format(v, v_sum.values))
 
 
-    def calculate_log_posterior(self, h):
-        """ Calculate log posterior of segment/bond copy number.
-
+    def test_allele_independence(self, delta):
+        """ Test allele costs are independent
+        
         Args:
-            h (numpy.array): haploid read depths
+            delta (numpy.array): copy number modification
+
+        Raises:
+            Exception: raised if not a valid circulation
+
+        """
+
+        log_likelihood = self.emission.log_likelihood(self.x, self.l, self.cn) + self.prior.log_prior(self.cn, allele_specific=False)
+
+        for sign in self.signs:
+
+            cn_delta = self.cn.copy()
+            for ell in xrange(2):
+                cn_delta[:,:,ell] += sign * delta
+
+            invalid_cn_delta = np.any(cn_delta < 0, axis=(1, 2))
+            cn_delta[invalid_cn_delta] = 1
+
+            log_likelihood_delta = self.emission.log_likelihood(self.x, self.l, cn_delta) + self.prior.log_prior(cn_delta, allele_specific=False)
+
+            log_likelihood_delta[invalid_cn_delta] = -np.inf
+
+            cost_joint = log_likelihood - log_likelihood_delta
+
+            cost_independent = np.zeros(cost_joint.shape)
+
+            for ell in xrange(2):
+
+                cn_delta = self.cn.copy()
+                cn_delta[:,:,ell] += sign * delta
+
+                invalid_cn_delta = np.any(cn_delta < 0, axis=(1, 2))
+                cn_delta[invalid_cn_delta] = 1
+
+                log_likelihood_delta = self.emission.log_likelihood(self.x, self.l, cn_delta) + self.prior.log_prior(cn_delta, allele_specific=False)
+
+                log_likelihood_delta[invalid_cn_delta] = -np.inf
+
+                cost_independent += log_likelihood - log_likelihood_delta
+
+            dependent, = np.where(np.absolute(cost_joint - cost_independent) > 0.01)
+
+            for n in dependent:
+
+                pass #raise Exception('Cost of segment {0} is {1} jointly and {2} independently'.format(n, cost_joint[n], cost_independent[n]))
+
+
+    def calculate_log_posterior(self):
+        """ Calculate log posterior of segment/bond copy number.
 
         Returns:
             float: log posterior of segment/bond copy number.
 
         """
 
-        log_likelihood = self.model.log_likelihood_cn(self.x, self.l, self.cn, h)
+        log_likelihood = self.emission.log_likelihood(self.x, self.l, self.cn) + self.prior.log_prior(self.cn, allele_specific=False)
 
         log_likelihood = log_likelihood.sum()
 
@@ -592,11 +690,8 @@ class GenomeGraph(object):
             return [np.array([0, 1, 0]), np.array([0, 0, 1]), np.array([0, 1, -1]), np.array([0, 1, 1])]
 
 
-    def optimize(self, h, max_iter=1000):
+    def optimize(self, max_iter=1000):
         """ Calculate optimal segment/bond copy number.
-
-        Args:
-            h (numpy.array): haploid read depths
 
         KwArgs:
             max_iter (int): maximum iterations
@@ -605,24 +700,24 @@ class GenomeGraph(object):
             numpy.array: optimized segment copy number
 
         """
-
-        M = h.shape[0]
+        
+        self.decreased_log_posterior = False
 
         self.test_circulation()
 
-        deltas = self.build_deltas(M)
+        deltas = self.build_deltas(self.M)
 
-        log_posterior_prev = self.calculate_log_posterior(h)
+        log_posterior_prev = self.calculate_log_posterior()
 
-        iter = 0
-
-        while True:
+        for self.opt_iter in xrange(max_iter):
 
             mod_list = list()
 
             for delta in deltas:
 
-                cost, modification = self.optimize_modification(delta, h)
+                self.test_allele_independence(delta)
+
+                cost, modification = self.optimize_modification(delta)
 
                 mod_list.append((cost, delta, modification))
 
@@ -633,42 +728,59 @@ class GenomeGraph(object):
             if best_cost == 0:
                 break
 
-            if self.debug_prefix is not None:
-                with open(self.debug_prefix + str(iter) + '.debug', 'w') as debug_file:
-                    pickle.dump((best_cost, best_delta, best_modification), debug_file)
-
             self.apply_modification(best_delta, best_modification)
 
             self.test_circulation()
 
-            log_posterior = self.calculate_log_posterior(h)
+            log_posterior = self.calculate_log_posterior()
 
             if log_posterior < log_posterior_prev:
-                raise Exception('decreased log posterior from {0} to {1}'.format(log_posterior_prev, log_posterior))
+                self.decreased_log_posterior = True
+                break #raise Exception('decreased log posterior from {0} to {1}'.format(log_posterior_prev, log_posterior))
 
             log_posterior_prev = log_posterior
 
-            iter += 1
-            if iter > max_iter:
-                break
-
-        return self.cn, log_posterior_prev
+        return log_posterior_prev, self.cn
 
 
     @property
     def breakpoint_copy_number(self):
+        """ Table of breakpoint copy number.
 
-        brk_cn = dict()
+        pandas.DataFrame with columns:
+            'n_1', 'ell_1', 'side_1', 'n_2', 'ell_2', 'side_2', 'cn_*'
 
-        bond_cn_breakpoints = self.bond_cn[(self.bond_cn['is_breakpoint']) &
-                                           (self.bond_cn[self.tumour_cn_cols].sum(axis=1) > 0)]
+        """
 
-        for idx, row in bond_cn_breakpoints.iterrows():
-
-            breakpoint = frozenset([((row['n_1'], row['ell_1']), row['side_1']),
-                                    ((row['n_2'], row['ell_2']), row['side_2'])])
-
-            brk_cn[breakpoint] = row[self.cn_cols].values
+        brk_cn = self.bond_cn.loc[
+            (self.bond_cn['is_breakpoint']) &
+            (self.bond_cn[self.tumour_cn_cols].sum(axis=1) > 0),
+            edge_cols + self.cn_cols].copy()
 
         return brk_cn
+
+
+    def set_parameter(self, param, value):
+        setattr(self.emission, param, value)
+
+
+    def get_parameter_bounds(self, param):
+        return self.emission.param_bounds[param]
+
+
+    def get_parameter_is_global(self, param):
+        return not self.emission.param_per_segment[param]
+
+
+    def log_likelihood(self, state):
+        return self.emission.log_likelihood(self.x, self.l, state)
+
+
+    def log_likelihood_partial(self, param, state):
+        return self.emission.log_likelihood_partial_param(self.x, self.l, state, param)
+
+
+    def optimal_state(self):
+        return self.optimize()
+
 

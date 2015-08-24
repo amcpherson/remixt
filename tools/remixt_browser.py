@@ -9,7 +9,8 @@ import seaborn
 import argparse
 
 argparser = argparse.ArgumentParser()
-argparser.add_argument('preds_filename', help='ReMixT Predictions Filename')
+argparser.add_argument('results_filename', help='ReMixT Results Filename')
+argparser.add_argument('--solution_idx', help='solution index')
 argparser.add_argument('--positions', help='annotate positions')
 argparser.add_argument('--breakpoints', help='annotate breakpoints')
 argparser.add_argument('--max_copies', help='maximum copies to display', type=float, default=5.0)
@@ -18,12 +19,11 @@ args = argparser.parse_args()
 chromosomes = [str(a) for a in range(1, 23)] + ['X']
 chromosome_indices = dict([(chromosome, idx) for idx, chromosome in enumerate(chromosomes)])
 
-if args.preds_filename.endswith('.gz'):
-    compression = 'gzip'
-else:
-    compression = None
-
-cnv = pd.read_csv(args.preds_filename, sep='\t', converters={'chromosome':str}, compression=compression)
+with pd.HDFStore(args.results_filename, 'r') as store:
+    idx = args.solution_idx
+    if idx is None:
+        idx = store['stats'].iloc[0]['idx']
+    cnv = store['solutions/{0}/cn'.format(idx)]
 cnv = cnv.replace([np.inf, -np.inf], np.nan).dropna()
 
 cnv = cnv.loc[(cnv['chromosome'].isin(chromosomes))]

@@ -3,18 +3,17 @@ import os
 import unittest
 import copy
 import itertools
+import pickle
 import numpy as np
 import pandas as pd
 import scipy
 import scipy.optimize
 
-remixt_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-
-sys.path.append(remixt_directory)
-
 import remixt.simulations.simple as sim_simple
-import remixt.simulations.experiment as sim_experiment
+import remixt.simulations.experiment
 import remixt.cn_model as cn_model
+import remixt.em as em
+import remixt.likelihood as likelihood
 import remixt.genome_graph as genome_graph
 import remixt.seqdataio
 
@@ -25,22 +24,22 @@ if __name__ == '__main__':
 
     class remixt_unittest(unittest.TestCase):
 
-        def generate_simple_data(self, total_cn):
+        def generate_simple_data(self, total_cn, N=100, M=3):
 
-            N = 100
-            M = 3
             r = np.array([75, 75, 75])
 
             l = np.random.uniform(low=100000, high=1000000, size=N)
-            p = np.random.uniform(low=0.2, high=0.4, size=N)
-            p = np.vstack([p, p, np.ones(p.shape)]).T
+            phi = np.random.uniform(low=0.2, high=0.4, size=N)
+            p = np.vstack([phi, phi, np.ones(phi.shape)]).T
 
-            cn = sim_simple.generate_cn(N, M, 2.0, 0.5, 0.5, 2)
+            cn = sim_simple.generate_cn(N, M, 2.0, 0.5, 0.5, 1)
             h = np.random.uniform(low=0.5, high=2.0, size=M)
 
-            model = cn_model.CopyNumberModel(M, set(), set())
+            likelihood_model = likelihood.ReadCountLikelihood()
+            likelihood_model.h = h
+            likelihood_model.phi = phi
 
-            mu = model.expected_read_count(l, cn, h, p)
+            mu = likelihood_model.expected_read_count(l, cn)
 
             nb_p = mu / (r + mu)
 
@@ -48,9 +47,60 @@ if __name__ == '__main__':
             x = x.reshape(nb_p.shape)
 
             if not total_cn:
+                p = p[:,0:2]
                 r = r[0:2]
+                x = x[:,0:2]
 
-            return cn, h, l, p, r, x
+            return cn, h, l, phi, r, x
+
+
+        def load_test_experiment(self):
+
+            script_directory = os.path.realpath(os.path.dirname(__file__))
+            experiment_filename = os.path.join(script_directory, 'test_experiment.pickle')
+
+            with open(experiment_filename) as experiment_file:
+                experiment = pickle.load(experiment_file)
+
+            return experiment
+
+
+        def uniform_cn_prior(self):
+
+            cn_max = 4
+
+            num_haploid_states = cn_max + 1
+            num_cn_states = num_haploid_states * (num_haploid_states + 1) / 2
+            num_total_states = num_cn_states + 1
+
+            cn_prior = np.ones((cn_max + 2, cn_max + 2)) / float(num_total_states)
+
+            return cn_prior
+
+
+        def perfect_cn_prior(self, cn):
+
+            cn_max = 4
+
+            cn_prior = np.zeros((cn_max + 2, cn_max + 2))
+
+            for n in xrange(cn.shape[0]):
+                for m in xrange(1, cn.shape[1]):
+                    cn_1 = int(cn[n,m,0])
+                    cn_2 = int(cn[n,m,1])
+                    if cn_1 > cn_max or cn_2 > cn_max:
+                        cn_prior[cn_max+1, :] += 1.0
+                        cn_prior[:, cn_max+1] += 1.0
+                        cn_prior[cn_max+1, cn_max+1] -= 1.0
+                    elif cn_1 != cn_2:
+                        cn_prior[cn_1, cn_2] += 1.0
+                        cn_prior[cn_2, cn_1] += 1.0
+                    else:
+                        cn_prior[cn_1, cn_2] += 1.0
+
+            cn_prior /= cn.shape[0] * cn.shape[1]
+
+            return cn_prior
 
 
         def generate_tiny_data(self):
@@ -69,173 +119,62 @@ if __name__ == '__main__':
 
             l = np.array([10000, 20000, 10000])
 
-            p = np.array([[0.2, 0.2, 1.0],
-                          [0.2, 0.2, 1.0],
-                          [0.2, 0.2, 1.0]])
+            phi = np.array([0.2, 0.2, 0.2])
 
-            mu = cn_model.CopyNumberModel.expected_read_count(l, cn, h, p)
+            p = np.vstack([phi, phi, np.ones(phi.shape)]).T
+
+            likelihood_model = likelihood.ReadCountLikelihood()
+            likelihood_model.h = h
+            likelihood_model.phi = phi
+
+            mu = likelihood_model.expected_read_count(l, cn)
 
             x = np.array([np.random.poisson(a) for a in mu])
             x = x.reshape(mu.shape)
 
-            return x, cn, h, l, p
+            return x, cn, h, l, phi
 
-
-        def test_expected_read_count_opt(self):
-
-            for total_cn in (True, False):
-                cn, h, l, p, r, x = self.generate_simple_data(total_cn)
-
-                model = cn_model.CopyNumberModel(cn.shape[1], set(), set())
-                model.total_cn = total_cn
-
-                unopt = model.expected_read_count_unopt(l, cn, h, p)
-
-                opt = model.expected_read_count(l, cn, h, p)
-
-                error = np.sum(unopt - opt)
-
-                self.assertAlmostEqual(error, 0.0, places=3)
-
-
-        def test_log_likelihood_cn_negbin_opt(self):
-
-            for total_cn in (True, False):
-                cn, h, l, p, r, x = self.generate_simple_data(total_cn)
-
-                model = cn_model.CopyNumberModel(cn.shape[1], set(), set())
-                model.total_cn = total_cn
-
-                mu = model.expected_read_count_unopt(l, cn, h, p)
-
-                unopt = model.log_likelihood_cn_negbin_unopt(x, mu, r)
-                opt = model.log_likelihood_cn_negbin(x, mu, r)
-
-                error = np.sum(unopt - opt)
-
-                self.assertAlmostEqual(error, 0.0, places=3)
-
-
-        def test_log_likelihood_cn_poisson_opt(self):
-
-            for total_cn in (True, False):
-                cn, h, l, p, r, x = self.generate_simple_data(total_cn)
-
-                model = cn_model.CopyNumberModel(cn.shape[1], set(), set())
-                model.total_cn = total_cn
-
-                mu = model.expected_read_count_unopt(l, cn, h, p)
-
-                unopt = model.log_likelihood_cn_poisson_unopt(x, mu)
-                opt = model.log_likelihood_cn_poisson(x, mu)
-
-                error = np.sum(unopt - opt)
-
-                self.assertAlmostEqual(error, 0.0, places=3)
-
-
-        def test_log_likelihood_cn_negbin_partial_h_opt(self):
-
-            for total_cn in (True, False):
-                cn, h, l, p, r, x = self.generate_simple_data(total_cn)
-
-                model = cn_model.CopyNumberModel(cn.shape[1], set(), set())
-                model.total_cn = total_cn
-
-                unopt = model.log_likelihood_cn_negbin_partial_h_unopt(x, l, cn, h, p, r)
-                opt = model.log_likelihood_cn_negbin_partial_h(x, l, cn, h, p, r)
-
-                error = np.sum(unopt - opt)
-
-                self.assertAlmostEqual(error, 0.0, places=3)
-
-
-        def test_log_likelihood_cn_poisson_partial_h_opt(self):
-
-            for total_cn in (True, False):
-                cn, h, l, p, r, x = self.generate_simple_data(total_cn)
-
-                model = cn_model.CopyNumberModel(cn.shape[1], set(), set())
-                model.total_cn = total_cn
-
-                unopt = model.log_likelihood_cn_poisson_partial_h_unopt(x, l, cn, h, p)
-                opt = model.log_likelihood_cn_poisson_partial_h(x, l, cn, h, p)
-
-                error = np.sum(unopt - opt)
-
-                self.assertAlmostEqual(error, 0.0, places=3)
-
-
-        def test_log_likelihood_cn_negbin_partial_h(self):
-
-            for total_cn in (True, False):
-                cn, h, l, p, r, x = self.generate_simple_data(total_cn)
-
-                model = cn_model.CopyNumberModel(cn.shape[1], set(), set())
-                model.total_cn = total_cn
-
-                def evaluate_log_likelihood(h):
-                    mu = model.expected_read_count_unopt(l, cn, h, p)
-                    return np.sum(model.log_likelihood_cn_negbin(x, mu, r))
-
-                def evaluate_log_likelihood_partial_h(h):
-                    return np.sum(model.log_likelihood_cn_negbin_partial_h(x, l, cn, h, p, r), axis=0)
-
-                approx = scipy.optimize.approx_fprime(h, evaluate_log_likelihood, 1e-8) 
-                calculated = evaluate_log_likelihood_partial_h(h)
-                error = np.sum(np.square(approx - calculated)) / np.sum(np.square((approx + calculated)/2.0))
-
-                self.assertAlmostEqual(error, 0.0, places=3)
-
-
-        def test_log_likelihood_cn_poisson_partial_h(self):
-
-            for total_cn in (True, False):
-                cn, h, l, p, r, x = self.generate_simple_data(total_cn)
-
-                model = cn_model.CopyNumberModel(cn.shape[1], set(), set())
-                model.total_cn = total_cn
-
-                def evaluate_log_likelihood(h):
-                    mu = model.expected_read_count_unopt(l, cn, h, p)
-                    return np.sum(model.log_likelihood_cn_poisson(x, mu))
-
-                def evaluate_log_likelihood_partial_h(h):
-                    return np.sum(model.log_likelihood_cn_poisson_partial_h(x, l, cn, h, p), axis=0)
-
-                approx = scipy.optimize.approx_fprime(h, evaluate_log_likelihood, 1e-8) 
-                calculated = evaluate_log_likelihood_partial_h(h)
-                error = np.sum(np.square(approx - calculated)) / np.sum(np.square((approx + calculated)/2.0))
-                
-                self.assertAlmostEqual(error, 0.0, places=3)
-
-
+            
         def test_evaluate_q_derivative(self):
 
             for total_cn in (True, False):
-                cn, h, l, p, r, x = self.generate_simple_data(total_cn)
+                cn, h, l, phi, r, x = self.generate_simple_data(total_cn)
 
-                model = cn_model.CopyNumberModel(cn.shape[1], set(), set())
-                model.total_cn = total_cn
+                emission = likelihood.NegBinLikelihood(total_cn=total_cn)
+                emission.h = h
+                emission.phi = phi
+                emission.r = r
 
-                model.infer_offline_parameters(x, l)
+                N = l.shape[0]
+                M = h.shape[0]
 
-                cns, resps, log_posterior = model.e_step_independent(x, l, h)
-
-                grad_error = scipy.optimize.check_grad(model.evaluate_q, model.evaluate_q_derivative, h, x, l, cns, resps)
+                prior = cn_model.CopyNumberPrior(N, M, self.perfect_cn_prior(cn))
+                prior.set_lengths(l)
                 
+                model = cn_model.HiddenMarkovModel(N, M, emission, prior)
+                model.set_observed_data(x, l)
+
+                log_posterior, cns, resps = model.posterior_marginals()
+
+                estimator = em.ExpectationMaximizationEstimator()
+
+                grad_error = scipy.optimize.check_grad(estimator.evaluate_q, estimator.evaluate_q_derivative,
+                    h, model, 'h', cns, resps)
+
                 self.assertAlmostEqual(grad_error, 0.0, places=-1)
 
 
         def test_build_cn(self):
 
-            model = cn_model.CopyNumberModel(3, set(), set())
+            prior = cn_model.CopyNumberPrior(1, 3, self.uniform_cn_prior())
+            model = cn_model.HiddenMarkovModel(1, 3, None, prior)
+
             model.cn_max = 6
             model.cn_dev_max = 2
 
             # Build cn list using the method from CopyNumberModel
             built_cns = set()
-            for cn in model.build_hmm_cns(1):
+            for cn in model.build_hmm_cns():
                 cn_tuple = list()
                 for m in xrange(3):
                     for ell in xrange(2):
@@ -261,22 +200,31 @@ if __name__ == '__main__':
 
         def test_wildcard_cn(self):
 
-            x, cn, h, l, p = self.generate_tiny_data()
+            x, cn, h, l, phi = self.generate_tiny_data()
 
-            model = cn_model.CopyNumberModel(3, set(), set())
+            N = l.shape[0]
+            M = h.shape[0]
+
+            emission = likelihood.PoissonLikelihood(total_cn=False)
+            emission.h = h
+            emission.phi = phi
+
+            prior = cn_model.CopyNumberPrior(N, M, self.uniform_cn_prior())
+
+            model = cn_model.HiddenMarkovModel(N, M, emission, prior)
+            model.set_observed_data(x, l)
             model.wildcard_cn_max = 2
             model.cn_dev_max = 1
             model.cn_max = 0
 
-            model.infer_p(x)
-
             # Build cn list using the method from CopyNumberModel
             built_cns = [set() for _ in xrange(x.shape[0])]
-            for cn in model.build_wildcard_cns(x, l, h):
+            for cn in model.build_wildcard_cns():
                 for n in xrange(x.shape[0]):
                     built_cns[n].add(tuple(cn[n].flatten().astype(int)))
 
             # Build the naive way
+            p = np.vstack([phi, phi, np.ones(phi.shape)]).T
             for n in xrange(x.shape[0]):
                 num_cns = 0
                 h_t = ((x[n,0:2] / p[n,0:2]).T / l[n]).T
@@ -298,33 +246,31 @@ if __name__ == '__main__':
 
         def test_simple_genome_graph(self):
 
-            x, cn, h, l, p = self.generate_tiny_data()
+            x, cn, h, l, phi = self.generate_tiny_data()
 
             cn_true = cn.copy()
 
-            model = cn_model.CopyNumberModel(3, set(), set())
-            model.total_cn = False
-            model.false_cn = False
+            emission = likelihood.PoissonLikelihood(total_cn=False)
+            emission.h = h
+            emission.phi = phi
 
-            wt_adj = set()
-            for seg in xrange(2):
-                for allele in (0, 1):
-                    wt_adj.add(frozenset([((seg, allele), 1), ((seg + 1, allele), 0)]))
+            N = l.shape[0]
+            M = h.shape[0]
 
-            tmr_adj = set()
-            for allele_1, allele_2 in itertools.product(xrange(2), repeat=2):
-                tmr_adj.add(frozenset([((0, allele_1), 1), ((2, allele_2),0)]))
+            prior = cn_model.CopyNumberPrior(N, M, self.uniform_cn_prior())
+            prior.set_lengths(l)
+            
+            adjacencies = [(0, 1), (1, 2)]
+            breakpoints = [frozenset([(0, 1), (2, 0)])]
 
             # Modify copy number from known true
             cn[1,1,1] = 2
 
-            model.infer_p(x)
-            
-            model.r = np.array([100., 100.])
+            graph = genome_graph.GenomeGraph(emission, prior, adjacencies, breakpoints)
+            graph.set_observed_data(x, l)
+            graph.init_copy_number(cn)
 
-            graph = genome_graph.GenomeGraph(model, x, l, cn, wt_adj, tmr_adj)
-
-            graph.optimize(h)
+            graph.optimize()
 
             self.assertTrue(np.all(graph.cn == cn_true))
 
@@ -340,14 +286,102 @@ if __name__ == '__main__':
             # Check variant edge
             self.assertTrue(np.all(bond_cn.loc[0,1,1,2,1,0].values == np.array([1, 0])))
 
-            model.total = False
+
+        def test_learn_h(self):
+
+            experiment = self.load_test_experiment()
+
+            print 'h', experiment.h
+
+            emission = likelihood.NegBinLikelihood(total_cn=False)
+            emission.h = experiment.h
+            emission.phi = experiment.phi
+            emission.r = experiment.negbin_r[0:2]
+
+            N = experiment.l.shape[0]
+            M = experiment.h.shape[0]
+
+            prior = cn_model.CopyNumberPrior(N, M, self.perfect_cn_prior(experiment.cn))
+            prior.set_lengths(experiment.l)
+
+            model = cn_model.HiddenMarkovModel(N, M, emission, prior)
+            model.set_observed_data(experiment.x, experiment.l)
+            
+            _, cn_init = model.optimal_state()
+
+            graph = genome_graph.GenomeGraph(emission, prior, experiment.adjacencies, experiment.breakpoints)
+            graph.set_observed_data(experiment.x, experiment.l)
+            graph.init_copy_number(cn_init)
+
+            h_init = experiment.h + experiment.h * 0.05 * np.random.randn(*experiment.h.shape)
+
+            print 'h_init', h_init
+
+            estimator = em.HardAssignmentEstimator(num_em_iter=1)
+            estimator.learn_param(graph, 'h', h_init)
+
+
+        def test_learn_r(self):
+
+            experiment = self.load_test_experiment()
+
+            print 'r', experiment.negbin_r
+
+            emission = likelihood.NegBinLikelihood(total_cn=True)
+            emission.h = experiment.h
+            emission.phi = experiment.phi
+            emission.r = experiment.negbin_r
+
+            N = experiment.l.shape[0]
+            M = experiment.h.shape[0]
+
+            prior = cn_model.CopyNumberPrior(N, M, self.perfect_cn_prior(experiment.cn))
+            prior.set_lengths(experiment.l)
+
+            model = cn_model.HiddenMarkovModel(N, M, emission, prior)
+            model.set_observed_data(experiment.x, experiment.l)
+            
+            r_init = experiment.negbin_r + experiment.negbin_r * 0.10 * np.random.randn(*experiment.negbin_r.shape)
+
+            print 'r_init', r_init
+
+            estimator = em.ExpectationMaximizationEstimator(num_em_iter=1)
+            estimator.learn_param(model, 'r', r_init)
+
+
+        def test_learn_phi(self):
+
+            experiment = self.load_test_experiment()
+
+            print 'phi', experiment.phi
+
+            emission = likelihood.NegBinLikelihood(total_cn=True)
+            emission.h = experiment.h
+            emission.phi = experiment.phi
+            emission.r = experiment.negbin_r
+
+            N = experiment.l.shape[0]
+            M = experiment.h.shape[0]
+
+            prior = cn_model.CopyNumberPrior(N, M, self.perfect_cn_prior(experiment.cn))
+            prior.set_lengths(experiment.l)
+
+            model = cn_model.HiddenMarkovModel(N, M, emission, prior)
+            model.set_observed_data(experiment.x, experiment.l)
+
+            phi_init = experiment.phi + experiment.phi * 0.02 * np.random.randn(*experiment.phi.shape)
+
+            print 'phi_init', phi_init
+
+            estimator = em.ExpectationMaximizationEstimator(num_em_iter=1)
+            estimator.learn_param(model, 'phi', phi_init)
 
 
         def test_recreate(self):
 
-            rparams = sim_experiment.RearrangedGenome.default_params.copy()
+            rparams = remixt.simulations.experiment.RearrangedGenome.default_params.copy()
 
-            genome = sim_experiment.RearrangedGenome(100)
+            genome = remixt.simulations.experiment.RearrangedGenome(100)
 
             genome.create(rparams)
 
@@ -368,9 +402,9 @@ if __name__ == '__main__':
 
         def test_rewind(self):
 
-            rparams = sim_experiment.RearrangedGenome.default_params.copy()
+            rparams = remixt.simulations.experiment.RearrangedGenome.default_params.copy()
 
-            genome = sim_experiment.RearrangedGenome(100)
+            genome = remixt.simulations.experiment.RearrangedGenome(100)
 
             genome.create(rparams)
 
@@ -394,11 +428,11 @@ if __name__ == '__main__':
 
         def test_create_rearranged_sequence(self):
 
-            rparams = sim_experiment.RearrangedGenome.default_params.copy()
+            rparams = remixt.simulations.experiment.RearrangedGenome.default_params.copy()
 
             rparams['chromosome_lengths'] = {'1':20, '2':10}
 
-            genome = sim_experiment.RearrangedGenome(4)
+            genome = remixt.simulations.experiment.RearrangedGenome(4)
 
             np.random.seed(2014)
 
@@ -419,55 +453,6 @@ if __name__ == '__main__':
             test_sequences = genome.create_chromosome_sequences(germline_genome)
 
             self.assertTrue(test_sequences == true_sequences)
-
-
-        def test_seqdataio(self):
-
-            writer = remixt.seqdataio.Writer('./test.seqdata', './')
-
-            chromosome = '1'
-
-            num_reads = 10000000
-            num_alleles = num_reads * 4
-            
-            fragments = pd.DataFrame({'start':np.random.randint(0, int(1e8), size=num_reads)})
-            fragments['end'] = fragments['start'] + np.random.randint(0, 100, size=num_reads)
-
-            alleles = pd.DataFrame({
-                'fragment_id':np.sort(np.random.randint(0, num_reads, size=num_alleles)),
-                'position':np.random.randint(0, int(1e8), size=num_alleles),
-                'is_alt':np.random.randint(0, 2, size=num_alleles),
-            })
-            alleles = alleles[['fragment_id', 'position', 'is_alt']]
-
-            chunk_size = 1000000
-            num_reads_written = 0
-
-            while num_reads_written < num_reads:
-
-                fragment_ids = pd.DataFrame({'fragment_id':np.arange(chunk_size, dtype=int) + num_reads_written})
-
-                fragments_chunk = fragments.reindex(fragment_ids.set_index('fragment_id').index)
-                alleles_chunk = alleles[alleles['fragment_id'].isin(fragment_ids['fragment_id'])].copy()
-
-                fragments_chunk.reset_index(inplace=True, drop=True)
-                alleles_chunk['fragment_id'] -= num_reads_written
-
-                writer.write(chromosome, fragments_chunk, alleles_chunk)
-
-                num_reads_written += chunk_size
-
-            writer.close()
-
-            fragments_test = next(remixt.seqdataio.read_read_data('./test.seqdata', chromosome='1', num_rows=None))
-            alleles_test = next(remixt.seqdataio.read_allele_data('./test.seqdata', chromosome='1', num_rows=None))
-
-            self.assertEqual(fragments.values.shape, fragments_test.values.shape)
-            self.assertEqual(alleles.values.shape, alleles_test.values.shape)
-
-            self.assertTrue(np.all(fragments.values == fragments_test.values))
-            self.assertTrue(np.all(alleles.values == alleles_test.values))
-
 
 
     unittest.main()

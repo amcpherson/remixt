@@ -90,7 +90,9 @@ def generate_cn(N, M, ploidy, base_p, clone_p, dev_max):
     cn_base = np.ones((N, 2)) * ploidy
     cn_base = random_geometric_deviation(cn_base, base_p, dev_max).reshape((N, 2))
 
-    for tidx in xrange(M-1):
+    cn.append(cn_base)
+
+    for tidx in xrange(M-2):
         clone_cn = random_geometric_deviation(cn_base, clone_p, dev_max).reshape((N, 2))
         cn.append(clone_cn)
 
