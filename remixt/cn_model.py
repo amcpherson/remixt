@@ -41,13 +41,16 @@ class ProbabilityError(ValueError):
 
 class CopyNumberPrior(object):
 
-    def __init__(self, N, M, cn_prob):
+    def __init__(self, N, M, cn_prob, allele_specific=True):
         """Create a copy number model.
 
         Args:
             N (int): number of segments
             M (int): number of clones including normal
-            cn_prob (numpy.array): copy number prior probability matrix 
+            cn_prob (numpy.array): copy number prior probability matrix
+
+        KwArgs:
+            allele_specific (boolean): calculate allele specific prior
 
         Copy number probability matrix is a symmetric matrix of prior probabilities of
         each copy number state.  The last row and column are the prior of seeing a 
@@ -57,6 +60,7 @@ class CopyNumberPrior(object):
 
         self.N = N
         self.M = M
+        self.allele_specific = allele_specific
 
         self.cn_max = cn_prob.shape[0] - 2
         self.cn_prob = cn_prob
@@ -69,17 +73,14 @@ class CopyNumberPrior(object):
         
         self.divergence_probs = np.array([0.8, 0.2])
 
-        self.prior_cn_scale = 1.0 / 3e6
+        self.prior_cn_scale = 5e-8
 
 
-    def log_prior(self, cn, allele_specific=True):
+    def log_prior(self, cn):
         """ Evaluate log prior probability of segment copy number.
         
         Args:
             cn (numpy.array): copy number state of segments
-
-        KwArgs:
-            allele_specific (boolean): calculate allele specific prior
 
         Returns:
             numpy.array: log prior per segment
@@ -88,7 +89,7 @@ class CopyNumberPrior(object):
 
         cn = cn.copy().astype(int)
 
-        if allele_specific:
+        if self.allele_specific:
             cn[np.any(cn > self.cn_max + 1, axis=(1, 2)),:,:] = self.cn_max + 1
 
             cn_minor, cn_major = cn.swapaxes(0, 2).swapaxes(1, 2)

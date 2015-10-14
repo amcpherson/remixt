@@ -51,7 +51,7 @@ if __name__ == '__main__':
         None,
         mgd.TempOutputFile('experiment.pickle'),
         mgd.TempOutputFile('h_init', 'byh'),
-        mgd.TempOutputFile('h_plot.pdf'),
+        mgd.TempOutputFile('init_results'),
         mgd.InputFile(args['counts']),
         mgd.InputFile(args['breakpoints']),
         num_clones=args['num_clones'],
@@ -60,7 +60,7 @@ if __name__ == '__main__':
     pyp.sch.transform('fit', ('byh',), {'mem':8},
         remixt.analysis.pipeline.fit,
         None,
-        mgd.TempOutputFile('results', 'byh'),
+        mgd.TempOutputFile('fit_results', 'byh'),
         mgd.TempInputFile('experiment.pickle'),
         mgd.TempInputFile('h_init', 'byh'),
         args['cn_proportions'],
@@ -72,7 +72,8 @@ if __name__ == '__main__':
         mgd.OutputFile(args['results']),
         mgd.InputFile(args['breakpoints']),
         mgd.TempInputFile('experiment.pickle'),
-        mgd.TempInputFile('results', 'byh'),
+        mgd.TempInputFile('init_results'),
+        mgd.TempInputFile('fit_results', 'byh'),
     )
 
     pyp.run()

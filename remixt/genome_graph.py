@@ -295,7 +295,7 @@ class GenomeGraph(object):
 
         mod_seg_edge_costs = list()
 
-        log_likelihood = self.emission.log_likelihood(self.x, self.l, self.cn) + self.prior.log_prior(self.cn, allele_specific=False)
+        log_likelihood = self.emission.log_likelihood(self.x, self.l, self.cn) + self.prior.log_prior(self.cn)
 
         for sign in self.signs:
 
@@ -307,7 +307,7 @@ class GenomeGraph(object):
                 invalid_cn_delta = np.any(cn_delta < 0, axis=(1, 2))
                 cn_delta[invalid_cn_delta] = 1
 
-                log_likelihood_delta = self.emission.log_likelihood(self.x, self.l, cn_delta) + self.prior.log_prior(cn_delta, allele_specific=False)
+                log_likelihood_delta = self.emission.log_likelihood(self.x, self.l, cn_delta) + self.prior.log_prior(cn_delta)
 
                 log_likelihood_delta[invalid_cn_delta] = -np.inf
 
@@ -613,7 +613,7 @@ class GenomeGraph(object):
 
         """
 
-        log_likelihood = self.emission.log_likelihood(self.x, self.l, self.cn) + self.prior.log_prior(self.cn, allele_specific=False)
+        log_likelihood = self.emission.log_likelihood(self.x, self.l, self.cn) + self.prior.log_prior(self.cn)
 
         for sign in self.signs:
 
@@ -624,7 +624,7 @@ class GenomeGraph(object):
             invalid_cn_delta = np.any(cn_delta < 0, axis=(1, 2))
             cn_delta[invalid_cn_delta] = 1
 
-            log_likelihood_delta = self.emission.log_likelihood(self.x, self.l, cn_delta) + self.prior.log_prior(cn_delta, allele_specific=False)
+            log_likelihood_delta = self.emission.log_likelihood(self.x, self.l, cn_delta) + self.prior.log_prior(cn_delta)
 
             log_likelihood_delta[invalid_cn_delta] = -np.inf
 
@@ -640,7 +640,7 @@ class GenomeGraph(object):
                 invalid_cn_delta = np.any(cn_delta < 0, axis=(1, 2))
                 cn_delta[invalid_cn_delta] = 1
 
-                log_likelihood_delta = self.emission.log_likelihood(self.x, self.l, cn_delta) + self.prior.log_prior(cn_delta, allele_specific=False)
+                log_likelihood_delta = self.emission.log_likelihood(self.x, self.l, cn_delta) + self.prior.log_prior(cn_delta)
 
                 log_likelihood_delta[invalid_cn_delta] = -np.inf
 
@@ -661,7 +661,7 @@ class GenomeGraph(object):
 
         """
 
-        log_likelihood = self.emission.log_likelihood(self.x, self.l, self.cn) + self.prior.log_prior(self.cn, allele_specific=False)
+        log_likelihood = self.emission.log_likelihood(self.x, self.l, self.cn) + self.prior.log_prior(self.cn)
 
         log_likelihood = log_likelihood.sum()
 

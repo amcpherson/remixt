@@ -48,7 +48,7 @@ def create_cn_prior_matrix(cn_proportions_filename):
 def init(
         experiment_filename,
         candidate_h_filename_callback,
-        candidate_h_plot_filename,
+        results_filename,
         segment_allele_count_filename,
         breakpoint_filename,
         num_clones=None,
@@ -63,21 +63,17 @@ def init(
     with open(experiment_filename, 'w') as f:
         pickle.dump(experiment, f)
 
-    # Prepare candidate haploid depth initializations
-    fig = plt.figure(figsize=(8,8))
+    read_depth = remixt.analysis.readdepth.calculate_depth(experiment)
+    minor_modes = remixt.analysis.readdepth.calculate_modes(read_depth)
+    candidate_h = remixt.analysis.readdepth.calculate_candidate_h(minor_modes, num_clones=num_clones)
 
-    ax = plt.subplot(1, 1, 1)
-
-    emission = remixt.likelihood.ReadCountLikelihood()
-    emission.estimate_parameters(experiment.x, experiment.l)
-
-    candidate_h_init = remixt.analysis.readdepth.candidate_h(experiment.x, experiment.l, num_clones=num_clones, ax=ax)
-
-    fig.savefig(candidate_h_plot_filename, format='pdf')
-
-    for idx, h in enumerate(candidate_h_init):
+    for idx, h in enumerate(candidate_h):
         with open(candidate_h_filename_callback(idx), 'w') as f:
             pickle.dump(h, f)
+
+    with pd.HDFStore(results_filename, 'w') as store:
+        store['read_depth'] = read_depth
+        store['minor_modes'] = pd.Series(minor_modes, index=xrange(len(minor_modes)))
 
 
 def fit(
@@ -109,23 +105,20 @@ def fit(
 
     # Estimate haploid depths
     estimator = remixt.em.ExpectationMaximizationEstimator()
-    h_init, _, _ = estimator.learn_param(model, 'h', h_init)
-
-    # Re-estimate phi
-    estimator = remixt.em.ExpectationMaximizationEstimator()
-    _, _, phi_converged = estimator.learn_param(model, 'phi', emission.phi)
-    phi_em_iter = estimator.em_iter
-
-    # Re-estimate haploid depths
-    estimator = remixt.em.ExpectationMaximizationEstimator()
     h, log_posterior, h_converged = estimator.learn_param(model, 'h', h_init)
     h_em_iter = estimator.em_iter
 
-    # Infer copy number
+    # Set to allele independent prior as allele dependence will
+    # cause the genome graph algorithm to fail
+    prior.allele_specific = False
+
+    # Initialize copy number
     _, cn_init = model.optimal_state()
     graph = remixt.genome_graph.GenomeGraph(emission, prior, experiment.adjacencies, experiment.breakpoints)
     graph.set_observed_data(experiment.x, experiment.l)
     graph.init_copy_number(cn_init)
+
+    # Infer copy number
     log_posterior_graph, cn = graph.optimize()
     brk_cn = graph.breakpoint_copy_number
     graph_opt_iter = graph.opt_iter
@@ -161,12 +154,10 @@ def fit(
     stats_table = {
         'log_posterior':log_posterior,
         'log_posterior_graph':log_posterior_graph,
-        'phi_converged':phi_converged,
         'h_converged':h_converged,
+        'h_em_iter':h_em_iter,
         'num_clones':len(h),
         'num_segments':len(experiment.x),
-        'phi_em_iter':phi_em_iter,
-        'h_em_iter':h_em_iter,
         'graph_opt_iter':graph_opt_iter,
         'decreased_log_posterior':decreased_log_posterior,
     }
@@ -181,17 +172,21 @@ def fit(
         store['brk_cn'] = brk_cn_table
 
 
-def collate(collate_filename, breakpoints_filename, experiment_filename, results_filenames):
+def collate(collate_filename, breakpoints_filename, experiment_filename, init_results_filename, fit_results_filenames):
 
     with pd.HDFStore(collate_filename, 'w') as collated:
-        
+
+        with pd.HDFStore(init_results_filename, 'r') as results:
+            for key, value in results.iteritems():
+                collated[key] = results[key]
+
         stats_table = list()
 
-        for idx, results_filename in results_filenames.iteritems():
+        for idx, results_filename in fit_results_filenames.iteritems():
 
             with pd.HDFStore(results_filename, 'r') as results:
                 for key, value in results.iteritems():
-                    collated['solutions/{0}/{1}'.format(idx, key)] = results[key]
+                    collated['solutions/solution_{0}/{1}'.format(idx, key)] = results[key]
 
                 stats = results['stats']
                 stats['idx'] = idx
