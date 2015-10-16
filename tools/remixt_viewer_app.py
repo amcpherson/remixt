@@ -37,7 +37,7 @@ patient_samples = collections.defaultdict(list)
 sample_stores = dict()
 
 
-for data_filename in glob.glob('./patient_DG1135/sample_*.h5'):
+for data_filename in glob.glob('./patient_*/sample_*.h5'):
     patient = data_filename.split('/')[1][len('patient_'):]
     sample = data_filename.split('/')[2][len('sample_'):-len('.h5')]
 
