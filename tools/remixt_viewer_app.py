@@ -1,9 +1,3 @@
-"""
-This file demonstrates a bokeh applet, which can either be viewed
-directly on a bokeh-server, or embedded into a flask application.
-See the README.md file in this directory for instructions on running.
-"""
-
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
@@ -23,7 +17,7 @@ from bokeh.io import vplot, hplot
 from bokeh.properties import String, Instance, Dict
 from bokeh.server.app import bokeh_app
 from bokeh.server.utils.plugins import object_page
-from bokeh.models.widgets import HBox, VBox, VBoxForm, Paragraph, Select, DataTable, TableColumn
+from bokeh.models.widgets import HBox, VBox, VBoxForm, Paragraph, Select, DataTable, TableColumn, Tabs, Panel
 
 
 chromosomes = [str(a) for a in range(1, 23)] + ['X']
@@ -43,7 +37,7 @@ patient_samples = collections.defaultdict(list)
 sample_stores = dict()
 
 
-for data_filename in glob.glob('./patient_*/sample_*.h5'):
+for data_filename in glob.glob('./patient_DG1135/sample_*.h5'):
     patient = data_filename.split('/')[1][len('patient_'):]
     sample = data_filename.split('/')[2][len('sample_'):-len('.h5')]
 
@@ -155,7 +149,7 @@ def retrieve_cnv_data(patient, sample, solution, chromosome=''):
     """
     store = sample_stores[(patient, sample)]
 
-    cnv = store['solutions/{0}/cn'.format(solution)]
+    cnv = store['solutions/sol{0}/cn'.format(solution)]
 
     if chromosome != '':
         cnv = cnv[cnv['chromosome'] == chromosome].copy()
@@ -186,7 +180,7 @@ def retrieve_chromosome_plot_info(patient, sample, solution, chromosome=''):
 def prepare_cnv_data(cnv, chromosome_plot_info):
     """
     """
-    # Scatter size scaled by segment length        
+    # Scatter size scaled by segment length
     cnv['scatter_size'] = 5. * cnv['length'] / 3e6
 
     # Scatter color by chromosome
@@ -207,7 +201,7 @@ def retrieve_brk_data(patient, sample, solution, left_chromosome, right_chromoso
 
     brk = store['breakpoints']
 
-    brk_cn = store['/solutions/{0}/brk_cn'.format(solution)]
+    brk_cn = store['/solutions/sol{0}/brk_cn'.format(solution)]
     brk_cn = brk_cn.groupby('prediction_id')[['cn_1', 'cn_2']].sum().reset_index()
     brk = brk.merge(brk_cn, on='prediction_id', how='left').fillna(0.0)
 
@@ -246,28 +240,136 @@ def retrieve_brk_data(patient, sample, solution, left_chromosome, right_chromoso
     return brk
 
 
+def build_genome_panel(cnv_source, chromosome_plot_info, width=1000):
+    """
+    """
+    init_x_range = [0, chromosome_plot_info['chromosome_plot_end'].max()]
+
+    line_plot1 = major_minor_segment_plot(cnv_source, 'major_raw', 'minor_raw', init_x_range, width)
+    line_plot2 = major_minor_segment_plot(cnv_source, 'major_1', 'minor_1', line_plot1.x_range, width)
+    line_plot3 = major_minor_segment_plot(cnv_source, 'major_2', 'minor_2', line_plot1.x_range, width)
+
+    for p in [line_plot1, line_plot2, line_plot3]:
+        setup_genome_plot_axes(p, chromosome_plot_info)
+
+    panel = Panel(title='Genome View', closable=False)
+    panel.child = vplot(*[line_plot1, line_plot2, line_plot3])
+
+    return panel
+
+
+def build_split_plots(cnv_source, brk_source, chromosome_plot_info, brk_view, width=500):
+    """
+    """
+    init_x_range = [0, chromosome_plot_info['chromosome_plot_end'].max()]
+
+    line_plot1 = major_minor_segment_plot(cnv_source, 'major_raw', 'minor_raw', init_x_range, width)
+    line_plot2 = major_minor_segment_plot(cnv_source, 'major_1', 'minor_1', line_plot1.x_range, width)
+    line_plot3 = major_minor_segment_plot(cnv_source, 'major_2', 'minor_2', line_plot1.x_range, width)
+
+    brk_plot = breakpoints_plot(brk_source, brk_view, line_plot1.x_range, width)
+
+    for p in [line_plot1, line_plot2, line_plot3]:
+        setup_chromosome_plot_axes(p)
+
+    return vplot(*[line_plot1, line_plot2, line_plot3, brk_plot])
+
+
+def build_split_panel(cnv_source_left, cnv_source_right, brk_source, chromosome_plot_info):
+    """
+    """
+    plots1 = build_split_plots(cnv_source_left, brk_source, chromosome_plot_info['left'], 'left')
+    plots2 = build_split_plots(cnv_source_right, brk_source, chromosome_plot_info['right'], 'right')
+
+    plots = hplot(*[plots1, plots2])
+
+    columns = ['prediction_id',
+        'chromosome_1', 'position_1', 'strand_1',
+        'chromosome_2', 'position_2', 'strand_2',
+        'cn_1', 'cn_2']
+    columns = [TableColumn(field=a, title=a, width=10) for a in columns]
+    data_table = DataTable(source=brk_source, columns=columns, width=1000, height=1000)
+
+    panel = Panel(title='Split View', closable=False)
+    panel.child = vplot(*[plots, data_table])
+
+    return panel
+
+
+import scipy.stats
+class gaussian_kde_set_covariance(scipy.stats.gaussian_kde):
+    def __init__(self, dataset, covariance):
+        self.covariance = covariance
+        scipy.stats.gaussian_kde.__init__(self, dataset)
+    def _compute_covariance(self):
+        self.inv_cov = 1.0 / self.covariance
+        self._norm_factor = np.sqrt(2*np.pi*self.covariance) * self.n
+
+
+def filled_density(p, data, c, a, xmin, xmax, cov):
+    density = gaussian_kde_set_covariance(data, cov)
+    xs = [xmin] + list(np.linspace(xmin, xmax, 2000)) + [xmax]
+    ys = density(xs)
+    ys[0] = 0.0
+    ys[-1] = 0.0
+    p.patch(xs, ys, color=c, alpha=a)
+
+
+def filled_density_weighted(p, data, weights, c, a, xmim, xmax, cov):
+    weights = weights.astype(float)
+    resample_prob = weights / weights.sum()
+    samples = np.random.choice(data, size=10000, replace=True, p=resample_prob)
+    filled_density(p, samples, c, a, xmim, xmax, cov)
+
+
+def build_solutions_panel(patient, sample, solutions_source):
+    store = sample_stores[(patient, sample)]
+
+    # Create solutions table
+    solutions_columns = ['decreased_log_posterior', 'graph_opt_iter', 'h_converged',
+       'h_em_iter', 'log_posterior', 'log_posterior_graph', 'num_clones',
+       'num_segments', 'phi_converged', 'phi_em_iter', 'idx', 'bic',
+       'bic_optimal']
+    columns = [TableColumn(field=a, title=a) for a in solutions_columns]
+    solutions_table = DataTable(source=solutions_source, columns=columns, width=1000, height=500)
+
+    # Create read depth plot
+    read_depth_df = store['read_depth']
+
+    depth_max = np.percentile(read_depth_df['total'], 95)
+    cov = 0.0000001
+
+    readdepth_plot = figure(
+        title='chromosome major/minor',
+        plot_width=1000, plot_height=300,
+        tools='xpan,xwheel_zoom,reset',
+        logo=None,
+        title_text_font_size='10pt',
+    )
+
+    filled_density_weighted(readdepth_plot, read_depth_df['minor'], read_depth_df['length'], 'blue', 0.5, 0.0, depth_max, cov)
+    filled_density_weighted(readdepth_plot, read_depth_df['major'], read_depth_df['length'], 'red', 0.5, 0.0, depth_max, cov)
+    filled_density_weighted(readdepth_plot, read_depth_df['total'], read_depth_df['length'], 'grey', 0.5, 0.0, depth_max, cov)
+
+    panel = Panel(title='Solutions View', closable=False)
+    panel.child = vplot(*[solutions_table, readdepth_plot])
+
+    return panel
+
+
 class RemixtApp(VBox):
     extra_generated_classes = [["RemixtApp", "RemixtApp", "VBox"]]
     jsmodel = "VBox"
 
-    # plots
-    scatter_plot = Instance(Plot)
-    line_plot1 = Instance(Plot)
-    line_plot2 = Instance(Plot)
-    line_plot3 = Instance(Plot)
-
-    # tables
-    data_table = Instance(DataTable)
+    # All plots within this tab
+    tabs = Instance(Tabs)
 
     # data sources
+    solutions_source = Instance(ColumnDataSource)
     cnv_source_full = Instance(ColumnDataSource)
     cnv_source_left = Instance(ColumnDataSource)
     cnv_source_right = Instance(ColumnDataSource)
     brk_source = Instance(ColumnDataSource)
-
-    # layout boxes
-    plot_column = Instance(VBox)
-    split_panel = Instance(HBox)
 
     # inputs
     patient = String()
@@ -284,9 +386,6 @@ class RemixtApp(VBox):
 
     def __init__(self, *args, **kwargs):
         super(RemixtApp, self).__init__(*args, **kwargs)
-        self._dfs = {}
-        self._chromosome_plot_mids = []
-        self._chromosome_plot_bounds = [0]
 
     @classmethod
     def create(cls):
@@ -296,8 +395,6 @@ class RemixtApp(VBox):
         """
         # create layout widgets
         obj = cls()
-        obj.plot_column = VBox()
-        obj.split_panel = HBox()
         obj.input_box = VBoxForm()
 
         # create input widgets
@@ -306,7 +403,6 @@ class RemixtApp(VBox):
         # outputs
         obj.make_source()
         obj.make_plots()
-        obj.make_tables()
 
         # layout
         obj.set_children()
@@ -372,6 +468,13 @@ class RemixtApp(VBox):
         return cnv, chromosome_plot_info
 
 
+    def make_solutions_source(self):
+
+        store = sample_stores[(self.patient, self.sample)]
+        solutions_df = store['stats']
+        self.solutions_source = ColumnDataSource(solutions_df)
+
+
     def make_source(self):
         if self.patient is None or self.sample is None:
             return
@@ -399,58 +502,21 @@ class RemixtApp(VBox):
 
         self.brk_source = ColumnDataSource(brk)
 
+        self.make_solutions_source()
+
 
     def make_plots(self):
         """
         """
-        init_x_range = [0, self._chromosome_plot_info['full']['chromosome_plot_end'].max()]
 
-        self.line_plot1 = major_minor_segment_plot(self.cnv_source_full, 'major_raw', 'minor_raw', init_x_range)
-
-        self.line_plot2 = major_minor_segment_plot(self.cnv_source_full, 'major_1', 'minor_1', self.line_plot1.x_range)
-
-        self.line_plot3 = major_minor_segment_plot(self.cnv_source_full, 'major_2', 'minor_2', self.line_plot1.x_range)
-
-        setup_genome_plot_axes(self.line_plot1, self._chromosome_plot_info['full'])
-        setup_genome_plot_axes(self.line_plot2, self._chromosome_plot_info['full'])
-        setup_genome_plot_axes(self.line_plot3, self._chromosome_plot_info['full'])
-
-        self.split_panel.children = [
-            self.make_split_panel(self.cnv_source_left, 'left'),
-            self.make_split_panel(self.cnv_source_right, 'right'),
-        ]
-
-
-    def make_split_panel(self, source, view, width=500):
-        """
-        """
-        init_x_range = [0, self._chromosome_plot_info[view]['chromosome_plot_end'].max()]
-
-        plots = []
-        plots.append(major_minor_segment_plot(source, 'major_raw', 'minor_raw', init_x_range, width))
-        plots.append(major_minor_segment_plot(source, 'major_1', 'minor_1', plots[0].x_range, width))
-        plots.append(major_minor_segment_plot(source, 'major_2', 'minor_2', plots[0].x_range, width))
-
-        plots.append(breakpoints_plot(self.brk_source, view, plots[0].x_range, width))
-
-        for p in plots:
-            setup_chromosome_plot_axes(p)
-
-        return vplot(*plots)
-
-
-    def make_tables(self):
-        columns = ['prediction_id',
-            'chromosome_1', 'position_1', 'strand_1',
-            'chromosome_2', 'position_2', 'strand_2',
-            'cn_1', 'cn_2']
-        columns = [TableColumn(field=a, title=a, width=10) for a in columns]
-        self.data_table = DataTable(source=self.brk_source, columns=columns, width=1000, height=1000)
+        self.tabs = Tabs()
+        self.tabs.tabs.append(build_solutions_panel(self.patient, self.sample, self.solutions_source))
+        self.tabs.tabs.append(build_genome_panel(self.cnv_source_full, self._chromosome_plot_info['full']))
+        self.tabs.tabs.append(build_split_panel(self.cnv_source_left, self.cnv_source_right, self.brk_source, self._chromosome_plot_info))
 
 
     def set_children(self):
-        self.children = [self.input_box, self.plot_column, self.data_table]
-        self.plot_column.children = [self.line_plot1, self.line_plot2, self.line_plot3, self.split_panel]
+        self.children = [self.input_box, self.tabs]
         self.input_box.children = [self.patient_select, self.sample_select, self.solution_select, self.chromosome_left_select, self.chromosome_right_select]
 
 
@@ -479,7 +545,6 @@ class RemixtApp(VBox):
 
         self.make_source()
         self.make_plots()
-        self.make_tables()
         self.set_children()
         curdoc().add(self)
 
@@ -488,7 +553,6 @@ class RemixtApp(VBox):
         self.chromosome_left = new
         self.make_source()
         self.make_plots()
-        self.make_tables()
         self.set_children()
         curdoc().add(self)
 
@@ -497,7 +561,6 @@ class RemixtApp(VBox):
         self.chromosome_right = new
         self.make_source()
         self.make_plots()
-        self.make_tables()
         self.set_children()
         curdoc().add(self)
 
