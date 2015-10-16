@@ -245,6 +245,7 @@ def build_genome_panel(cnv_source, chromosome_plot_info, width=1000):
     """
     init_x_range = [0, chromosome_plot_info['chromosome_plot_end'].max()]
 
+    scatter_plot = major_minor_scatter_plot(cnv_source)
     line_plot1 = major_minor_segment_plot(cnv_source, 'major_raw', 'minor_raw', init_x_range, width)
     line_plot2 = major_minor_segment_plot(cnv_source, 'major_1', 'minor_1', line_plot1.x_range, width)
     line_plot3 = major_minor_segment_plot(cnv_source, 'major_2', 'minor_2', line_plot1.x_range, width)
@@ -253,7 +254,7 @@ def build_genome_panel(cnv_source, chromosome_plot_info, width=1000):
         setup_genome_plot_axes(p, chromosome_plot_info)
 
     panel = Panel(title='Genome View', closable=False)
-    panel.child = vplot(*[line_plot1, line_plot2, line_plot3])
+    panel.child = vplot(*[scatter_plot, line_plot1, line_plot2, line_plot3])
 
     return panel
 
