@@ -358,9 +358,9 @@ def build_solutions_panel(patient, sample, solutions_source):
     return panel
 
 
-class RemixtApp(VBox):
-    extra_generated_classes = [["RemixtApp", "RemixtApp", "VBox"]]
-    jsmodel = "VBox"
+class RemixtApp(HBox):
+    extra_generated_classes = [["RemixtApp", "RemixtApp", "HBox"]]
+    jsmodel = "HBox"
 
     # All plots within this tab
     tabs = Instance(Tabs)
