@@ -37,7 +37,7 @@ patient_samples = collections.defaultdict(list)
 sample_stores = dict()
 
 
-for data_filename in glob.glob('./patient_*/sample_*.h5'):
+for data_filename in glob.glob('./patient_DG1135/sample_*.h5'):
     patient = data_filename.split('/')[1][len('patient_'):]
     sample = data_filename.split('/')[2][len('sample_'):-len('.h5')]
 
@@ -149,7 +149,7 @@ def retrieve_cnv_data(patient, sample, solution, chromosome=''):
     """
     store = sample_stores[(patient, sample)]
 
-    cnv = store['solutions/sol{0}/cn'.format(solution)]
+    cnv = store['solutions/solution_{0}/cn'.format(solution)]
 
     if chromosome != '':
         cnv = cnv[cnv['chromosome'] == chromosome].copy()
@@ -201,7 +201,7 @@ def retrieve_brk_data(patient, sample, solution, left_chromosome, right_chromoso
 
     brk = store['breakpoints']
 
-    brk_cn = store['/solutions/sol{0}/brk_cn'.format(solution)]
+    brk_cn = store['/solutions/solution_{0}/brk_cn'.format(solution)]
     brk_cn = brk_cn.groupby('prediction_id')[['cn_1', 'cn_2']].sum().reset_index()
     brk = brk.merge(brk_cn, on='prediction_id', how='left').fillna(0.0)
 
