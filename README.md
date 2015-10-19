@@ -263,7 +263,7 @@ There is an experimental viewer for ReMixT at `tools/remixt_viewer_app.py`.  Bok
 
     bokeh-server --script $REMIXT_DIR/tools/remixt_viewer_app.py
 
-The navigate to `http://127.0.0.1:5006/remixt`.
+Then navigate to `http://127.0.0.1:5006/remixt`.
 
 ## Parallelism Using Pypeliner
 
