@@ -174,13 +174,12 @@ For parallelism options see the section [Parallelism using pypeliner](#markdown-
 
 ### Step 3 - Running ReMixT
 
-ReMixT is run on each sample individually, and takes as input the sample specific segment read counts and breakpoints.  The outputs are a segment copy number file (`$cn` below), a breakpoint copy number file (`$brk_cn` below), a segment copy number plot pdf (`$cn_plot` below), and a mixture file (`$mix` below).
+ReMixT is run on each sample individually, and takes as input the sample specific segment read counts and breakpoints.  The output is an HDF5 store (`$results` below) containing pandas dataframes.
 
 To run ReMixT for tumour sample 1 from above with counts file `$tumour_1_counts`, use the `pipeline/run_remixt.py` script as follows:
 
     python pipeline/run_remixt.py $tumour_1_counts $breakpoints \
-        $cn $brk_cn $cn_plot $mix \
-        --tmpdir $tmp_remixt
+        $results --tmpdir $tmp_remixt
 
 where `$tmp_remixt` is a unique temporary directory.  If you need to stop and restart the script, using the same temporary directory will allow the scripts to restart where it left off.
 
@@ -209,9 +208,31 @@ The `chromosome`, `start` and `end` columns define the segment.  The `readcount`
 
 ### Output File Formats
 
+The main output file is an HDF5 store containing pandas dataframes.  These can be extracted in python or viewed using the ReMixT viewer.  Important tables include:
+
+* `stats`: statistics for each restart
+* `solutions/solution_{idx}/cn`: segment copy number table for solution `idx`
+* `solutions/solution_{idx}/brk_cn`: breakpoint copy number table for solution `idx`
+* `solutions/solution_{idx}/h`: haploid depths for solution `idx`
+
+#### Statistics
+
+ReMixT uses optimal restarts and model selection by BIC.  The statistics table contains one row per restart, sorted by BIC.  The table contains the following columns:
+
+* `idx`: the solution index, used to refer to `solutions/solution_{idx}/*` tables.
+* `bic`: the bic of this solution
+* `log_posterior`: log posterior of the HMM
+* `log_posterior_graph`: log posterior of the genome graph model
+* `num_clones`: number of clones including normal
+* `num_segments`: number of segments
+* `h_converged`: whether haploid depths estimation converged
+* `h_em_iter`: number of iterations for convergence of h
+* `graph_opt_iter`: number of iterations for convergence of genome graph copy number
+* `decreased_log_posterior`: whether the genome graph optimization stopped due to a move that decreased the log posterior
+
 #### Segment Copy Number
 
-The segment copy number file adds additional columns to the segment counts file described above, including but not limited to:
+The segment copy number table adds additional columns to the segment counts table described above, including but not limited to:
 
 * `major_1`
 * `minor_1`
@@ -222,7 +243,7 @@ The columns refer to the major and minor copy number in tumour clone 1 and 2.
 
 #### Breakpoints Copy Number
 
-The breakpoint copy number file is tab separated with the first line as the header and contains the following columns:
+The breakpoint copy number table contains the following columns:
 
 * `prediction_id`
 * `allele_1`
@@ -232,23 +253,17 @@ The breakpoint copy number file is tab separated with the first line as the head
 
 The `prediction_id` column matches the column of the same name in the input breakpoints file, and specifies for which breakpoint prediction the copy number is being provided.  The `allele_1` and `allele_2` columns refer to which allele at break-end 1 and 2 are part of the tumour chromosome harboring the breakpoints.  The `cn_1` and `cn_2` columns provide the clone specific copy number for clone 1 and 2 respectively.
 
-#### Segment Copy Number Plot
+#### Haploid Depths
 
-The segment copy number plot shows 5 tracks, each with the chromosomes on the x-axis.  Major and minor copy number are shown in red and blue respectively.  From the top, the plots show the following:
+The haploid depths is a vector of `M` depths for each of the `M` clones including the normal.  To recover cell mixture proportions, simply normalize `h`.
 
-1. raw normalized copy number, normal haploid depth subtracted out and the result divided by tumour haploid depth
-2. expected raw copy number given the inferred copy number
-3. inferred clone 1 copy number
-4. inferred clone 2 copy number
-5. inferred clone copy number difference
+### ReMixT Viewer
 
-#### Mixture File
+There is an experimental viewer for ReMixT at `tools/remixt_viewer_app.py`.  Bokeh '>0.10.0' is required.  To use the viewer app, organize your patient sample results files as `./patient_*/sample_*.h5`.  From the directory containing patient subdirectories, run the bokeh server:
 
-Currently this file contains 3 numbers, tab separated.  These numbers, respectively, are:
+    bokeh-server --script $REMIXT_DIR/tools/remixt_viewer_app.py
 
-1. normal DNA proportion
-2. tumour clone 1 DNA proportion
-3. tumour clone 2 DNA proportion
+The navigate to `http://127.0.0.1:5006/remixt`.
 
 ## Parallelism Using Pypeliner
 
