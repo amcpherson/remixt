@@ -1,5 +1,7 @@
 import logging
+import warnings
 
+warnings.filterwarnings('error')
 logging.basicConfig(level=logging.DEBUG)
 
 import collections
@@ -14,7 +16,7 @@ from bokeh.models import ColumnDataSource, Plot, FixedTicker, NumeralTickFormatt
 from bokeh.plotting import figure, curdoc, gridplot
 from bokeh.charts import Scatter
 from bokeh.io import vplot, hplot
-from bokeh.properties import String, Instance, Dict
+from bokeh.properties import String, Instance, Dict, value
 from bokeh.server.app import bokeh_app
 from bokeh.server.utils.plugins import object_page
 from bokeh.models.widgets import HBox, VBox, VBoxForm, Paragraph, Select, DataTable, TableColumn, Tabs, Panel
@@ -53,7 +55,7 @@ def major_minor_scatter_plot(source):
         plot_width=1000, plot_height=500,
         tools='pan,wheel_zoom,box_select,reset',
         logo=None,
-        title_text_font_size='10pt',
+        title_text_font_size=value('10pt'),
         x_range=[-0.5, 3],
         y_range=[-0.5, 3],
     )
@@ -73,7 +75,7 @@ def major_minor_segment_plot(source, major_column, minor_column, x_range, width=
         plot_width=width, plot_height=200,
         tools='xpan,xwheel_zoom,box_select,reset',
         logo=None,
-        title_text_font_size='10pt',
+        title_text_font_size=value('10pt'),
         x_range=x_range,
         y_range=[-0.5, 3],
     )
@@ -101,7 +103,7 @@ def breakpoints_plot(source, view, x_range, width=1000):
         plot_width=width, plot_height=150,
         tools='xpan,xwheel_zoom,box_select,reset,tap',
         logo=None,
-        title_text_font_size='10pt',
+        title_text_font_size=value('10pt'),
         x_range=x_range,
         y_range=['+', '-'],
     )
@@ -131,9 +133,9 @@ def setup_genome_plot_axes(p, chromosome_plot_info):
     p.xgrid.band_fill_color = "navy"
 
     p.xaxis[0].ticker = FixedTicker(ticks=chromosome_bounds)
-    p.xaxis[0].major_label_text_font_size = '0pt'
+    p.xaxis[0].major_label_text_font_size = value('0pt')
 
-    p.text(x=chromosome_mids, y=-0.5, text=chromosomes, text_font_size='0.5em', text_align='center')
+    p.text(x=chromosome_mids, y=-0.5, text=chromosomes, text_font_size=value('0.5em'), text_align='center')
 
 
 def retrieve_solutions(patient, sample):
@@ -171,7 +173,7 @@ def retrieve_chromosome_plot_info(patient, sample, solution, chromosome=''):
 
     info['chromosome_plot_end'] = np.cumsum(info['chromosome_length'])
     info['chromosome_plot_start'] = info['chromosome_plot_end'].shift(1)
-    info['chromosome_plot_start'].iloc[0] = 0
+    info.loc[info.index[0], 'chromosome_plot_start'] = 0
     info['chromosome_plot_mid'] = 0.5 * (info['chromosome_plot_start'] + info['chromosome_plot_end'])
 
     return info
@@ -329,8 +331,7 @@ def build_solutions_panel(patient, sample, solutions_source):
     # Create solutions table
     solutions_columns = ['decreased_log_posterior', 'graph_opt_iter', 'h_converged',
        'h_em_iter', 'log_posterior', 'log_posterior_graph', 'num_clones',
-       'num_segments', 'phi_converged', 'phi_em_iter', 'idx', 'bic',
-       'bic_optimal']
+       'num_segments', 'idx', 'bic', 'bic_optimal']
     columns = [TableColumn(field=a, title=a) for a in solutions_columns]
     solutions_table = DataTable(source=solutions_source, columns=columns, width=1000, height=500)
 
@@ -345,7 +346,7 @@ def build_solutions_panel(patient, sample, solutions_source):
         plot_width=1000, plot_height=300,
         tools='xpan,xwheel_zoom,reset',
         logo=None,
-        title_text_font_size='10pt',
+        title_text_font_size=value('10pt'),
     )
 
     filled_density_weighted(readdepth_plot, read_depth_df['minor'], read_depth_df['length'], 'blue', 0.5, 0.0, depth_max, cov)
