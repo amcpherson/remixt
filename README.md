@@ -130,7 +130,16 @@ The predicted breakpoints should be provided in a tab separated file with the fo
 * `strand_2`
 * `position_2`
 
-The first line should be the column names, which should be identical to the above list.  Each subsequent line is a breakpoint prediction.  The `prediction_id` should be unique to each breakpoint prediction.  The `chromosome_`, `strand_` and `position_` columns give the position and orientation of each end of the breakpoint.  The values for `strand_` should be either `+` or `-`.  A value of `+` means that sequence to the right of `chromosome_`, `position_` is preserved in the tumour chromosome containing the breakpoint.  Conversely, a value of `-` means that sequence to the left of `chromosome_`, `position_` is preserved in the tumour chromosome containing the breakpoint.  
+The first line should be the column names, which should be identical to the above list.  Each subsequent line is a breakpoint prediction.  The `prediction_id` should be unique to each breakpoint prediction.  The `chromosome_`, `strand_` and `position_` columns give the position and orientation of each end of the breakpoint.  The values for `strand_` should be either `+` or `-`.  A value of `+` means that sequence to the right of `chromosome_`, `position_` is preserved in the tumour chromosome containing the breakpoint.  Conversely, a value of `-` means that sequence to the left of `chromosome_`, `position_` is preserved in the tumour chromosome containing the breakpoint.
+
+The following table may assist in understanding the strand of a break-end.  Note that an inversion event produces two breakpoints, the strand configurations for both are shown.
+
+| Structural Variation     | Strand of Leftmost Break-End | Strand of Rightmost Break-End |
+| ------------------------ | ---------------------------- | ----------------------------- |
+| Deletion                 |              +               |              -                |
+| Duplication              |              -               |              +                |
+| Inversion (Breakpoint A) |              +               |              +                |
+| Inversion (Breakpoint B) |              -               |              -                |
 
 ### Step 1 - Importing the Data
 
