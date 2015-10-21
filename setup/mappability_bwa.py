@@ -54,8 +54,8 @@ if __name__ == '__main__':
     pyp.sch.transform('create_kmers', (), ctx,
         mappability_bwa.create_kmers,
         None,
-        mgd.InputFile(cfg.genome_fasta),
-        int(cfg.mappability_length),
+        mgd.InputFile(config['genome_fasta']),
+        int(config['mappability_length']),
         mgd.TempOutputFile('kmers'))
 
     pyp.sch.transform('split_kmers', (), ctx,
@@ -68,7 +68,7 @@ if __name__ == '__main__':
     pyp.sch.commandline('bwa_aln_kmers', ('bykmer',), ctx,
         'bwa',
         'aln',
-        mgd.InputFile(cfg.genome_fasta),
+        mgd.InputFile(config['genome_fasta']),
         mgd.TempInputFile('kmers', 'bykmer'),
         '>',
         mgd.TempOutputFile('sai', 'bykmer'))
@@ -76,7 +76,7 @@ if __name__ == '__main__':
     pyp.sch.commandline('bwa_samse_kmers', ('bykmer',), ctx,
         'bwa',
         'samse',
-        mgd.InputFile(cfg.genome_fasta),
+        mgd.InputFile(config['genome_fasta']),
         mgd.TempInputFile('sai', 'bykmer'),
         mgd.TempInputFile('kmers', 'bykmer'),
         '>',
@@ -92,7 +92,7 @@ if __name__ == '__main__':
         mappability_bwa.merge_files_by_line,
         None,
         mgd.TempInputFile('bedgraph', 'bykmer'),
-        mgd.OutputFile(cfg.mappability_filename))
+        mgd.OutputFile(config['mappability_filename']))
 
     pyp.run()
     
