@@ -107,7 +107,7 @@ if __name__ == '__main__':
 
     def create_snp_positions():
         with open(config['snp_positions'], 'w') as snp_positions_file:
-            for chromosome in config['chromosomes'].split():
+            for chromosome in config['chromosomes']:
                 phased_chromosome = chromosome
                 if chromosome == 'X':
                     phased_chromosome = config['phased_chromosome_x']
