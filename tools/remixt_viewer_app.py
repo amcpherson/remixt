@@ -138,6 +138,32 @@ def setup_genome_plot_axes(p, chromosome_plot_info):
     p.text(x=chromosome_mids, y=-0.5, text=chromosomes, text_font_size=value('0.5em'), text_align='center')
 
 
+def retrieve_solution_data(patient, sample):
+    """
+    """
+    store = sample_stores[(patient, sample)]
+
+    solutions_df = store['stats']
+
+    for idx, row in solutions_df.iterrows():
+
+        # Calculate ploidy
+        cnv = retrieve_cnv_data(patient, sample, row['idx'])
+        cnv = cnv.replace([np.inf, -np.inf], np.nan).dropna()
+        ploidy = (cnv['length'] * (cnv['major_raw_e'] + cnv['minor_raw_e'])).sum() / cnv['length'].sum()
+        solutions_df.loc[idx, 'ploidy'] = ploidy
+
+        # Add haploid normal/tumour depth and clone fraction
+        h = store['/solutions/solution_{0}/h'.format(row['idx'])]
+        solutions_df.loc[idx, 'haploid_normal'] = h.values[0]
+        solutions_df.loc[idx, 'haploid_tumour'] = h.values[1:].sum()
+        solutions_df.loc[idx, 'haploid_tumour_mode'] = h.values.sum()
+        solutions_df.loc[idx, 'clone_1_fraction'] = h.values[1] / h.values[1:].sum()
+        solutions_df.loc[idx, 'clone_2_fraction'] = 1. - solutions_df.loc[idx, 'clone_1_fraction']
+
+    return solutions_df
+
+
 def retrieve_solutions(patient, sample):
     """
     """
@@ -165,7 +191,7 @@ def retrieve_chromosome_plot_info(patient, sample, solution, chromosome=''):
     cnv = retrieve_cnv_data(patient, sample, solution, chromosome)
 
     cnv['chromosome_index'] = cnv['chromosome'].apply(lambda a: chromosome_indices[a])
-    cnv = cnv.sort(['chromosome_index', 'start'])
+    cnv.sort_values(['chromosome_index', 'start'], inplace=True)
 
     info = (
         cnv.groupby('chromosome', sort=False)['end']
@@ -333,7 +359,8 @@ def build_solutions_panel(patient, sample, solutions_source):
     # Create solutions table
     solutions_columns = ['decreased_log_posterior', 'graph_opt_iter', 'h_converged',
        'h_em_iter', 'log_posterior', 'log_posterior_graph', 'num_clones',
-       'num_segments', 'idx', 'bic', 'bic_optimal']
+       'num_segments', 'idx', 'bic', 'bic_optimal', 'ploidy',
+       'haploid_normal', 'haploid_tumour', 'clone_1_fraction', 'clone_2_fraction']
     columns = [TableColumn(field=a, title=a) for a in solutions_columns]
     solutions_table = DataTable(source=solutions_source, columns=columns, width=1000, height=500)
 
@@ -354,6 +381,9 @@ def build_solutions_panel(patient, sample, solutions_source):
     filled_density_weighted(readdepth_plot, read_depth_df['minor'], read_depth_df['length'], 'blue', 0.5, 0.0, depth_max, cov)
     filled_density_weighted(readdepth_plot, read_depth_df['major'], read_depth_df['length'], 'red', 0.5, 0.0, depth_max, cov)
     filled_density_weighted(readdepth_plot, read_depth_df['total'], read_depth_df['length'], 'grey', 0.5, 0.0, depth_max, cov)
+
+    readdepth_plot.circle(x='haploid_normal', y=0, size=10, source=solutions_source, color='orange')
+    readdepth_plot.circle(x='haploid_tumour_mode', y=0, size=10, source=solutions_source, color='green')
 
     panel = Panel(title='Solutions View', closable=False)
     panel.child = vplot(*[solutions_table, readdepth_plot])
@@ -475,8 +505,7 @@ class RemixtApp(HBox):
 
     def make_solutions_source(self):
 
-        store = sample_stores[(self.patient, self.sample)]
-        solutions_df = store['stats']
+        solutions_df = retrieve_solution_data(self.patient, self.sample)
         self.solutions_source = ColumnDataSource(solutions_df)
 
 
@@ -586,6 +615,6 @@ class RemixtApp(HBox):
 
 @bokeh_app.route("/remixt")
 @object_page("remixt")
-def make_stocks():
+def make_remixt():
     app = RemixtApp.create()
     return app
