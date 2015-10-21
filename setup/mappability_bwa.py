@@ -98,7 +98,7 @@ if __name__ == '__main__':
     
 def create_kmers(genome_fasta, k, kmers_filename):
     with open(kmers_filename, 'w') as kmers_file:
-        genome_sequences = dict(remixt.utils.read_sequences(genome_fasta, 'r'))
+        genome_sequences = dict(remixt.utils.read_sequences(genome_fasta))
         for chromosome, sequence in genome_sequences.iteritems():
             chromosome = chromosome.split()[0]
             for start in xrange(len(sequence)):
