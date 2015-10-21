@@ -51,7 +51,7 @@ def major_minor_scatter_plot(source):
     """
     """
     p = figure(
-        title='major vs minor',
+        title='raw major vs minor',
         plot_width=1000, plot_height=500,
         tools='pan,wheel_zoom,box_select,reset',
         logo=None,
@@ -67,11 +67,11 @@ def major_minor_scatter_plot(source):
     return p
 
 
-def major_minor_segment_plot(source, major_column, minor_column, x_range, width=1000):
+def major_minor_segment_plot(source, major_column, minor_column, x_range, name, width=1000):
     """
     """
     p = figure(
-        title='chromosome major/minor',
+        title=name+' chromosome major/minor',
         plot_width=width, plot_height=200,
         tools='xpan,xwheel_zoom,box_select,reset',
         logo=None,
@@ -99,7 +99,7 @@ def breakpoints_plot(source, view, x_range, width=1000):
     """
     """
     p = figure(
-        title='major vs minor',
+        title='break ends',
         plot_width=width, plot_height=150,
         tools='xpan,xwheel_zoom,box_select,reset,tap',
         logo=None,
@@ -248,15 +248,16 @@ def build_genome_panel(cnv_source, chromosome_plot_info, width=1000):
     init_x_range = [0, chromosome_plot_info['chromosome_plot_end'].max()]
 
     scatter_plot = major_minor_scatter_plot(cnv_source)
-    line_plot1 = major_minor_segment_plot(cnv_source, 'major_raw', 'minor_raw', init_x_range, width)
-    line_plot2 = major_minor_segment_plot(cnv_source, 'major_1', 'minor_1', line_plot1.x_range, width)
-    line_plot3 = major_minor_segment_plot(cnv_source, 'major_2', 'minor_2', line_plot1.x_range, width)
+    line_plot1 = major_minor_segment_plot(cnv_source, 'major_raw', 'minor_raw', init_x_range, 'raw', width)
+    line_plot2 = major_minor_segment_plot(cnv_source, 'major_raw_e', 'minor_raw_e', line_plot1.x_range, 'expected', width)
+    line_plot3 = major_minor_segment_plot(cnv_source, 'major_1', 'minor_1', line_plot1.x_range, 'clone 1', width)
+    line_plot4 = major_minor_segment_plot(cnv_source, 'major_2', 'minor_2', line_plot1.x_range, 'clone 2', width)
 
-    for p in [line_plot1, line_plot2, line_plot3]:
+    for p in [line_plot1, line_plot2, line_plot3, line_plot4]:
         setup_genome_plot_axes(p, chromosome_plot_info)
 
     panel = Panel(title='Genome View', closable=False)
-    panel.child = vplot(*[scatter_plot, line_plot1, line_plot2, line_plot3])
+    panel.child = vplot(*[scatter_plot, line_plot1, line_plot2, line_plot3, line_plot4])
 
     return panel
 
@@ -266,16 +267,17 @@ def build_split_plots(cnv_source, brk_source, chromosome_plot_info, brk_view, wi
     """
     init_x_range = [0, chromosome_plot_info['chromosome_plot_end'].max()]
 
-    line_plot1 = major_minor_segment_plot(cnv_source, 'major_raw', 'minor_raw', init_x_range, width)
-    line_plot2 = major_minor_segment_plot(cnv_source, 'major_1', 'minor_1', line_plot1.x_range, width)
-    line_plot3 = major_minor_segment_plot(cnv_source, 'major_2', 'minor_2', line_plot1.x_range, width)
+    line_plot1 = major_minor_segment_plot(cnv_source, 'major_raw', 'minor_raw', init_x_range, 'raw', width)
+    line_plot2 = major_minor_segment_plot(cnv_source, 'major_raw_e', 'minor_raw_e', line_plot1.x_range, 'expected', width)
+    line_plot3 = major_minor_segment_plot(cnv_source, 'major_1', 'minor_1', line_plot1.x_range, 'clone 1', width)
+    line_plot4 = major_minor_segment_plot(cnv_source, 'major_2', 'minor_2', line_plot1.x_range, 'clone 2', width)
 
     brk_plot = breakpoints_plot(brk_source, brk_view, line_plot1.x_range, width)
 
-    for p in [line_plot1, line_plot2, line_plot3]:
+    for p in [line_plot1, line_plot2, line_plot3, line_plot4]:
         setup_chromosome_plot_axes(p)
 
-    return vplot(*[line_plot1, line_plot2, line_plot3, brk_plot])
+    return vplot(*[line_plot1, line_plot2, line_plot3, line_plot4, brk_plot])
 
 
 def build_split_panel(cnv_source_left, cnv_source_right, brk_source, chromosome_plot_info):
@@ -342,7 +344,7 @@ def build_solutions_panel(patient, sample, solutions_source):
     cov = 0.0000001
 
     readdepth_plot = figure(
-        title='chromosome major/minor',
+        title='major/minor/total read depth',
         plot_width=1000, plot_height=300,
         tools='xpan,xwheel_zoom,reset',
         logo=None,
@@ -465,6 +467,7 @@ class RemixtApp(HBox):
         chromosome_plot_info = retrieve_chromosome_plot_info(self.patient, self.sample, self.solution, chromosome)
 
         cnv = retrieve_cnv_data(self.patient, self.sample, self.solution, chromosome)
+
         cnv = prepare_cnv_data(cnv, chromosome_plot_info)
 
         return cnv, chromosome_plot_info
