@@ -88,10 +88,17 @@ def calculate_candidate_h(minor_modes, mix_frac_resolution=20, num_clones=None):
             continue
 
         h_tumour -= h_normal
-        h_tumour_candidates.append(h_tumour)
 
-        if num_clones is not None and num_clones == 2:
-            h_candidates.append(np.array([h_normal, h_tumour]))
+        # Consider the possibility that the first minor mode
+        # is composed of segments with 2 minor copies
+        for scale in (1., 0.5):
+
+            h_tumour_scaled = h_tumour * scale
+
+            h_tumour_candidates.append(h_tumour_scaled)
+
+            if num_clones is not None and num_clones == 2:
+                h_candidates.append(np.array([h_normal, h_tumour_scaled]))
 
     # Maximum of 3 clones
     mix_iter = itertools.product(xrange(1, mix_frac_resolution+1), repeat=2)
