@@ -6,7 +6,6 @@ import pickle
 import collections
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 
 import pypeliner
 import pypeliner.managed as mgd

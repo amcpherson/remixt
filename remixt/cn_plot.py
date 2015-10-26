@@ -338,4 +338,90 @@ def mixture_plot(mixture):
     return fig
 
 
+def gc_plot(gc_table_filename, plot_filename):
+    """ Plot the probability distribution of GC content for sampled reads
+
+    Args:
+        gc_table_filename (str): table of binned gc values
+        plot_filename (str): plot PDF filename
+
+    """
+    gc_binned = pd.read_csv(gc_table_filename, sep='\t')
+
+    fig = plt.figure(figsize=(4,4))
+
+    plt.scatter(gc_binned['gc_bin'].values, gc_binned['mean'].values, c='k', s=4)
+    plt.plot(gc_binned['gc_bin'].values, gc_binned['smoothed'].values, c='r')
+
+    plt.xlabel('gc %')
+    plt.ylabel('density')
+    plt.xlim((-0.5, 100.5))
+    plt.ylim((-0.01, gc_binned['mean'].max() * 1.1))
+
+    plt.tight_layout()
+
+    fig.savefig(plot_filename, format='pdf', bbox_inches='tight')
+
+
+def plot_depth(ax, x, l, p, annotated=()):
+    """ Plot read depth of major minor and total as a density
+
+    Args:
+        ax (matplotlib.axis): optional axis for plotting major/minor/total read depth
+        x (numpy.array): observed major, minor, and total read counts
+        l (numpy.array): observed lengths of segments
+        p (numpy.array): proportion genotypable reads
+
+    KwArgs:
+        annotated (list): depths to annotate with verticle lines
+
+    """
+
+    rd = ((x.T / p.T) / l.T)
+    rd.sort(axis=0)
+
+    depth_max = np.percentile(rd[2], 95)
+    cov = 0.0000001
+
+    remixt.utils.filled_density_weighted(ax, rd[0], l, 'blue', 0.5, 0.0, depth_max, cov)
+    remixt.utils.filled_density_weighted(ax, rd[1], l, 'red', 0.5, 0.0, depth_max, cov)
+    remixt.utils.filled_density_weighted(ax, rd[2], l, 'grey', 0.5, 0.0, depth_max, cov)
+
+    ylim = ax.get_ylim()
+    for depth in annotated:
+        ax.plot([depth, depth], [0, 1e16], 'g', lw=2)
+    ax.set_ylim(ylim)
+
+
+def plot_experiment(experiment_plot_filename, experiment_filename):
+    """ Plot an experiment
+
+    Args:
+        experiment_plot_filename (str): plot PDF filename
+        experiment_filename (str): filename of experiment pickle
+
+    """
+    with open(experiment_filename, 'r') as experiment_file:
+        exp = pickle.load(experiment_file)
+
+    fig = experiment_plot(exp, exp.cn, exp.h, exp.p)
+
+    fig.savefig(experiment_plot_filename, format='pdf', bbox_inches='tight', dpi=300)
+
+
+def plot_mixture(mixture_plot_filename, mixture_filename):
+    """ Plot a mixture
+
+    Args:
+        mixture_plot_filename (str): plot PDF filename
+        mixture_filename (str): filename of mixture pickle
+
+    """
+    with open(mixture_filename, 'r') as mixture_file:
+        mixture = pickle.load(mixture_file)
+
+    fig = mixture_plot(mixture)
+
+    fig.savefig(mixture_plot_filename, format='pdf', bbox_inches='tight', dpi=300)
+
 

@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import scipy.stats
 import statsmodels.api as sm
-import matplotlib.pyplot as plt
 
 import pypeliner
 import pypeliner.managed as mgd
@@ -131,7 +130,7 @@ if __name__ == '__main__':
         None,
         mgd.TempInputFile('gcsamples.tsv', 'bytumour'),
         mgd.TempOutputFile('gcloess.tsv', 'bytumour'),
-        mgd.TempOutputFile('gcplots.pdf', 'bytumour'),
+        mgd.TempOutputFile('gctable.tsv', 'bytumour'),
     )
 
     pyp.sch.commandline('gc_segment', ('bytumour',), {'mem':16},
@@ -353,7 +352,7 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
     gc_sample_data.to_csv(gc_samples_filename, sep='\t', header=False, index=False)
 
 
-def gc_lowess(gc_samples_filename, gc_dist_filename, plot_filename, gc_resolution=100):
+def gc_lowess(gc_samples_filename, gc_dist_filename, gc_table_filename, gc_resolution=100):
 
     gc_samples = pd.read_csv(gc_samples_filename, sep='\t', names=['chromosome', 'position', 'gc', 'count'])
 
@@ -375,19 +374,7 @@ def gc_lowess(gc_samples_filename, gc_dist_filename, plot_filename, gc_resolutio
     gc_binned['mean'] = gc_binned['mean'] * rescale
     gc_binned['smoothed'] = gc_binned['smoothed'] * rescale
 
-    fig = plt.figure(figsize=(4,4))
-
-    plt.scatter(gc_binned['gc_bin'].values, gc_binned['mean'].values, c='k', s=4)
-    plt.plot(gc_binned['gc_bin'].values, gc_binned['smoothed'].values, c='r')
-
-    plt.xlabel('gc %')
-    plt.ylabel('density')
-    plt.xlim((-0.5, 100.5))
-    plt.ylim((-0.01, gc_binned['mean'].max() * 1.1))
-
-    plt.tight_layout()
-
-    fig.savefig(plot_filename, format='pdf', bbox_inches='tight')
+    gc_binned.to_csv(gc_table_filename, sep='\t', index=False)
 
     gc_binned[['smoothed']].to_csv(gc_dist_filename, sep='\t', index=False, header=False)
 

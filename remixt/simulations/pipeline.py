@@ -2,12 +2,10 @@ import itertools
 import pickle
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 
 import remixt.segalg
 import remixt.simulations.experiment
 import remixt.simulations.haplotype
-import remixt.cn_plot
 import remixt.simulations.seqread
 
 
@@ -182,26 +180,6 @@ def tabulate_experiment(exp_table_filename, sim_id, experiment_filename):
     exp_table = pd.DataFrame([exp_data])
 
     exp_table.to_csv(exp_table_filename, sep='\t', index=False)
-
-
-def plot_experiment(experiment_plot_filename, experiment_filename):
-
-    with open(experiment_filename, 'r') as experiment_file:
-        exp = pickle.load(experiment_file)
-
-    fig = remixt.cn_plot.experiment_plot(exp, exp.cn, exp.h, exp.p)
-
-    fig.savefig(experiment_plot_filename, format='pdf', bbox_inches='tight', dpi=300)
-
-
-def plot_mixture(mixture_plot_filename, mixture_filename):
-
-    with open(mixture_filename, 'r') as mixture_file:
-        mixture = pickle.load(mixture_file)
-
-    fig = remixt.cn_plot.mixture_plot(mixture)
-
-    fig.savefig(mixture_plot_filename, format='pdf', bbox_inches='tight', dpi=300)
 
 
 def merge_tables(output_filename, input_filenames):

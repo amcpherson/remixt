@@ -120,33 +120,3 @@ def calculate_candidate_h(minor_modes, mix_frac_resolution=20, num_clones=None):
     return h_candidates
 
 
-def plot_depth(ax, x, l, p, annotated=()):
-    """ Plot read depth of major minor and total as a density
-
-    Args:
-        ax (matplotlib.axis): optional axis for plotting major/minor/total read depth
-        x (numpy.array): observed major, minor, and total read counts
-        l (numpy.array): observed lengths of segments
-        p (numpy.array): proportion genotypable reads
-
-    KwArgs:
-        annotated (list): depths to annotate with verticle lines
-
-    """
-
-    rd = ((x.T / p.T) / l.T)
-    rd.sort(axis=0)
-
-    depth_max = np.percentile(rd[2], 95)
-    cov = 0.0000001
-
-    remixt.utils.filled_density_weighted(ax, rd[0], l, 'blue', 0.5, 0.0, depth_max, cov)
-    remixt.utils.filled_density_weighted(ax, rd[1], l, 'red', 0.5, 0.0, depth_max, cov)
-    remixt.utils.filled_density_weighted(ax, rd[2], l, 'grey', 0.5, 0.0, depth_max, cov)
-
-    ylim = ax.get_ylim()
-    for depth in annotated:
-        ax.plot([depth, depth], [0, 1e16], 'g', lw=2)
-    ax.set_ylim(ylim)
-
-
