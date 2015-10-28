@@ -1,7 +1,7 @@
 import logging
 import warnings
 
-warnings.filterwarnings('error')
+# warnings.filterwarnings('error')
 logging.basicConfig(level=logging.DEBUG)
 
 import collections
@@ -20,6 +20,7 @@ from bokeh.properties import String, Instance, Dict, value
 from bokeh.server.app import bokeh_app
 from bokeh.server.utils.plugins import object_page
 from bokeh.models.widgets import HBox, VBox, VBoxForm, Paragraph, Select, DataTable, TableColumn, Tabs, Panel
+from bokeh.models import *
 
 
 chromosomes = [str(a) for a in range(1, 23)] + ['X']
@@ -53,7 +54,7 @@ def major_minor_scatter_plot(source):
     p = figure(
         title='raw major vs minor',
         plot_width=1000, plot_height=500,
-        tools='pan,wheel_zoom,box_select,reset',
+        tools='pan,wheel_zoom,box_select,reset,lasso_select',
         logo=None,
         title_text_font_size=value('10pt'),
         x_range=[-0.5, 3],
@@ -61,7 +62,8 @@ def major_minor_scatter_plot(source):
     )
 
     p.circle(x='major_raw', y='minor_raw',
-        size='scatter_size', color='scatter_color', source=source
+        size='scatter_size', color='scatter_color', alpha=0.5,
+        source=source,
     )
 
     return p
@@ -70,10 +72,28 @@ def major_minor_scatter_plot(source):
 def major_minor_segment_plot(source, major_column, minor_column, x_range, name, width=1000):
     """
     """
+    hover = HoverTool(
+        tooltips=[
+            ('chromosome', '@chromosome'),
+            ('start', '@start'),
+            ('end', '@end'),
+        ]
+    )
+
+    tools = [
+        PanTool(dimensions=['x']),
+        WheelZoomTool(dimensions=['x']),
+        BoxZoomTool(),
+        BoxSelectTool(),
+        ResetTool(),
+        TapTool(),
+        hover,
+    ]
+
     p = figure(
         title=name+' chromosome major/minor',
         plot_width=width, plot_height=200,
-        tools='xpan,xwheel_zoom,box_select,reset',
+        tools=tools,
         logo=None,
         title_text_font_size=value('10pt'),
         x_range=x_range,
@@ -95,20 +115,42 @@ def major_minor_segment_plot(source, major_column, minor_column, x_range, name, 
     return p
 
 
-def breakpoints_plot(source, view, x_range, width=1000):
+def breakpoints_plot(source, x_range, width=1000):
     """
     """
+    hover = HoverTool(
+        tooltips=[
+            ('prediction_id', '@prediction_id'),
+            ('chromosome', '@chromosome'),
+            ('position', '@position'),
+            ('strand', '@strand'),
+            ('other_chromosome', '@other_chromosome'),
+            ('other_position', '@other_position'),
+            ('other_strand', '@other_strand'),
+            ('type', '@type'),
+        ]
+    )
+
+    tools = [
+        PanTool(dimensions=['x']),
+        WheelZoomTool(dimensions=['x']),
+        BoxSelectTool(),
+        ResetTool(),
+        TapTool(),
+        hover,
+    ]
+
     p = figure(
         title='break ends',
         plot_width=width, plot_height=150,
-        tools='xpan,xwheel_zoom,box_select,reset,tap',
+        tools=tools,
         logo=None,
         title_text_font_size=value('10pt'),
         x_range=x_range,
         y_range=['+', '-'],
     )
 
-    p.triangle(x='plot_position_'+view, y='plot_strand_'+view, size=10, angle='plot_strand_angle_'+view,
+    p.triangle(x='plot_position', y='strand', size=10, angle='strand_angle',
         line_color='grey', fill_color='clonality_color', alpha=1.0,
         source=source)
 
@@ -205,11 +247,49 @@ def retrieve_chromosome_plot_info(patient, sample, solution, chromosome=''):
     return info
 
 
-def prepare_cnv_data(cnv, chromosome_plot_info):
+def prepare_cnv_data(cnv, chromosome_plot_info, smooth_segments=False):
     """
     """
+
+    # Group segments with same state
+    if smooth_segments:
+        cnv['chromosome_index'] = cnv['chromosome'].apply(lambda a: chromosome_indices[a])
+        cnv['diff'] = cnv[['chromosome_index', 'major_1', 'major_2', 'minor_1', 'minor_2']].diff().abs().sum(axis=1)
+        cnv['is_diff'] = (cnv['diff'] != 0)
+        cnv['cn_group'] = cnv['is_diff'].cumsum()
+
+        def agg_segments(df):
+
+            stable_cols = [
+                'chromosome',
+                'major_1',
+                'major_2',
+                'minor_1',
+                'minor_2',
+                'major_raw_e',
+                'minor_raw_e',
+            ]
+
+            a = df[stable_cols].iloc[0]
+
+            a['start'] = df['start'].min()
+            a['end'] = df['end'].max()
+            a['length'] = df['length'].sum()
+
+            length_normalized_cols = [
+                'major_raw',
+                'minor_raw',
+            ]
+
+            for col in length_normalized_cols:
+                a[col] = (df[col] * df['length']).sum() / (df['length'].sum() + 1e-16)
+
+            return a
+
+        cnv = cnv.groupby('cn_group').apply(agg_segments)
+
     # Scatter size scaled by segment length
-    cnv['scatter_size'] = 5. * cnv['length'] / 3e6
+    cnv['scatter_size'] = 2. * np.sqrt(cnv['length'] / 1e6)
 
     # Scatter color by chromosome
     cnv = cnv.merge(chromosome_colors)
@@ -222,53 +302,72 @@ def prepare_cnv_data(cnv, chromosome_plot_info):
     return cnv
 
 
-def retrieve_brk_data(patient, sample, solution, left_chromosome, right_chromosome):
+def retrieve_brk_data(patient, sample, solution, chromosome_plot_info):
     """
     """
     store = sample_stores[(patient, sample)]
 
     brk = store['breakpoints']
 
+    # Duplicate required columns before stack
+    brk['type_1'] = brk['type']
+    brk['type_2'] = brk['type']
+
+    # Stack break ends
+    brk.set_index(['prediction_id'], inplace=True)
+    brk = brk.filter(regex='(_1|_2)')
+    def split_col_name(col):
+        parts = col.split('_')
+        return '_'.join(parts[:-1]), parts[-1]
+    brk.columns = pd.MultiIndex.from_tuples([split_col_name(col) for col in brk.columns])
+    brk.columns.names = 'value', 'side'
+    brk = brk.stack()
+    brk.reset_index(inplace=True)
+
+    # Add columns for other side
+    brk2 = brk[['prediction_id', 'side', 'chromosome', 'strand', 'position']].copy()
+    def swap_side(side):
+        if side == '1':
+            return '2'
+        elif side == '2':
+            return '1'
+        else:
+            raise ValueError()
+    brk2['side'] = brk2['side'].apply(swap_side)
+    brk2.rename(
+        columns={
+            'chromosome':'other_chromosome',
+            'strand':'other_strand',
+            'position':'other_position',
+        },
+        inplace=True
+    )
+    brk = brk.merge(brk2)
+
+    # Annotate with copy number
     brk_cn = store['/solutions/solution_{0}/brk_cn'.format(solution)]
     brk_cn = brk_cn.groupby('prediction_id')[['cn_1', 'cn_2']].sum().reset_index()
     brk = brk.merge(brk_cn, on='prediction_id', how='left').fillna(0.0)
 
-    chromosomes = [left_chromosome, right_chromosome]
-    brk = brk[
-        (brk['chromosome_1'].isin(chromosomes)) |
-        (brk['chromosome_2'].isin(chromosomes))]
+    # Annotate with strand related appearance    
+    strand_angle = pd.DataFrame({'strand':['+', '-'], 'strand_angle':[math.pi/6., -math.pi/6.]})
+    brk = brk.merge(strand_angle)
 
-    sides = ('1', '2')
+    # Calculate plot start and end
+    brk = brk.merge(chromosome_plot_info[['chromosome', 'chromosome_plot_start']])
+    brk['plot_position'] = brk['position'] + brk['chromosome_plot_start']
 
-    for side in sides:
-        strand_angle = pd.DataFrame({'strand_'+side:['+', '-'], 'strand_angle_'+side:[math.pi/6., -math.pi/6.]})
-        brk = brk.merge(strand_angle)
-
-    plot_variables = ('chromosome', 'position', 'strand', 'strand_angle')
-    for var in plot_variables:
-        brk['plot_{0}_left'.format(var)] = brk['{0}_1'.format(var)]
-        brk['plot_{0}_right'.format(var)] = brk['{0}_2'.format(var)]
-
-    if left_chromosome == right_chromosome:
-        flip = (brk['plot_position_left'] > brk['plot_position_right'])
-    else:
-        flip = (brk['plot_chromosome_left'] != left_chromosome)
-
-    for var in plot_variables:
-        cols = ['plot_{0}_left'.format(var), 'plot_{0}_right'.format(var)]
-        brk.loc[flip, cols] = brk.loc[flip, cols[::-1]]
-
-    brk.loc[(~brk['plot_chromosome_left'].isin(chromosomes)), 'plot_position_left'] = np.inf
-    brk.loc[(~brk['plot_chromosome_right'].isin(chromosomes)), 'plot_position_right'] = np.inf
-
+    # Annotate with clonal information
     brk['clone_1_color'] = np.where(brk['cn_1'] > 0, '00', 'ff')
     brk['clone_2_color'] = np.where(brk['cn_2'] > 0, '00', 'ff')
     brk['clonality_color'] = '#ff' + brk['clone_1_color'] + brk['clone_2_color']
 
+    brk.sort_values(['prediction_id', 'side'], inplace=True)
+
     return brk
 
 
-def build_genome_panel(cnv_source, chromosome_plot_info, width=1000):
+def build_genome_panel(cnv_source, brk_source, chromosome_plot_info, width=1000):
     """
     """
     init_x_range = [0, chromosome_plot_info['chromosome_plot_end'].max()]
@@ -278,12 +377,19 @@ def build_genome_panel(cnv_source, chromosome_plot_info, width=1000):
     line_plot2 = major_minor_segment_plot(cnv_source, 'major_raw_e', 'minor_raw_e', line_plot1.x_range, 'expected', width)
     line_plot3 = major_minor_segment_plot(cnv_source, 'major_1', 'minor_1', line_plot1.x_range, 'clone 1', width)
     line_plot4 = major_minor_segment_plot(cnv_source, 'major_2', 'minor_2', line_plot1.x_range, 'clone 2', width)
+    brk_plot = breakpoints_plot(brk_source, line_plot1.x_range, width)
 
-    for p in [line_plot1, line_plot2, line_plot3, line_plot4]:
+    for p in [line_plot1, line_plot2, line_plot3, line_plot4, brk_plot]:
         setup_genome_plot_axes(p, chromosome_plot_info)
 
+    columns = ['prediction_id',
+        'chromosome', 'position', 'strand',
+        'cn_1', 'cn_2']
+    columns = [TableColumn(field=a, title=a, width=10) for a in columns]
+    data_table = DataTable(source=brk_source, columns=columns, width=1000, height=1000)
+
     panel = Panel(title='Genome View', closable=False)
-    panel.child = vplot(*[scatter_plot, line_plot1, line_plot2, line_plot3, line_plot4])
+    panel.child = vplot(*[scatter_plot, line_plot1, line_plot2, line_plot3, line_plot4, brk_plot, data_table])
 
     return panel
 
@@ -400,9 +506,7 @@ class RemixtApp(HBox):
 
     # data sources
     solutions_source = Instance(ColumnDataSource)
-    cnv_source_full = Instance(ColumnDataSource)
-    cnv_source_left = Instance(ColumnDataSource)
-    cnv_source_right = Instance(ColumnDataSource)
+    cnv_source = Instance(ColumnDataSource)
     brk_source = Instance(ColumnDataSource)
 
     # inputs
@@ -412,10 +516,6 @@ class RemixtApp(HBox):
     sample_select = Instance(Select)
     solution = String(default="0")
     solution_select = Instance(Select)
-    chromosome_left = String(default="")
-    chromosome_left_select = Instance(Select)
-    chromosome_right = String(default="")
-    chromosome_right_select = Instance(Select)
     input_box = Instance(VBoxForm)
 
     def __init__(self, *args, **kwargs):
@@ -471,22 +571,6 @@ class RemixtApp(HBox):
         self.solution_select.value = self.solution_select.options[0]
         self.solution = self.solution_select.value
 
-        self.chromosome_left_select = Select(
-            title="Left chromosome:",
-            name='chromosome',
-            value=chromosomes[0],
-            options=chromosomes,
-        )
-        self.chromosome_left = self.chromosome_left_select.value
-
-        self.chromosome_right_select = Select(
-            title="Right chromosome:",
-            name='chromosome',
-            value=chromosomes[0],
-            options=chromosomes,
-        )
-        self.chromosome_right = self.chromosome_right_select.value
-
 
     def make_cnv_source(self, chromosome=''):
         """
@@ -513,26 +597,10 @@ class RemixtApp(HBox):
         if self.patient is None or self.sample is None:
             return
 
-        view_info = [
-            ('', 'full'),
-            (self.chromosome_left, 'left'),
-            (self.chromosome_right, 'right'),
-        ]
+        cnv, self._chromosome_plot_info = self.make_cnv_source()
+        self.cnv_source = ColumnDataSource(cnv)
 
-        self._chromosome_plot_info = dict()
-
-        for view_chrom, view_name in view_info:
-            cnv, chromosome_plot_info = self.make_cnv_source(view_chrom)
-            self._chromosome_plot_info[view_name] = chromosome_plot_info
-            if view_name == 'full':
-                self.cnv_source_full = ColumnDataSource(cnv)
-            elif view_name == 'left':
-                self.cnv_source_left = ColumnDataSource(cnv)
-            elif view_name == 'right':
-                self.cnv_source_right = ColumnDataSource(cnv)
-
-        brk = retrieve_brk_data(self.patient, self.sample, self.solution,
-            self.chromosome_left, self.chromosome_right)
+        brk = retrieve_brk_data(self.patient, self.sample, self.solution, self._chromosome_plot_info)
 
         self.brk_source = ColumnDataSource(brk)
 
@@ -545,13 +613,13 @@ class RemixtApp(HBox):
 
         self.tabs = Tabs()
         self.tabs.tabs.append(build_solutions_panel(self.patient, self.sample, self.solutions_source))
-        self.tabs.tabs.append(build_genome_panel(self.cnv_source_full, self._chromosome_plot_info['full']))
-        self.tabs.tabs.append(build_split_panel(self.cnv_source_left, self.cnv_source_right, self.brk_source, self._chromosome_plot_info))
+        self.tabs.tabs.append(build_genome_panel(self.cnv_source, self.brk_source, self._chromosome_plot_info))
+        #self.tabs.tabs.append(build_split_panel(self.cnv_source_left, self.cnv_source_right, self.brk_source, self._chromosome_plot_info))
 
 
     def set_children(self):
         self.children = [self.input_box, self.tabs]
-        self.input_box.children = [self.patient_select, self.sample_select, self.solution_select, self.chromosome_left_select, self.chromosome_right_select]
+        self.input_box.children = [self.patient_select, self.sample_select, self.solution_select]
 
 
     def input_change(self, obj, attrname, old, new):
@@ -583,22 +651,6 @@ class RemixtApp(HBox):
         curdoc().add(self)
 
 
-    def chromosome_left_change(self, obj, attrname, old, new):
-        self.chromosome_left = new
-        self.make_source()
-        self.make_plots()
-        self.set_children()
-        curdoc().add(self)
-
-
-    def chromosome_right_change(self, obj, attrname, old, new):
-        self.chromosome_right = new
-        self.make_source()
-        self.make_plots()
-        self.set_children()
-        curdoc().add(self)
-
-
     def setup_events(self):
         super(RemixtApp, self).setup_events()
         if self.patient_select:
@@ -607,10 +659,6 @@ class RemixtApp(HBox):
             self.sample_select.on_change('value', self, 'input_change')
         if self.solution_select:
             self.solution_select.on_change('value', self, 'input_change')
-        if self.chromosome_left_select:
-            self.chromosome_left_select.on_change('value', self, 'chromosome_left_change')
-        if self.chromosome_right_select:
-            self.chromosome_right_select.on_change('value', self, 'chromosome_right_change')
 
 
 @bokeh_app.route("/remixt")
