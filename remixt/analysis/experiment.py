@@ -136,9 +136,11 @@ def find_closest_segment_end(segment_data, breakpoint_data):
 
 def create_experiment(count_filename, breakpoint_filename, min_brk_dist=2000, min_length=None):
 
-    count_data = pd.read_csv(count_filename, sep='\t')
+    count_data = pd.read_csv(count_filename, sep='\t',
+        converters={'chromosome':str})
 
-    breakpoint_data = pd.read_csv(breakpoint_filename, sep='\t')
+    breakpoint_data = pd.read_csv(breakpoint_filename, sep='\t',
+        converters={'chromosome_1':str, 'chromosome_2':str})
 
     if min_length is not None:
         count_data = count_data[count_data['length'] > min_length]
