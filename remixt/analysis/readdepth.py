@@ -71,7 +71,7 @@ def calculate_candidate_h(minor_modes, mix_frac_resolution=20, num_clones=None):
 
     Kwargs:
         mix_frac_resolution (int): number of mixture fraction candidates
-        num_clones (int): number of clones
+        num_clones (int): number of clones, default 2 and 3
 
     Returns:
         list of tuple: candidate haploid normal and tumour read depths
@@ -97,7 +97,7 @@ def calculate_candidate_h(minor_modes, mix_frac_resolution=20, num_clones=None):
 
             h_tumour_candidates.append(h_tumour_scaled)
 
-            if num_clones is not None and num_clones == 2:
+            if num_clones is None or num_clones == 2:
                 h_candidates.append(np.array([h_normal, h_tumour_scaled]))
 
     # Maximum of 3 clones
@@ -114,7 +114,7 @@ def calculate_candidate_h(minor_modes, mix_frac_resolution=20, num_clones=None):
         for h_tumour in h_tumour_candidates:
             h = np.array([h_normal] + list(h_tumour*mix))
 
-            if num_clones is not None and num_clones == 3:
+            if num_clones is None or num_clones == 3:
                 h_candidates.append(h)
 
     return h_candidates
