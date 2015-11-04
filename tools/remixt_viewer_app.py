@@ -233,7 +233,7 @@ def retrieve_chromosome_plot_info(patient, sample, solution, chromosome=''):
     cnv = retrieve_cnv_data(patient, sample, solution, chromosome)
 
     cnv['chromosome_index'] = cnv['chromosome'].apply(lambda a: chromosome_indices[a])
-    cnv.sort_values(['chromosome_index', 'start'], inplace=True)
+    cnv.sort(['chromosome_index', 'start'], inplace=True)
 
     info = (
         cnv.groupby('chromosome', sort=False)['end']
@@ -309,6 +309,18 @@ def retrieve_brk_data(patient, sample, solution, chromosome_plot_info):
 
     brk = store['breakpoints']
 
+    def calculate_breakpoint_type(row):
+        if row['chromosome_1'] != row['chromosome_2']:
+            return 'translocation'
+        if row['strand_1'] == row['strand_2']:
+            return 'inversion'
+        positions = sorted([(row['position_{0}'.format(side)], row['strand_{0}'.format(side)]) for side in (1, 2)])
+        if positions[0][1] == '+':
+            return 'deletion'
+        else:
+            return 'duplication'
+    brk['type'] = brk.apply(calculate_breakpoint_type, axis=1)
+
     # Duplicate required columns before stack
     brk['type_1'] = brk['type']
     brk['type_2'] = brk['type']
@@ -362,7 +374,7 @@ def retrieve_brk_data(patient, sample, solution, chromosome_plot_info):
     brk['clone_2_color'] = np.where(brk['cn_2'] > 0, '00', 'ff')
     brk['clonality_color'] = '#ff' + brk['clone_1_color'] + brk['clone_2_color']
 
-    brk.sort_values(['prediction_id', 'side'], inplace=True)
+    brk.sort(['prediction_id', 'side'], inplace=True)
 
     return brk
 
