@@ -29,31 +29,53 @@ def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor'):
 
     """ 
 
-    color_major = plt.get_cmap('RdBu')(0.1)
-    color_minor = plt.get_cmap('RdBu')(0.9)
+    segment_color_major = plt.get_cmap('RdBu')(0.1)
+    segment_color_minor = plt.get_cmap('RdBu')(0.9)
+
+    quad_color_major = colorConverter.to_rgba(segment_color_major, alpha=0.5)
+    quad_color_minor = colorConverter.to_rgba(segment_color_minor, alpha=0.5)
 
     cnv = cnv.sort('start')
 
-    def plot_segment(ax, row, field, color):
-        ax.plot([row['start'], row['end']], [row[field]]*2, color=color, lw=1)
-        ax.add_patch(
-            Rectangle((row['start'], 0), row['end'] - row['start'], row[field],
-                facecolor=colorConverter.to_rgba(color, alpha=0.5),
-                edgecolor=colorConverter.to_rgba(color, alpha=0.0),
-            )
-        )
+    def create_segments(df, field):
+        segments = np.array([[df['start'].values, df[field].values], [df['end'].values, df[field].values]])
+        segments = np.transpose(segments, (2, 0, 1))
+        return segments
 
-    def plot_connectors(ax, row, next_row, field, color):
-        mid = (row[field] + next_row[field]) / 2.0
-        ax.plot([row['end'], row['end']], [row[field], mid], color=color, lw=1)
-        ax.plot([next_row['start'], next_row['start']], [mid, next_row[field]], color=color, lw=1)
+    def create_connectors(df, field):
+        prev = df.iloc[:-1].reset_index()
+        next = df.iloc[1:].reset_index()
+        mids = ((prev[field] + next[field]) / 2.0).values
+        prev_cnct = np.array([[prev['end'].values, prev[field].values], [prev['end'].values, mids]])
+        prev_cnct = np.transpose(prev_cnct, (2, 0, 1))
+        next_cnct = np.array([[next['start'].values, mids], [next['start'].values, next[field].values]])
+        next_cnct = np.transpose(next_cnct, (2, 0, 1))
+        return np.concatenate([prev_cnct, next_cnct])
 
-    for (idx, row), (next_idx, next_row) in itertools.izip_longest(cnv.iterrows(), cnv.iloc[1:].iterrows(), fillvalue=(None, None)):
-        plot_segment(ax, row, major_col, color_major)
-        plot_segment(ax, row, minor_col, color_minor)
-        if next_row is not None:
-            plot_connectors(ax, row, next_row, major_col, color_major)
-            plot_connectors(ax, row, next_row, minor_col, color_minor)
+    def create_quads(df, field):
+        quads = np.array([
+            [df['start'].values, np.zeros(len(df.index))],
+            [df['start'].values, df[field].values],
+            [df['end'].values, df[field].values],
+            [df['end'].values, np.zeros(len(df.index))],
+        ])
+        quads = np.transpose(quads, (2, 0, 1))
+        return quads
+
+    major_segments = create_segments(cnv, major_col)
+    minor_segments = create_segments(cnv, minor_col)
+    ax.add_collection(matplotlib.collections.LineCollection(major_segments, colors=segment_color_major, lw=2))
+    ax.add_collection(matplotlib.collections.LineCollection(minor_segments, colors=segment_color_minor, lw=2))
+
+    major_connectors = create_connectors(cnv, major_col)
+    minor_connectors = create_connectors(cnv, minor_col)
+    ax.add_collection(matplotlib.collections.LineCollection(major_connectors, colors=segment_color_major, lw=2))
+    ax.add_collection(matplotlib.collections.LineCollection(minor_connectors, colors=segment_color_minor, lw=2))
+
+    major_quads = create_quads(cnv, major_col)
+    minor_quads = create_quads(cnv, minor_col)
+    ax.add_collection(matplotlib.collections.PolyCollection(major_quads, facecolors=quad_color_major, edgecolors=quad_color_major, lw=0))
+    ax.add_collection(matplotlib.collections.PolyCollection(minor_quads, facecolors=quad_color_minor, edgecolors=quad_color_minor, lw=0))
 
 
 def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', minor_col='minor', 
@@ -79,8 +101,17 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', min
     if chromosome is None and (start is not None or end is not None):
         raise ValueError('start and end require chromosome arg')
 
+    # Ensure we dont modify the calling function's table
     cnv = cnv[['chromosome', 'start', 'end', 'length', major_col, minor_col]].copy()
-    
+
+    # Restrict segments to those plotted
+    if chromosome is not None:
+        cnv = cnv[cnv['chromosome'] == chromosome]
+    if start is not None:
+        cnv = cnv[cnv['end'] > start]
+    if end is not None:
+        cnv = cnv[cnv['start'] < end]
+
     # Create chromosome info table
     chromosome_length = cnv.groupby('chromosome')['end'].max()
     chromosome_info = pd.DataFrame({'length':chromosome_length})
@@ -195,7 +226,7 @@ def plot_breakpoints_genome(ax, breakpoint, chromosome_info, scale_height=1.0):
         verts = [(pos_1, 0.), (pos_1, height), (pos_2, height), (pos_2, 0.)]
 
         path = Path(verts, codes)
-        patch = patches.PathPatch(path, facecolor='none', edgecolor='#2eb036', lw=2)
+        patch = patches.PathPatch(path, facecolor='none', edgecolor='#2eb036', lw=2, zorder=100)
         ax.add_patch(patch)
 
 
