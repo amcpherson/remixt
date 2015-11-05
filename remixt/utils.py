@@ -113,6 +113,15 @@ def link_file(target_filename, link_filename):
     os.symlink(os.path.abspath(target_filename), link_filename)
 
 
+def sort_chromosome_names(chromosomes):
+    def get_chromosome_key(chromosome):
+        try:
+            return (0, int(chromosome))
+        except ValueError:
+            return (1, chromosome)
+    return [chromosome for chromosome in sorted(chromosomes, key=get_chromosome_key)]
+
+
 class BreakpointDatabase(object):
     def __init__(self, breakpoints):
         """ Create a database of breakpoints.

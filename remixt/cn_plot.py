@@ -14,8 +14,7 @@ import remixt.analysis.experiment
 
 
 def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor'):
-    """
-    Plot raw major/minor copy number as line plots
+    """ Plot raw major/minor copy number as line plots
 
     Args:
         ax (matplotlib.axes.Axes): plot axes
@@ -80,8 +79,7 @@ def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor'):
 
 def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', minor_col='minor', 
                     chromosome=None, start=None, end=None):
-    """
-    Plot major/minor copy number across the genome
+    """ Plot major/minor copy number across the genome
 
     Args:
         ax (matplotlib.axes.Axes): plot axes
@@ -113,16 +111,9 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', min
         cnv = cnv[cnv['start'] < end]
 
     # Create chromosome info table
+    chromosomes = remixt.utils.sort_chromosome_names(cnv['chromosome'].unique())
     chromosome_length = cnv.groupby('chromosome')['end'].max()
-    chromosome_info = pd.DataFrame({'length':chromosome_length})
-    
-    if issubclass(chromosome_info.index.dtype.type, np.integer):
-        chromosome_info.sort_index(inplace=True)
-    else:
-        # Reorder in a standard way with X and Y last
-        chromosome_info = chromosome_info.reindex([str(a) for a in xrange(50)] + ['X', 'Y']).dropna()
-        if len(chromosome_info.index) != len(cnv['chromosome'].unique()):
-            raise Exception('Unable to reindex chromosomes')
+    chromosome_info = pd.DataFrame({'length':chromosome_length}, index=chromosomes)
 
     # Calculate start and end in plot
     chromosome_info['end'] = np.cumsum(chromosome_info['length'])
@@ -184,6 +175,94 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', min
     ax.yaxis.grid(True, which='major', linestyle=':')
     
     return chromosome_info
+
+
+def create_chromosome_color_map(chromosomes):
+    """ Create a map of colors per chromosome.
+
+    Args:
+        chromosomes (list): list of chromosome names
+
+    Returns:
+        pandas.DataFrame: chromosome color table
+        
+    """
+
+    color_map = plt.get_cmap('Dark2')
+
+    chromosome_colors = list()
+    for i in xrange(len(chromosomes)):
+        rgb_color = color_map(float(i)/float(len(chromosomes)-1))
+        hex_color = matplotlib.colors.rgb2hex(rgb_color)
+        chromosome_colors.append(hex_color)
+
+    chromosome_colors = pd.DataFrame({'chromosome':chromosomes, 'color':chromosome_colors})
+
+    return chromosome_colors
+
+
+def plot_cnv_scatter(ax, cnv, major_col='major', minor_col='minor', highlight_col=None, chromosome_colors=None):
+    """ Scatter plot segments major by minor.
+
+    Args:
+        ax (matplotlib.axes.Axes): plot axes
+        cnv (pandas.DataFrame): 'cnv_site' table
+
+    KwArgs:
+        major_col (str): name of major copies column
+        minor_col (str): name of minor copies column
+        highlight_col (str): name of boolean column for highlighting specific segments
+        chromosome_colors (pandas.DataFrame): chromosome color table
+
+    """
+
+    # Create color map for chromosomes
+    chromosomes = remixt.utils.sort_chromosome_names(cnv['chromosome'].unique())
+
+    # Create chromosome color map if not given
+    if chromosome_colors is None:
+        chromosome_colors = create_chromosome_color_map(chromosomes)
+
+    # Scatter size scaled by segment length
+    cnv['scatter_size'] = 10. * np.sqrt(cnv['length'] / 1e6)
+
+    # Scatter color
+    cnv = cnv.merge(chromosome_colors)
+
+    if highlight_col is not None:
+        cnv_greyed = cnv[~cnv[highlight_col]]
+        cnv = cnv[cnv[highlight_col]]
+        points = ax.scatter(cnv_greyed['major_raw'], cnv_greyed['minor_raw'],
+            s=cnv_greyed['scatter_size'], facecolor='#d0d0e0', edgecolor='#d0d0e0',
+            linewidth=0.0, zorder=2)
+
+    points = ax.scatter(cnv['major_raw'], cnv['minor_raw'],
+        s=cnv['scatter_size'], facecolor=cnv['color'], edgecolor=cnv['color'],
+        linewidth=0.0, zorder=2)
+    
+    ax.set_xlim((-0.5, 4.5))
+    ax.set_xticks(xrange(5))
+    ax.set_xlabel('major')
+    ax.set_ylim((-0.5, 3.5))
+    ax.set_yticks(xrange(4))
+    ax.set_ylabel('minor')
+    
+    ax.spines['left'].set_position(('outward', 5))
+    ax.spines['bottom'].set_position(('outward', 5))
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_bounds(0, 3)
+    ax.spines['bottom'].set_bounds(0, 4)
+    ax.xaxis.tick_bottom()
+    ax.yaxis.tick_left()
+
+    ax.grid(True)
+
+    lgnd_artists = [plt.Circle((0, 0), color=c) for c in chromosome_colors['color']]
+    lgnd = ax.legend(lgnd_artists, chromosomes,
+        loc=2, markerscale=0.5, fontsize=6,
+        bbox_to_anchor=(1.1, 0.95), ncol=2,
+        title='Chromosome', frameon=False)
 
 
 def plot_breakpoints_genome(ax, breakpoint, chromosome_info, scale_height=1.0):
