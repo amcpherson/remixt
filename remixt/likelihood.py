@@ -35,11 +35,69 @@ def estimate_phi(x):
     Args:
         x (numpy.array): observed major, minor, and total read counts
 
+    Returns:
+        numpy.array: estimate of proportion of genotypable reads.
+
     """
 
     phi = x[:,0:2].sum(axis=1).astype(float) / (x[:,2].astype(float) + 1.0)
 
     return phi
+
+
+
+def proportion_measureable_matrix(phi, total_cn=True):
+    """ Proportion reads measureable matrix.
+
+    Args:
+        phi (numpy.array): estimate of proportion of genotypable reads.    
+
+    KwArgs:
+        total_cn (boolean): include proportion for total copy number
+
+    Returns:
+        numpy.array: N * K dim array, segment to measurement transform
+
+    """
+
+    if total_cn:
+        return np.vstack([phi, phi, np.ones(phi.shape)]).T
+    else:
+        return np.vstack([phi, phi]).T
+
+
+
+def calculate_mean_cn(h, x, l):
+    """ Infer proportion of genotypable reads.
+
+    Args:
+        h (numpy.array): haploid read depths, h[0] for normal
+        x (numpy.array): observed major, minor, and total read counts
+        l (numpy.array): observed lengths of segments
+
+    Returns:
+        numpy.array: N * L dim array, per segment per allele mean copy number
+
+    """
+
+    phi = estimate_phi(x)
+    p = proportion_measureable_matrix(phi, total_cn=True)
+
+    # Avoid divide by zero
+    x = x + 1e-16
+    l = l + 1e-16
+    p = p + 1e-16
+
+    # Calculate the total haploid depth of the tumour clones
+    h_t = ((x[:,0:2] / p[:,0:2]).T / l).T
+
+    for n, ell in zip(*np.where(np.isnan(h_t))):
+        raise ProbabilityError('h_t is nan', n=n, x=x[n], l=l[n], h=h, p=p[n])
+
+    # Calculate the dominant cn assuming no divergence
+    dom_cn = (h_t - h[0]) / h[1:].sum()
+
+    return dom_cn
 
 
 
@@ -72,6 +130,27 @@ class ReadCountLikelihood(object):
         self.param_per_segment = dict()
         self.param_per_segment['h'] = False
         self.param_per_segment['phi'] = True
+
+        self.mask = None
+
+
+    def add_amplification_mask(self, x, l, cn_max):
+        """ Add a mask for highly amplified regions.
+
+        Args:
+            x (numpy.array): observed major, minor, and total read counts
+            l (numpy.array): observed lengths of segments
+            cn_max (int): max unmasked dominant copy number
+
+        Returns:
+            float: proportion of the genome masked
+
+        """
+
+        dom_cn = calculate_mean_cn(self.h, x, l)
+        dom_cn = np.clip(dom_cn.round().astype(int), 0, int(1e6))
+
+        self.mask = np.all(dom_cn <= cn_max, axis=1)
 
 
     @property
@@ -120,20 +199,6 @@ class ReadCountLikelihood(object):
         return q
 
 
-    def proportion_genotypeable_matrix(self):
-        """ Proportion reads measureable matrix.
-
-        Returns:
-            numpy.array: N * K dim array, segment to measurement transform
-
-        """
-
-        if self.total_cn:
-            return np.vstack([self.phi, self.phi, np.ones(self.phi.shape)]).T
-        else:
-            return np.vstack([self.phi, self.phi]).T
-
-
     def expected_read_count(self, l, cn):
         """Calculate expected major, minor and total read counts.
         
@@ -146,7 +211,7 @@ class ReadCountLikelihood(object):
         """
         
         h = self.h
-        p = self.proportion_genotypeable_matrix()
+        p = proportion_measureable_matrix(self.phi, total_cn=self.total_cn)
         q = self.allele_measurement_matrix()
 
         gamma = np.sum(cn * np.vstack([h, h]).T, axis=-2)
@@ -195,6 +260,9 @@ class ReadCountLikelihood(object):
 
         ll[l < self.min_length_likelihood] = 0.0
 
+        if self.mask is not None:
+            ll[~self.mask] = 0.0
+
         return ll
 
 
@@ -220,6 +288,9 @@ class ReadCountLikelihood(object):
         ll_partial = self.param_partial_func[param](x, l, cn)
 
         ll_partial[l < self.min_length_likelihood,:] = 0.0
+
+        if self.mask is not None:
+            ll_partial[~self.mask,:] = 0.0
 
         for n in zip(*np.where(np.isnan(ll_partial))):
             raise ProbabilityError('ll derivative is nan', n=n, x=x[n], cn=cn[n], l=l[n], h=h, p=p[n], mu=mu[n])
@@ -248,7 +319,7 @@ class ReadCountLikelihood(object):
 
         partial_mu = self._log_likelihood_partial_mu(x, l, cn)
         
-        p = self.proportion_genotypeable_matrix()
+        p = proportion_measureable_matrix(self.phi, total_cn=self.total_cn)
         q = self.allele_measurement_matrix()
 
         partial_h = np.einsum('...l,...jk,...kl,...l,...->...j', partial_mu, cn, q, p, l)
@@ -392,7 +463,7 @@ class NegBinLikelihood(ReadCountLikelihood):
         super(NegBinLikelihood, self).estimate_parameters(x, l)
 
         K = (2, 3)[self.total_cn]
-        p = self.proportion_genotypeable_matrix()
+        p = proportion_measureable_matrix(self.phi, total_cn=self.total_cn)
         
         self.r = np.array([remixt.nb_overdispersion.infer_disperion(x[:,k], l*p[:,k]) for k in xrange(K)])
 

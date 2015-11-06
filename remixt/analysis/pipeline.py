@@ -63,8 +63,9 @@ def init(
         pickle.dump(experiment, f)
 
     read_depth = remixt.analysis.readdepth.calculate_depth(experiment)
-    minor_modes = remixt.analysis.readdepth.calculate_modes(read_depth)
+    minor_modes = remixt.analysis.readdepth.calculate_minor_modes(read_depth)
     candidate_h = remixt.analysis.readdepth.calculate_candidate_h(minor_modes, num_clones=num_clones)
+    candidate_h = remixt.analysis.readdepth.filter_high_ploidy(candidate_h, experiment, max_ploidy=5.0)
 
     for idx, h in enumerate(candidate_h):
         with open(candidate_h_filename_callback(idx), 'w') as f:
@@ -94,6 +95,7 @@ def fit(
     # Create emission / prior / copy number models
     emission = remixt.likelihood.NegBinLikelihood(total_cn=True)
     emission.estimate_parameters(experiment.x, experiment.l)
+    emission.h = h_init
 
     cn_probs = create_cn_prior_matrix(cn_proportions_filename)
     prior = remixt.cn_model.CopyNumberPrior(N, M, cn_probs)
@@ -101,6 +103,9 @@ def fit(
 
     model = remixt.cn_model.HiddenMarkovModel(N, M, emission, prior)
     model.set_observed_data(experiment.x, experiment.l)
+
+    # Mask amplifications from likelihood
+    emission.add_amplification_mask(experiment.x, experiment.l, model.cn_max)
 
     # Estimate haploid depths
     estimator = remixt.em.ExpectationMaximizationEstimator()
@@ -111,8 +116,10 @@ def fit(
     # cause the genome graph algorithm to fail
     prior.allele_specific = False
 
-    # Initialize copy number
+    # Infer copy number from viterbi
     _, cn_init = model.optimal_state()
+
+    # Create genome graph initializing from viterbi
     graph = remixt.genome_graph.GenomeGraph(emission, prior, experiment.adjacencies, experiment.breakpoints)
     graph.set_observed_data(experiment.x, experiment.l)
     graph.init_copy_number(cn_init)

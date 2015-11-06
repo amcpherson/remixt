@@ -153,10 +153,6 @@ class HiddenMarkovModel(object):
 
         self.cn_dev_max = 1
 
-        self.hmm_cns = None
-
-        self.wildcard_cn_max = 2
-
         self.log_trans_mat = None
 
 
@@ -208,7 +204,7 @@ class HiddenMarkovModel(object):
             yield cn
 
 
-    def build_hmm_cns(self):
+    def build_cn_states(self):
         """ Build a list of hmm copy number states.
 
         Returns:
@@ -216,77 +212,7 @@ class HiddenMarkovModel(object):
 
         """
 
-        if self.hmm_cns is None:
-            self.hmm_cns = np.array(list(self.build_cns(self.cn_max, self.cn_dev_max)))
-
-        return self.hmm_cns
-
-
-    def build_wildcard_cns(self):
-        """ Build a list of wild card copy number states centered around posterior mode
-
-        Returns:
-            numpy.array: copy number states
-
-        """
-
-        h = self.emission.h
-        p = self.emission.proportion_genotypeable_matrix()
-
-        # Calculate the total haploid depth of the tumour clones
-        h_t = (((self.x[:,0:2] + 1e-16) / (p[:,0:2] + 1e-16)).T / self.l).T
-
-        for n, ell in zip(*np.where(np.isnan(h_t))):
-            raise ProbabilityError('h_t is nan', n=n, x=x[n], l=l[n], h=h, p=p[n])
-
-        # Calculate the dominant cn assuming no divergence
-        dom_cn = (h_t - h[0]) / h[1:].sum()
-        dom_cn = np.clip(dom_cn.round().astype(int), 0, int(1e6))
-
-        # Do not allow competition with HMM states
-        dom_cn[np.all(dom_cn < self.cn_max, axis=1),:] += 100
-
-        # Reshape from N,L to N,M,L
-        dom_cn = np.array([dom_cn] * (self.M-1))
-        dom_cn = dom_cn.swapaxes(0, 1)
-
-        wildcard_cns = list()
-
-        for cn in self.build_cns(self.wildcard_cn_max, self.cn_dev_max, bounded=False):
-
-            # Center around dominant cn prediction
-            cn[:,1:,:] += dom_cn - self.wildcard_cn_max/2
-
-            # Some copy number matrices may be negative, and should
-            # be removed from consideration.  Adding a large number to
-            # the negative copy number entries will do this.
-            cn[cn < 0] += 100
-
-            wildcard_cns.append(cn)
-
-        return wildcard_cns
-
-
-    def count_wildcard_cns(self):
-        """ Count the number of wild card copy number states that will be used
-
-        Returns:
-            int: number of wild card copy number states
-
-        """
-        
-        return len(list(self.build_cns(self.wildcard_cn_max, self.cn_dev_max, bounded=False)))
-
-
-    def build_cn_states(self):
-        """ Calculate the log posterior over copy number states.
-        
-        Returns:
-            numpy.array: copy number states, shape (S,N,M,L)
-
-        """
-
-        cn_states = np.concatenate([self.build_hmm_cns(), self.build_wildcard_cns()])
+        cn_states = np.array(list(self.build_cns(self.cn_max, self.cn_dev_max)))
 
         return cn_states
 
@@ -302,35 +228,23 @@ class HiddenMarkovModel(object):
         if self.log_trans_mat is not None:
             return self.log_trans_mat
 
-        hmm_cns = self.build_hmm_cns()
-
-        num_standard_cns = hmm_cns.shape[0]
-        num_wildcard_cns = self.count_wildcard_cns()
-
-        num_states = num_standard_cns + num_wildcard_cns
+        cn_states = self.build_cn_states()
+        num_states = cn_states.shape[0]
 
         self.log_trans_mat = np.zeros((num_states, num_states))
 
         if self.transition_model == 'step':
 
-            self.log_trans_mat[0:num_standard_cns, 0:num_states] = self.transition_log_prob
-            self.log_trans_mat[0:num_states, 0:num_standard_cns] = self.transition_log_prob
-
+            self.log_trans_mat[:,:] = self.transition_log_prob
             self.log_trans_mat[xrange(num_states), xrange(num_states)] = 0.
 
         elif self.transition_model == 'geometric':
 
-            def get_cn(idx):
-                if idx < num_standard_cns:
-                    return hmm_cns[idx]
-                else:
-                    return np.zeros(hmm_cns[0].shape) + self.cn_max + 1
-
             for idx_1 in xrange(num_states):
-                cn_1 = get_cn(idx_1)
+                cn_1 = cn_states[idx_1]
 
                 for idx_2 in xrange(num_states):
-                    cn_2 = get_cn(idx_2)
+                    cn_2 = cn_states[idx_2]
 
                     for ell in xrange(2):
 

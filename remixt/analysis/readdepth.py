@@ -23,7 +23,7 @@ def calculate_depth(experiment):
     l = experiment.l.copy()
 
     phi = remixt.likelihood.estimate_phi(x)
-    p = np.vstack([phi, phi, np.ones(phi.shape)]).T
+    p = remixt.likelihood.proportion_measureable_matrix(phi, total_cn=True)
 
     is_filtered = (l > 0) & np.all(p > 0, axis=1)
     x = x[is_filtered,:]
@@ -39,8 +39,8 @@ def calculate_depth(experiment):
     return rd
 
 
-def calculate_modes(read_depth):
-    """ Calculate modes in distribution of read depths
+def calculate_minor_modes(read_depth):
+    """ Calculate modes in distribution of minor allele read depths
 
     Args:
         read_depth (pandas.DataFrame): read depth table
@@ -74,7 +74,7 @@ def calculate_candidate_h(minor_modes, mix_frac_resolution=20, num_clones=None):
         num_clones (int): number of clones, default 2 and 3
 
     Returns:
-        list of tuple: candidate haploid normal and tumour read depths
+        list of numpy.array: candidate haploid normal and tumour read depths
 
     """
 
@@ -118,5 +118,27 @@ def calculate_candidate_h(minor_modes, mix_frac_resolution=20, num_clones=None):
                 h_candidates.append(h)
 
     return h_candidates
+
+
+def filter_high_ploidy(candidate_h, experiment, max_ploidy=5.0):
+    """ Calculate modes in distribution of read depths for minor allele
+
+    Args:
+        candidate_h (list of numpy.array): candidate haploid normal and tumour read depths
+        experiment (remixt.Experiment): experiment object
+
+    Kwargs:
+        max_ploidy (int): maximum ploidy of potential solutions
+
+    Returns:
+        candidate_h (list of numpy.array): candidate haploid normal and tumour read depths
+
+    """
+
+    def calculate_ploidy(h):
+        mean_cn = remixt.likelihood.calculate_mean_cn(h, experiment.x, experiment.l)
+        return (mean_cn.T * experiment.l).sum() / experiment.l.sum()
+
+    return filter(lambda h: calculate_ploidy(h) < max_ploidy, candidate_h)
 
 
