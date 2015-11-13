@@ -275,4 +275,59 @@ def reindex_segments(cn_1, cn_2):
     return pd.concat(reseg, ignore_index=True)
 
 
+def aggregate_adjacent(cnv):
+    """ Aggregate adjacent segments with similar copy number state.
+
+    Args:
+        cnv (pandas.DataFrame): copy number table
+
+    Returns:
+        pandas.DataFrame: copy number with adjacent segments aggregated
+
+    Copy number table should have columns:
+        'chromosome', 'start', 'end', 'length',
+        'major_1', 'minor_1', 'major_2', 'minor_2',
+        'major_raw_e', 'minor_raw_e',
+        'major_raw', 'minor_raw',
+    """
+
+    # Group segments with same state
+    cnv['chromosome_index'] = np.searchsorted(np.unique(cnv['chromosome']), cnv['chromosome'])
+    cnv['diff'] = cnv[['chromosome_index', 'major_1', 'major_2', 'minor_1', 'minor_2']].diff().abs().sum(axis=1)
+    cnv['is_diff'] = (cnv['diff'] != 0)
+    cnv['cn_group'] = cnv['is_diff'].cumsum()
+
+    def agg_segments(df):
+
+        stable_cols = [
+            'chromosome',
+            'major_1',
+            'major_2',
+            'minor_1',
+            'minor_2',
+            'major_raw_e',
+            'minor_raw_e',
+        ]
+
+        a = df[stable_cols].iloc[0]
+
+        a['start'] = df['start'].min()
+        a['end'] = df['end'].max()
+        a['length'] = df['length'].sum()
+
+        length_normalized_cols = [
+            'major_raw',
+            'minor_raw',
+        ]
+
+        for col in length_normalized_cols:
+            a[col] = (df[col] * df['length']).sum() / (df['length'].sum() + 1e-16)
+
+        return a
+
+    cnv = cnv.groupby('cn_group').apply(agg_segments)
+    
+    return cnv
+
+
 
