@@ -57,8 +57,8 @@ def major_minor_scatter_plot(source):
         tools='pan,wheel_zoom,box_select,reset,lasso_select',
         logo=None,
         title_text_font_size=value('10pt'),
-        x_range=[-0.5, 3],
-        y_range=[-0.5, 3],
+        x_range=[-0.5, 6.5],
+        y_range=[-0.5, 4.5],
     )
 
     p.circle(x='major_raw', y='minor_raw',
@@ -97,7 +97,7 @@ def major_minor_segment_plot(source, major_column, minor_column, x_range, name, 
         logo=None,
         title_text_font_size=value('10pt'),
         x_range=x_range,
-        y_range=[-0.5, 3],
+        y_range=[-0.5, 6.5],
     )
 
     p.quad(top=major_column, bottom=0, left='plot_start', right='plot_end',
