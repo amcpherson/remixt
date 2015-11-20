@@ -72,6 +72,7 @@ class CopyNumberPrior(object):
         self.min_length_likelihood = 10000
         
         self.divergence_probs = np.array([0.8, 0.2])
+        self.max_divergence = 1
 
         self.prior_cn_scale = 5e-8
 
@@ -107,8 +108,13 @@ class CopyNumberPrior(object):
 
         subclonal = (cn[:,1:,:].max(axis=1) != cn[:,1:,:].min(axis=1)) * 1
         subclonal_prob = self.divergence_probs[subclonal]
-
+        
         lp += (np.sum(np.log(subclonal_prob), axis=1)) * self.l * self.prior_cn_scale
+
+        subclonal_divergence = (cn[:,1:,:].max(axis=1) - cn[:,1:,:].min(axis=1)) * 1
+        invalid_divergence = (subclonal_divergence > self.max_divergence).any(axis=1)
+
+        lp[invalid_divergence] = np.inf
 
         lp[self.l < self.min_length_likelihood] = 0.0
 
