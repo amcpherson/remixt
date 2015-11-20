@@ -118,7 +118,7 @@ class GenomeGraph(object):
         assert len(self.wt_adj.intersection(self.tmr_adj)) == 0
 
         self.telomere_cost = 10.
-        self.breakpoint_cost = 2.
+        self.breakpoint_cost = .1
 
         self.opt_iter = None
         self.decreased_log_posterior = None
