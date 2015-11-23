@@ -77,6 +77,8 @@ def major_minor_segment_plot(source, major_column, minor_column, x_range, name, 
             ('chromosome', '@chromosome'),
             ('start', '@start'),
             ('end', '@end'),
+            ('major_raw', '@major_raw'),
+            ('minor_raw', '@minor_raw'),
         ]
     )
 
