@@ -488,6 +488,8 @@ class NegBinLikelihood(ReadCountLikelihood):
         
             log(G(x+r)) - log(x!) - log(G(r)) + x * log(p) + r * log(1 - p)
         """
+
+        mu += 1000.
         
         nb_p = mu / (self.r + mu)
 
@@ -522,6 +524,8 @@ class NegBinLikelihood(ReadCountLikelihood):
         """
 
         mu = self.expected_read_count(l, cn)
+
+        mu += 1000.
         
         partial_mu = x / mu - (self.r + x) / (self.r + mu)
         

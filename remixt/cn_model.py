@@ -115,7 +115,7 @@ class CopyNumberPrior(object):
         subclonal_divergence = (cn[:,1:,:].max(axis=1) - cn[:,1:,:].min(axis=1)) * 1
         invalid_divergence = (subclonal_divergence > self.max_divergence).any(axis=1)
 
-        lp[invalid_divergence] = np.inf
+        lp[invalid_divergence] -= 1000.
 
         lp[self.l < self.min_length_likelihood] = 0.0
 
