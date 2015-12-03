@@ -11,11 +11,11 @@ Experiment = collections.namedtuple('Experiment', [
     'segment_start',
     'segment_end',
     'segment_major_is_allele_a',
-     'x',
-     'l',
-     'adjacencies',
-     'breakpoints',
-     'breakpoint_table',
+    'x',
+    'l',
+    'adjacencies',
+    'breakpoints',
+    'breakpoint_table',
 ])
 
 
