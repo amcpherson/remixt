@@ -391,9 +391,10 @@ def build_genome_panel(cnv_source, brk_source, chromosome_plot_info, width=1000)
     line_plot2 = major_minor_segment_plot(cnv_source, 'major_raw_e', 'minor_raw_e', line_plot1.x_range, 'expected', width)
     line_plot3 = major_minor_segment_plot(cnv_source, 'major_1', 'minor_1', line_plot1.x_range, 'clone 1', width)
     line_plot4 = major_minor_segment_plot(cnv_source, 'major_2', 'minor_2', line_plot1.x_range, 'clone 2', width)
+    line_plot5 = major_minor_segment_plot(cnv_source, 'major_diff', 'minor_diff', line_plot1.x_range, 'clone diff', width)
     brk_plot = breakpoints_plot(brk_source, line_plot1.x_range, width)
 
-    for p in [line_plot1, line_plot2, line_plot3, line_plot4, brk_plot]:
+    for p in [line_plot1, line_plot2, line_plot3, line_plot4, line_plot5, brk_plot]:
         setup_genome_plot_axes(p, chromosome_plot_info)
 
     columns = ['prediction_id',
@@ -403,7 +404,7 @@ def build_genome_panel(cnv_source, brk_source, chromosome_plot_info, width=1000)
     data_table = DataTable(source=brk_source, columns=columns, width=1000, height=1000)
 
     panel = Panel(title='Genome View', closable=False)
-    panel.child = vplot(*[scatter_plot, line_plot1, line_plot2, line_plot3, line_plot4, brk_plot, data_table])
+    panel.child = vplot(*[scatter_plot, line_plot1, line_plot2, line_plot3, line_plot4, line_plot5, brk_plot, data_table])
 
     return panel
 
