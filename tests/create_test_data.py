@@ -8,7 +8,7 @@ import remixt.simulations.experiment
 np.random.seed(2014)
 
 
-def generate_test_experiment(experiment_filename):
+def generate_experiment(experiment_filename):
 
     params = {}
 
@@ -34,6 +34,6 @@ if __name__ == '__main__':
     script_directory = os.path.realpath(os.path.dirname(__file__))
     experiment_filename = os.path.join(script_directory, 'test_experiment.pickle')
 
-    generate_test_experiment(experiment_filename)
+    generate_experiment(experiment_filename)
 
 
