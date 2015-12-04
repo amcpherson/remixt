@@ -164,8 +164,9 @@ class likelihood_unittest(unittest.TestCase):
             emission.phi = phi
             emission.r = r
 
-            unopt = emission._log_likelihood_partial_r_unopt(x, l, cn)
-            opt = emission._log_likelihood_partial_r(x, l, cn)
+            mu = emission.expected_read_count(l, cn)
+            unopt = emission._log_likelihood_partial_r_unopt(x, mu)
+            opt = emission._log_likelihood_partial_r(x, mu)
 
             error = np.sum(unopt - opt)
 
@@ -253,7 +254,8 @@ class likelihood_unittest(unittest.TestCase):
                 emission.h = h
                 emission.phi = phi
                 emission.r = r
-                return emission._log_likelihood_partial_r(x, l, cn)
+                mu = emission.expected_read_count(l, cn)
+                return emission._log_likelihood_partial_r(x, mu)
 
             assert_grad_correct(evaluate_log_likelihood,
                 evaluate_log_likelihood_partial_r, r,

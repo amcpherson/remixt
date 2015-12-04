@@ -193,11 +193,9 @@ class NegBinLikelihood(remixt.likelihood.NegBinLikelihood, ReadCountLikelihood):
         return partial_mu
 
 
-    def _log_likelihood_partial_r_unopt(self, x, l, cn):
+    def _log_likelihood_partial_r_unopt(self, x, mu):
         """ Unoptimized version of _log_likelihood_partial_r
         """
-
-        mu = self.expected_read_count_unopt(l, cn)
 
         r = self.r
         
