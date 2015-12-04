@@ -159,3 +159,125 @@ def gc_lowess(gc_samples_filename, gc_dist_filename, gc_table_filename, gc_resol
     gc_binned[['smoothed']].to_csv(gc_dist_filename, sep='\t', index=False, header=False)
 
 
+def read_mappability_indicator(mappability_filename, chromosome, chromosome_length):
+    """ Read a mappability wig file into a mappability vector
+    """
+    mappability_table = pd.read_csv(mappability_filename, sep='\t', header=None,
+        converters={'chromosome':str}, names=['chromosome', 'start', 'end', 'score'])
+
+    mappability = np.zeros(chromosome_length, dtype=np.uint8)
+
+    for start, end, value in mappability_table.loc[mappability_table['chromosome'] == chromosome, ['start', 'end', 'score']].values:
+        mappability[start:end] = value
+
+    return mappability
+
+
+def read_gc_cumsum(genome_fasta, chromosome):
+    """ Read a chromosome sequence and create GC cumulative sum
+
+    TODO: optimize using genome fasta index
+    """
+    for c, s in remixt.utils.read_sequences(genome_fasta):
+        if c == chromosome:
+            s = np.array(list(s.upper()), dtype=np.character)
+            gc_indicator = ((s == 'G') | (s == 'C')) * 1
+
+    gc_cumsum = gc_indicator.cumsum()
+
+    return gc_cumsum
+
+
+class GCCurve(object):
+    """ Piecewise linear GC probability curve
+    """
+    def read(self, gc_lowess_filename):
+        """ Read from a text file
+        """
+        with open(gc_lowess_filename, 'r') as f:
+            self.gc_lowess = np.array(f.readlines(), dtype=float)
+        self.gc_lowess /= self.gc_lowess.sum()
+
+    def predict(self, x):
+        """ Calculate GC probability from percent
+        """
+        idx = np.clip(int(x * float(len(self.gc_lowess) - 1)), 0, len(self.gc_lowess) - 1)
+        return max(self.gc_lowess[idx], 0.0)
+
+    def table(self, l):
+        """ Tabulate GC probabilities for a specific fragment length
+        """
+        return np.array([self.predict(float(x)/float(l)) for x in xrange(0, l + 1)])
+
+
+def gc_map_bias(segment_filename, fragment_mean, fragment_stddev, read_length, gc_lowess_filename, bias_filename, config):
+    """ Calculate per segment GC and mappability biases
+    """
+    segments = pd.read_csv(segment_filename, sep='\t', converters={'chromosome':str})
+
+    biases = calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, read_length, gc_lowess_filename, config)
+
+    biases.to_csv(bias_filename, sep='\t', index=False)
+
+
+def calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, read_length, gc_lowess_filename, config):
+    """ Calculate per segment GC and mappability biases
+    """
+    position_offset = config['sample_gc_offset']
+    genome_fai = config['genome_fai']
+    genome_fasta = config['genome_fasta']
+    mappability_filename = config['mappability_filename']
+
+    gc_dist = GCCurve()
+    gc_dist.read(gc_lowess_filename)
+
+    fragment_dist = scipy.stats.norm(fragment_mean, fragment_stddev)
+
+    fragment_min = int(fragment_dist.ppf(0.01) - 1.)
+    fragment_max = int(fragment_dist.ppf(0.99) + 1.)
+
+    for chromosome, chrom_seg in segments.groupby('chromosome'):
+
+        chromosome_length = chrom_seg['end'].max()
+        mappability = read_mappability_indicator(mappability_filename, chromosome, chromosome_length)
+        gc_cumsum = read_gc_cumsum(genome_fasta, chromosome)
+
+        for idx, (start, end) in segments[['start', 'end']].iterrows():
+            segments.loc[idx, 'bias'] = calculate_segment_gc_map_bias(gc_cumsum[start:end], mappability[start:end],
+                gc_dist, fragment_dist, fragment_min, fragment_max, position_offset, read_length)
+
+    return segments
+
+
+def calculate_segment_gc_map_bias(gc_cumsum, mappability, gc_dist, fragment_dist, fragment_min, fragment_max, position_offset, read_length):
+    """ Calculate GC/mappability bias
+    """
+    bias = 0.
+
+    for fragment_length in xrange(fragment_min, fragment_max+1):
+
+        # Calculate total GC
+        gc_sum = gc_cumsum[fragment_length-position_offset:-position_offset] - gc_cumsum[position_offset:-fragment_length+position_offset]
+        gc_length = fragment_length - 2*position_offset
+        
+        # Create a table mapping total GC to probability
+        gc_table = gc_dist.table(gc_length)
+
+        # Calculate per position GC probability
+        gc_prob = gc_table[gc_sum]
+
+        # Calculate mappabilities
+        mate_position = fragment_length - read_length
+        map_prob = mappability[:-fragment_length] * mappability[mate_position:-read_length]
+
+        # Calculate fragment length prob
+        len_prob = fragment_dist.pdf(fragment_length)
+        
+        # Calculate per position probability
+        prob = gc_prob * map_prob * len_prob
+        
+        bias += prob.sum()
+
+    return bias
+
+
