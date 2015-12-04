@@ -19,6 +19,7 @@ import remixt.utils
 import remixt.analysis.haplotype
 import remixt.analysis.segment
 import remixt.analysis.gcbias
+import remixt.analysis.stats
 
 
 remixt_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
@@ -73,7 +74,7 @@ if __name__ == '__main__':
     pyp.sch.setobj(mgd.OutputChunks('bytumour'), tumour_fnames.keys())
 
     pyp.sch.transform('calc_fragment_stats', ('bytumour',), {'mem':16},
-        prepare_counts.calculate_fragment_stats,
+        remixt.analysis.stats.calculate_fragment_stats,
         mgd.TempOutputObj('fragstats', 'bytumour'),
         mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_fnames),
     )
@@ -156,38 +157,6 @@ if __name__ == '__main__':
     )
 
     pyp.run()
-
-
-FragmentStats = collections.namedtuple('FragmentStats', [
-    'fragment_mean',
-    'fragment_stddev',
-])
-
-
-def calculate_fragment_stats(seqdata_filename):
-
-    segment_counts = list()
-    
-    sum_x = 0.
-    sum_x2 = 0.
-    n = 0.
-
-    chromosomes = remixt.seqdataio.read_chromosomes(seqdata_filename)
-
-    for chrom in chromosomes:
-
-        chrom_reads = next(remixt.seqdataio.read_read_data(seqdata_filename, chromosome=chrom))
-
-        length = chrom_reads['end'].values - chrom_reads['start'].values
-
-        sum_x += length.sum()
-        sum_x2 += (length * length).sum()
-        n += length.shape[0]
-
-    mean = sum_x / n
-    stdev = np.sqrt((sum_x2 / n) - (mean * mean)) 
-
-    return FragmentStats(mean, stdev)
 
 
 def create_counts(segment_counts_filename, allele_counts_filename, segment_filename, seqdata_filename, haps_filename):
