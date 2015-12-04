@@ -16,7 +16,7 @@ class ReadCountLikelihood(remixt.likelihood.ReadCountLikelihood):
         K = (2, 3)[self.total_cn]
 
         h = self.h
-        p = self.proportion_genotypeable_matrix()
+        p = remixt.likelihood.proportion_measureable_matrix(self.phi, total_cn=self.total_cn)
 
         x = np.zeros((N, K))
         
@@ -53,7 +53,7 @@ class ReadCountLikelihood(remixt.likelihood.ReadCountLikelihood):
 
         partial_mu = self._log_likelihood_partial_mu_unopt(x, l, cn)
         
-        p = self.proportion_genotypeable_matrix()
+        p = remixt.likelihood.proportion_measureable_matrix(self.phi, total_cn=self.total_cn)
         q = self.allele_measurement_matrix()
         
         N = x.shape[0]
@@ -82,7 +82,7 @@ class ReadCountLikelihood(remixt.likelihood.ReadCountLikelihood):
         partial_mu = self._log_likelihood_partial_mu_unopt(x, l, cn)
         
         h = self.h
-        p = self.proportion_genotypeable_matrix()
+        p = remixt.likelihood.proportion_measureable_matrix(self.phi, total_cn=self.total_cn)
         q = self.allele_measurement_matrix()
         
         N = x.shape[0]

@@ -22,8 +22,6 @@ def assert_grad_correct(func, grad, x0, *args, **kwargs):
     """ Assert correct gradiant compared to finite difference approximation
     """
 
-    epsilon = 1e-8
-
     analytic_fprime = grad(x0, *args)
     approx_fprime = statsmodels.tools.numdiff.approx_fprime_cs(x0, func, args=args)
 
@@ -207,7 +205,7 @@ class likelihood_unittest(unittest.TestCase):
 
             def evaluate_log_likelihood_partial_phi(phi, x, l, cn):
                 emission.phi = phi
-                return emission._log_likelihood_partial_phi(x, l, cn)
+                return emission._log_likelihood_partial_phi(x, l, cn)[:,0]
 
             assert_grad_correct(evaluate_log_likelihood,
                 evaluate_log_likelihood_partial_phi, phi,
