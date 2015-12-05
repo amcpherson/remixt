@@ -69,5 +69,5 @@ shapeit_confidence_threshold                = 0.95
 
 # GC bias correction
 sample_gc_num_positions                     = 10000000
-sample_gc_offset                            = 4
+gc_position_offset                          = 4
 

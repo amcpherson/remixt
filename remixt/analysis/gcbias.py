@@ -1,15 +1,16 @@
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
+import scipy.stats
 
-
+import remixt.utils
 
 
 def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
 
     chromosomes = config['chromosomes']
     num_samples = config['sample_gc_num_positions']
-    position_offset = config['sample_gc_offset']
+    position_offset = config['gc_position_offset']
     genome_fai = config['genome_fai']
     genome_fasta = config['genome_fasta']
     mappability_filename = config['mappability_filename']
@@ -191,10 +192,10 @@ def read_gc_cumsum(genome_fasta, chromosome):
 class GCCurve(object):
     """ Piecewise linear GC probability curve
     """
-    def read(self, gc_lowess_filename):
+    def read(self, gc_dist_filename):
         """ Read from a text file
         """
-        with open(gc_lowess_filename, 'r') as f:
+        with open(gc_dist_filename, 'r') as f:
             self.gc_lowess = np.array(f.readlines(), dtype=float)
         self.gc_lowess /= self.gc_lowess.sum()
 
@@ -210,26 +211,26 @@ class GCCurve(object):
         return np.array([self.predict(float(x)/float(l)) for x in xrange(0, l + 1)])
 
 
-def gc_map_bias(segment_filename, fragment_mean, fragment_stddev, read_length, gc_lowess_filename, bias_filename, config):
+def gc_map_bias(segment_filename, fragment_mean, fragment_stddev, read_length, gc_dist_filename, bias_filename, config):
     """ Calculate per segment GC and mappability biases
     """
     segments = pd.read_csv(segment_filename, sep='\t', converters={'chromosome':str})
 
-    biases = calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, read_length, gc_lowess_filename, config)
+    biases = calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, read_length, gc_dist_filename, config)
 
     biases.to_csv(bias_filename, sep='\t', index=False)
 
 
-def calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, read_length, gc_lowess_filename, config):
+def calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, read_length, gc_dist_filename, config, do_gc=True, do_map=True):
     """ Calculate per segment GC and mappability biases
     """
-    position_offset = config['sample_gc_offset']
+    position_offset = config['gc_position_offset']
     genome_fai = config['genome_fai']
     genome_fasta = config['genome_fasta']
     mappability_filename = config['mappability_filename']
 
     gc_dist = GCCurve()
-    gc_dist.read(gc_lowess_filename)
+    gc_dist.read(gc_dist_filename)
 
     fragment_dist = scipy.stats.norm(fragment_mean, fragment_stddev)
 
@@ -244,12 +245,14 @@ def calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, read_length,
 
         for idx, (start, end) in segments[['start', 'end']].iterrows():
             segments.loc[idx, 'bias'] = calculate_segment_gc_map_bias(gc_cumsum[start:end], mappability[start:end],
-                gc_dist, fragment_dist, fragment_min, fragment_max, position_offset, read_length)
+                gc_dist, fragment_dist, fragment_min, fragment_max, position_offset, read_length,
+                do_gc=do_gc, do_map=do_map)
 
     return segments
 
 
-def calculate_segment_gc_map_bias(gc_cumsum, mappability, gc_dist, fragment_dist, fragment_min, fragment_max, position_offset, read_length):
+def calculate_segment_gc_map_bias(gc_cumsum, mappability, gc_dist, fragment_dist, fragment_min, fragment_max, position_offset, read_length,
+        do_gc=True, do_map=True):
     """ Calculate GC/mappability bias
     """
     bias = 0.
@@ -274,7 +277,11 @@ def calculate_segment_gc_map_bias(gc_cumsum, mappability, gc_dist, fragment_dist
         len_prob = fragment_dist.pdf(fragment_length)
         
         # Calculate per position probability
-        prob = gc_prob * map_prob * len_prob
+        prob = len_prob
+        if do_gc:
+            prob = prob * gc_prob
+        if do_map:
+            prob = prob * map_prob
         
         bias += prob.sum()
 
