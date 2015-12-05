@@ -106,23 +106,63 @@ class ReadCountLikelihood(remixt.likelihood.ReadCountLikelihood):
 
 
 
-class PoissonLikelihood(remixt.likelihood.PoissonLikelihood, ReadCountLikelihood):
+class PoissonDistribution(remixt.likelihood.PoissonDistribution):
 
-    def _log_likelihood_unopt(self, x, mu):
-        """ Unoptimized version of _log_likelihood
+    def log_likelihood_unopt(self, x, mu):
+        """ Unoptimized version of log_likelihood
         """
         
         N = x.shape[0]
-        K = x.shape[1]
         
         ll = np.zeros((N,))
 
         for n in xrange(N):
             
-            for k in xrange(K):
+            ll[n] += x[n] * np.log(mu[n]) - mu[n] - gammaln(x[n] + 1)
                 
-                ll[n] += x[n,k] * np.log(mu[n,k]) - mu[n,k] - gammaln(x[n,k] + 1)
+        return ll
+
+
+    def log_likelihood_partial_mu_unopt(self, x, mu):
+        """ Unoptimized version of log_likelihood_partial_mu
+        """
+        
+        N = x.shape[0]
+
+        partial_mu = np.zeros((N,))
+        
+        for n in xrange(N):
+
+            partial_mu[n] = x[n] / mu[n] - 1.
                 
+        return partial_mu
+
+
+
+class PoissonLikelihood(ReadCountLikelihood,remixt.likelihood.PoissonLikelihood):
+
+    def __init__(self, **kwargs):
+        """ Poisson read count likelihood model.
+        """
+
+        super(PoissonLikelihood, self).__init__(**kwargs)
+
+        self.poisson = PoissonDistribution()
+
+
+    def _log_likelihood_unopt(self, x, l, cn):
+        """ Unoptimized version of _log_likelihood
+        """
+
+        N = x.shape[0]
+        K = x.shape[1]
+
+        mu = self.expected_read_count(l, cn)
+
+        ll = np.zeros((N,))
+        for k in xrange(K):
+            ll = ll + self.poisson.log_likelihood_unopt(x[:,k], mu[:,k])
+
         return ll
 
 
@@ -130,88 +170,137 @@ class PoissonLikelihood(remixt.likelihood.PoissonLikelihood, ReadCountLikelihood
         """ Unoptimized version of _log_likelihood_partial_mu
         """
 
-        mu = self.expected_read_count_unopt(l, cn)
-        
         N = x.shape[0]
         K = x.shape[1]
 
+        mu = self.expected_read_count(l, cn)
+
         partial_mu = np.zeros((N, K))
+        for k in xrange(K):
+            partial_mu[:,k] = self.poisson.log_likelihood_partial_mu_unopt(x[:,k], mu[:,k])
         
-        for n in xrange(N):
-
-            for k in range(K):
-
-                partial_mu[n,k] = x[n,k] / mu[n,k] - 1.
-                
         return partial_mu
 
 
 
-class NegBinLikelihood(remixt.likelihood.NegBinLikelihood, ReadCountLikelihood):
+class NegBinDistribution(remixt.likelihood.NegBinDistribution):
 
-    def _log_likelihood_unopt(self, x, mu):
-        """ Unoptimized version of _log_likelihood
+    def log_likelihood_unopt(self, x, mu):
+        """ Unoptimized version of log_likelihood
         """
         
         N = x.shape[0]
-        K = x.shape[1]
 
         ll = np.zeros((N,))
 
         for n in xrange(N):
             
-            for k in xrange(K):
+            nb_p = mu[n] / (self.r + mu[n])
             
-                nb_p = mu[n,k] / (self.r[k] + mu[n,k])
-                
-                ll[n] += gammaln(x[n,k] + self.r[k]) - gammaln(x[n,k] + 1) - gammaln(self.r[k])
-                ll[n] += x[n,k] * np.log(nb_p) + self.r[k] * np.log(1 - nb_p)
+            ll[n] += gammaln(x[n] + self.r) - gammaln(x[n] + 1) - gammaln(self.r)
+            ll[n] += x[n] * np.log(nb_p) + self.r * np.log(1 - nb_p)
                 
         return ll
 
 
-    def _log_likelihood_partial_mu_unopt(self, x, l, cn):
-        """ Unoptimized version of _log_likelihood_partial_mu
+    def log_likelihood_partial_mu_unopt(self, x, mu):
+        """ Unoptimized version of log_likelihood_partial_mu
         """
-
-        mu = self.expected_read_count_unopt(l, cn)
-        
-        q = np.array([[1, 0, 1], [0, 1, 1]])
         
         N = x.shape[0]
-        M = cn.shape[1]
-        K = x.shape[1]
 
-        partial_mu = np.zeros((N, K))
+        partial_mu = np.zeros((N,))
 
         for n in xrange(N):
 
-            for k in range(K):
-
-                partial_mu[n,k] = x[n,k] / mu[n,k] - (self.r[k] + x[n,k]) / (self.r[k] + mu[n,k])
+            partial_mu[n] = x[n] / mu[n] - (self.r + x[n]) / (self.r + mu[n])
 
         return partial_mu
 
 
-    def _log_likelihood_partial_r_unopt(self, x, mu):
-        """ Unoptimized version of _log_likelihood_partial_r
+    def log_likelihood_partial_r_unopt(self, x, mu):
+        """ Unoptimized version of log_likelihood_partial_r
         """
 
         r = self.r
         
         N = x.shape[0]
-        K = x.shape[1]
 
-        partial_r = np.zeros((N, K))
+        partial_r = np.zeros((N,))
 
         for n in xrange(N):
 
-            for k in range(K):
-
-                partial_r[n,k] = (digamma(r[k] + x[n,k]) - digamma(r[k]) + np.log(r[k]) + 1.
-                    - np.log(r[k] + mu[n,k]) - r[k] / (r[k] + mu[n,k])
-                    - x[n,k] / (r[k] + mu[n,k]))
+            partial_r[n] = (digamma(r + x[n]) - digamma(r) + np.log(r) + 1.
+                - np.log(r + mu[n]) - r / (r + mu[n])
+                - x[n] / (r + mu[n]))
 
         return partial_r
+
+
+
+class NegBinLikelihood(ReadCountLikelihood,remixt.likelihood.NegBinLikelihood):
+
+    def __init__(self, **kwargs):
+        """ Negative binomial read count likelihood model.
+
+        Attributes:
+            r (numpy.array): negative binomial read count over-dispersion
+
+        """
+
+        super(NegBinLikelihood, self).__init__(**kwargs)
+
+        self.negbin = [NegBinDistribution(), NegBinDistribution(), NegBinDistribution()]
+
+
+    def _log_likelihood_unopt(self, x, l, cn):
+        """ Unoptimized version of log_likelihood_partial_r
+        """
+        
+        N = x.shape[0]
+        K = x.shape[1]
+
+        mu = self.expected_read_count(l, cn)
+
+        ll = np.zeros((N,))
+        for k in xrange(K):
+            ll = ll + self.negbin[k].log_likelihood_unopt(x[:,k], mu[:,k])
+        
+        return ll
+
+
+    def _log_likelihood_partial_mu_unopt(self, x, l, cn):
+        """ Unoptimized version of _log_likelihood_partial_mu
+        """
+        
+        N = x.shape[0]
+        K = x.shape[1]
+
+        mu = self.expected_read_count(l, cn)
+
+        partial_mu = np.zeros((N, K))
+        for k in xrange(K):
+            partial_mu[:,k] = self.negbin[k].log_likelihood_partial_mu_unopt(x[:,k], mu[:,k])
+        
+        return partial_mu
+
+
+    def _log_likelihood_partial_r_unopt(self, x, l, cn):
+        """ Unoptimized version of _log_likelihood_partial_r
+        """
+
+        N = x.shape[0]
+        K = x.shape[1]
+
+        mu = self.expected_read_count(l, cn)
+
+        partial_r = np.zeros((N, K))
+        for k in xrange(K):
+            partial_r[:,k] = self.negbin[k].log_likelihood_partial_r_unopt(x[:,k], mu[:,k])
+        
+        return partial_r
+
+
+
 
 

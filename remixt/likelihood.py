@@ -33,7 +33,7 @@ def estimate_phi(x):
     """ Infer proportion of genotypable reads.
 
     Args:
-        x (numpy.array): observed major, minor, and total read counts
+        x (numpy.array): major, minor, and total read counts
 
     Returns:
         numpy.array: estimate of proportion of genotypable reads.
@@ -72,8 +72,8 @@ def calculate_mean_cn(h, x, l):
 
     Args:
         h (numpy.array): haploid read depths, h[0] for normal
-        x (numpy.array): observed major, minor, and total read counts
-        l (numpy.array): observed lengths of segments
+        x (numpy.array): major, minor, and total read counts
+        l (numpy.array): segment lengths
 
     Returns:
         numpy.array: N * L dim array, per segment per allele mean copy number
@@ -138,8 +138,8 @@ class ReadCountLikelihood(object):
         """ Add a mask for highly amplified regions.
 
         Args:
-            x (numpy.array): observed major, minor, and total read counts
-            l (numpy.array): observed lengths of segments
+            x (numpy.array): major, minor, and total read counts
+            l (numpy.array): segment lengths
             cn_max (int): max unmasked dominant copy number
 
         Returns:
@@ -175,8 +175,8 @@ class ReadCountLikelihood(object):
         """ Offline parameter inference.
 
         Args:
-            x (numpy.array): observed major, minor, and total read counts
-            l (numpy.array): observed lengths of segments
+            x (numpy.array): major, minor, and total read counts
+            l (numpy.array): segment lengths
 
         """
         
@@ -203,8 +203,8 @@ class ReadCountLikelihood(object):
         """Calculate expected major, minor and total read counts.
         
         Args:
-            l (numpy.array): length of segments
-            cn (numpy.array): copy number matrices of normal and tumour populations
+            l (numpy.array): segment lengths
+            cn (numpy.array): copy number state
         
         Returns:
             numpy.array: expected read depths
@@ -237,9 +237,9 @@ class ReadCountLikelihood(object):
         """ Evaluate log likelihood
         
         Args:
-            x (numpy.array): observed major, minor, and total read counts
-            l (numpy.array): observed lengths of segments
-            cn (numpy.array): copy number state of segments
+            x (numpy.array): major, minor, and total read counts
+            l (numpy.array): segment lengths
+            cn (numpy.array): copy number state
 
         Returns:
             numpy.array: log likelihood per segment
@@ -249,12 +249,10 @@ class ReadCountLikelihood(object):
         if not self.total_cn:
             x = x[:,0:2]
 
-        mu = self.expected_read_count(l, cn)
-
-        ll = self._log_likelihood(x, mu)
+        ll = self._log_likelihood(x, l, cn)
 
         for n in zip(*np.where(np.isnan(ll))):
-            raise ProbabilityError('ll is nan', n=n, x=x[n], cn=cn[n], l=l[n], mu=mu[n])
+            raise ProbabilityError('ll is nan', n=n, x=x[n], cn=cn[n], l=l[n])
 
         ll[np.where(np.any(cn < 0, axis=(-1, -2)))] = -np.inf
 
@@ -270,9 +268,9 @@ class ReadCountLikelihood(object):
         """ Evaluate partial derivative of log likelihood with respect to a parameter
         
         Args:
-            x (numpy.array): observed major, minor, and total read counts
-            l (numpy.array): observed lengths of segments
-            cn (numpy.array): copy number state of segments
+            x (numpy.array): major, minor, and total read counts
+            l (numpy.array): segment lengths
+            cn (numpy.array): copy number state
             param (str): parameter name
 
         Returns:
@@ -302,9 +300,9 @@ class ReadCountLikelihood(object):
         """ Evaluate partial derivative of log likelihood with respect to h
         
         Args:
-            x (numpy.array): measured major, minor, and total read counts
-            l (numpy.array): length of segments
-            cn (numpy.array): copy number matrices of normal and tumour populations
+            x (numpy.array): major, minor, and total read counts
+            l (numpy.array): segment lengths
+            cn (numpy.array): copy number state
         
         Returns:
             numpy.array: log likelihood derivative per segment per clone
@@ -317,9 +315,7 @@ class ReadCountLikelihood(object):
 
         """
 
-        mu = self.expected_read_count(l, cn)
-
-        partial_mu = self._log_likelihood_partial_mu(x, mu)
+        partial_mu = self._log_likelihood_partial_mu(x, l, cn)
         
         p = proportion_measureable_matrix(self.phi, total_cn=self.total_cn)
         q = self.allele_measurement_matrix()
@@ -333,9 +329,9 @@ class ReadCountLikelihood(object):
         """ Evaluate partial derivative of log likelihood with respect to phi
         
         Args:
-            x (numpy.array): measured major, minor, and total read counts
-            l (numpy.array): length of segments
-            cn (numpy.array): copy number matrices of normal and tumour populations
+            x (numpy.array): major, minor, and total read counts
+            l (numpy.array): segment lengths
+            cn (numpy.array): copy number state
         
         Returns:
             numpy.array: log likelihood derivative per segment per clone
@@ -350,9 +346,7 @@ class ReadCountLikelihood(object):
 
         h = self.h
 
-        mu = self.expected_read_count(l, cn)
-
-        partial_mu = self._log_likelihood_partial_mu(x, mu)
+        partial_mu = self._log_likelihood_partial_mu(x, l, cn)
 
         partial_phi = (partial_mu[:,0] * l * np.dot(cn[:,:,0], h) + 
             partial_mu[:,1] * l * np.dot(cn[:,:,1], h))
@@ -361,25 +355,17 @@ class ReadCountLikelihood(object):
 
 
 
-class PoissonLikelihood(ReadCountLikelihood):
+class PoissonDistribution(object):
 
-    def __init__(self, **kwargs):
-        """ Poisson read count likelihood model.
-
-        """
-
-        super(PoissonLikelihood, self).__init__(**kwargs)
-
-
-    def _log_likelihood(self, x, mu):
+    def log_likelihood(self, x, mu):
         """ Calculate the poisson read count log likelihood.
         
         Args:
-            x (numpy.array): measured major, minor, and total read counts
-            mu (numpy.array): expected major, minor, and total read counts
+            x (numpy.array): measured read counts
+            mu (numpy.array): expected read counts
         
         Returns:
-            float: log likelihood per segment
+            float: log likelihood
             
         The pmf of the negative binomial is:
         
@@ -394,27 +380,24 @@ class PoissonLikelihood(ReadCountLikelihood):
 
         ll = x * np.log(mu) - mu - gammaln(x + 1)
 
-        ll = np.sum(ll, axis=1)
-
         return ll
 
 
-    def _log_likelihood_partial_mu(self, x, mu):
+    def log_likelihood_partial_mu(self, x, mu):
         """ Calculate the partial derivative of the poisson read count log likelihood
-        with respect to mu[n,k]
+        with respect to mu
         
         Args:
-            x (numpy.array): measured major, minor, and total read counts
-            mu (numpy.array): expected major, minor, and total read counts
+            x (numpy.array): measured read counts
+            mu (numpy.array): expected read counts
         
         Returns:
-            numpy.array: N * M * K dim array, log likelihood derivative per segment
-                per clone per measurement
+            numpy.array: log likelihood derivative
             
         The partial derivative of the log pmf of the poisson with 
-        respect to mu[n,k] is:
+        respect to mu is:
         
-            x[n,k] / mu[n,k] - 1
+            x / mu - 1
 
         """
 
@@ -423,7 +406,71 @@ class PoissonLikelihood(ReadCountLikelihood):
         return partial_mu
 
 
-class NegBinLikelihood(ReadCountLikelihood):
+class PoissonLikelihood(ReadCountLikelihood):
+
+    def __init__(self, **kwargs):
+        """ Poisson read count likelihood model.
+
+        """
+
+        self.poisson = PoissonDistribution()
+
+        super(PoissonLikelihood, self).__init__(**kwargs)
+
+
+    def _log_likelihood(self, x, l, cn):
+        """ Calculate the poisson read count log likelihood.
+        
+        Args:
+            x (numpy.array): major, minor, and total read counts
+            l (numpy.array): segment lengths
+            cn (numpy.array): copy number state
+        
+        Returns:
+            float: log likelihood per segment
+
+        """
+
+        N = x.shape[0]
+        K = x.shape[1]
+
+        mu = self.expected_read_count(l, cn)
+
+        ll = np.zeros((N,))
+        for k in xrange(K):
+            ll = ll + self.poisson.log_likelihood(x[:,k], mu[:,k])
+
+        return ll
+
+
+    def _log_likelihood_partial_mu(self, x, l, cn):
+        """ Calculate the partial derivative of the poisson read count log likelihood
+        with respect to mu
+        
+        Args:
+            x (numpy.array): major, minor, and total read counts
+            l (numpy.array): segment lengths
+            cn (numpy.array): copy number state
+        
+        Returns:
+            numpy.array: log likelihood derivative per segment per measurement
+            
+        """
+
+        N = x.shape[0]
+        K = x.shape[1]
+
+        mu = self.expected_read_count(l, cn)
+
+        partial_mu = np.zeros((N, K))
+        for k in xrange(K):
+            partial_mu[:,k] = self.poisson.log_likelihood_partial_mu(x[:,k], mu[:,k])
+        
+        return partial_mu
+
+
+
+class NegBinDistribution(object):
 
     def __init__(self, **kwargs):
         """ Negative binomial read count likelihood model.
@@ -433,22 +480,7 @@ class NegBinLikelihood(ReadCountLikelihood):
 
         """
 
-        super(NegBinLikelihood, self).__init__(**kwargs)
-
-        self.param_partial_func['r'] = self._log_likelihood_partial_r
-
-        self.param_bounds['r'] = (0., np.inf)
-
-        self.param_per_segment['r'] = False
-
-
-    @property
-    def r(self):
-        return self._r
-    @r.setter
-    def r(self, value):
-        self._r = value.copy()
-        self._r[self._r < 0.] = 0.
+        self.r = 100.
 
 
     def estimate_parameters(self, x, l):
@@ -468,12 +500,12 @@ class NegBinLikelihood(ReadCountLikelihood):
         self.r = np.array([remixt.nb_overdispersion.infer_disperion(x[:,k], l*p[:,k]) for k in xrange(K)])
 
 
-    def _log_likelihood(self, x, mu):
+    def log_likelihood(self, x, mu):
         """ Calculate negative binomial read count log likelihood.
         
         Args:
-            x (numpy.array): measured major, minor, and total read counts
-            mu (numpy.array): expected major, minor, and total read counts
+            x (numpy.array): measured read counts
+            mu (numpy.array): expected read counts
         
         Returns:
             float: log likelihood per segment
@@ -495,26 +527,25 @@ class NegBinLikelihood(ReadCountLikelihood):
 
         ll = (gammaln(x + self.r) - gammaln(x + 1) - gammaln(self.r)
             + x * np.log(nb_p) + self.r * np.log(1 - nb_p))
-        ll = np.sum(ll, axis=1)
         
         return ll
 
 
-    def _log_likelihood_partial_mu(self, x, mu):
+    def log_likelihood_partial_mu(self, x, mu):
         """ Calculate the partial derivative of the negative binomial read count
-        log likelihood with respect to mu[n,k]
+        log likelihood with respect to mu
 
         Args:
-            x (numpy.array): measured major, minor, and total read counts
-            mu (numpy.array): expected major, minor, and total read counts
+            x (numpy.array): measured read counts
+            mu (numpy.array): expected read counts
         
         Returns:
-            numpy.array: log likelihood derivative per segment per clone
+            numpy.array: log likelihood derivative per segment
             
         The partial derivative of the log pmf of the negative binomial with 
-        respect to mu[n,k] is:
+        respect to mu is:
         
-            x[n,k] / mu[n,k] - (r[k] + x[n,k]) / (r[k] + mu[n,k])
+            x / mu - (r + x) / (r + mu)
 
         """
         
@@ -523,23 +554,23 @@ class NegBinLikelihood(ReadCountLikelihood):
         return partial_mu
 
 
-    def _log_likelihood_partial_r(self, x, mu):
+    def log_likelihood_partial_r(self, x, mu):
         """ Calculate the partial derivative of the negative binomial read count
-        log likelihood with respect to r[k]
+        log likelihood with respect to r
         
         Args:
-            x (numpy.array): measured major, minor, and total read counts
-            mu (numpy.array): expected major, minor, and total read counts
+            x (numpy.array): measured read counts
+            mu (numpy.array): expected read counts
         
         Returns:
-            numpy.array: log likelihood derivative per segment per clone
+            numpy.array: log likelihood derivative per segment
             
         The partial derivative of the log pmf of the negative binomial with 
-        respect to r[k] is:
+        respect to r is:
         
-            digamma(r[k] + x[n,k]) - digamma(r[k]) + log(r[k]) + 1
-                - log(r[k] + mu[n,k]) - r[k] / (r[k] + mu[n,k])
-                - x[n,k] / (r[k] + mu[n,k])
+            digamma(r + x) - digamma(r) + log(r) + 1
+                - log(r + mu) - r / (r + mu)
+                - x / (r + mu)
 
         """
 
@@ -548,6 +579,132 @@ class NegBinLikelihood(ReadCountLikelihood):
         partial_r = (digamma(r + x) - digamma(r) + np.log(r) + 1.
             - np.log(r + mu) - r / (r + mu)
             - x / (r + mu))
+        
+        return partial_r
+
+
+
+
+class NegBinLikelihood(ReadCountLikelihood):
+
+    def __init__(self, **kwargs):
+        """ Negative binomial read count likelihood model.
+
+        Attributes:
+            r (numpy.array): negative binomial read count over-dispersion
+
+        """
+
+        super(NegBinLikelihood, self).__init__(**kwargs)
+
+        self.param_partial_func['r'] = self._log_likelihood_partial_r
+
+        self.param_bounds['r'] = (0., np.inf)
+
+        self.param_per_segment['r'] = False
+
+        self.negbin = [NegBinDistribution(), NegBinDistribution(), NegBinDistribution()]
+
+
+    @property
+    def r(self):
+        return np.array([nb.r for nb in self.negbin])
+    @r.setter
+    def r(self, value):
+        for idx, val in enumerate(value):
+            self.negbin[idx].r = max(0., val)
+
+
+    def estimate_parameters(self, x, l):
+        """ Offline parameter inference.
+
+        Args:
+            x (numpy.array): observed major, minor, and total read counts
+            l (numpy.array): observed lengths of segments
+
+        """
+        
+        super(NegBinLikelihood, self).estimate_parameters(x, l)
+
+        K = (2, 3)[self.total_cn]
+        p = proportion_measureable_matrix(self.phi, total_cn=self.total_cn)
+        
+        self.r = np.array([remixt.nb_overdispersion.infer_disperion(x[:,k], l*p[:,k]) for k in xrange(K)])
+
+
+    def _log_likelihood(self, x, l, cn):
+        """ Calculate negative binomial read count log likelihood.
+        
+        Args:
+            x (numpy.array): major, minor, and total read counts
+            l (numpy.array): segment lengths
+            cn (numpy.array): copy number state
+        
+        Returns:
+            float: log likelihood per segment
+
+        """
+        
+        N = x.shape[0]
+        K = x.shape[1]
+
+        mu = self.expected_read_count(l, cn)
+
+        ll = np.zeros((N,))
+        for k in xrange(K):
+            ll = ll + self.negbin[k].log_likelihood(x[:,k], mu[:,k])
+        
+        return ll
+
+
+    def _log_likelihood_partial_mu(self, x, l, cn):
+        """ Calculate the partial derivative of the negative binomial read count
+        log likelihood with respect to mu
+
+        Args:
+            x (numpy.array): major, minor, and total read counts
+            l (numpy.array): segment lengths
+            cn (numpy.array): copy number state
+        
+        Returns:
+            numpy.array: log likelihood derivative per segment per measurement
+
+        """
+        
+        N = x.shape[0]
+        K = x.shape[1]
+
+        mu = self.expected_read_count(l, cn)
+
+        partial_mu = np.zeros((N, K))
+        for k in xrange(K):
+            partial_mu[:,k] = self.negbin[k].log_likelihood_partial_mu(x[:,k], mu[:,k])
+        
+        return partial_mu
+
+
+    def _log_likelihood_partial_r(self, x, l, cn):
+        """ Calculate the partial derivative of the negative binomial read count
+        log likelihood with respect to r
+        
+        Args:
+            x (numpy.array): major, minor, and total read counts
+            l (numpy.array): segment lengths
+            cn (numpy.array): copy number state
+        
+        Returns:
+            numpy.array: log likelihood derivative per segment per measurement
+            
+        """
+
+        N = x.shape[0]
+        K = x.shape[1]
+
+        mu = self.expected_read_count(l, cn)
+
+        partial_r = np.zeros((N, K))
+        for k in xrange(K):
+            partial_r[:,k] = self.negbin[k].log_likelihood_partial_r(x[:,k], mu[:,k])
         
         return partial_r
 

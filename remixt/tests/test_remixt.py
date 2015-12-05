@@ -172,7 +172,7 @@ class remixt_unittest(unittest.TestCase):
 
         # Build cn list using the method from CopyNumberModel
         built_cns = set()
-        for cn in model.build_hmm_cns():
+        for cn in model.build_cn_states():
             cn_tuple = list()
             for m in xrange(3):
                 for ell in xrange(2):
@@ -194,52 +194,6 @@ class remixt_unittest(unittest.TestCase):
                         num_cns += 1
 
         self.assertTrue(num_cns == len(built_cns))
-
-
-    def test_wildcard_cn(self):
-
-        x, cn, h, l, phi = self.generate_tiny_data()
-
-        N = l.shape[0]
-        M = h.shape[0]
-
-        emission = likelihood.PoissonLikelihood(total_cn=False)
-        emission.h = h
-        emission.phi = phi
-
-        prior = cn_model.CopyNumberPrior(N, M, self.uniform_cn_prior())
-
-        model = cn_model.HiddenMarkovModel(N, M, emission, prior)
-        model.set_observed_data(x, l)
-        model.wildcard_cn_max = 2
-        model.cn_dev_max = 1
-        model.cn_max = 0
-
-        # Build cn list using the method from CopyNumberModel
-        built_cns = [set() for _ in xrange(x.shape[0])]
-        for cn in model.build_wildcard_cns():
-            for n in xrange(x.shape[0]):
-                built_cns[n].add(tuple(cn[n].flatten().astype(int)))
-
-        # Build the naive way
-        p = np.vstack([phi, phi, np.ones(phi.shape)]).T
-        for n in xrange(x.shape[0]):
-            num_cns = 0
-            h_t = ((x[n,0:2] / p[n,0:2]).T / l[n]).T
-            dom_cn = (h_t - h[0]) / h[1:].sum()
-            dom_cn = dom_cn.round().astype(int)
-            for b1 in xrange(2+1):
-                b1 += dom_cn[0] - 1
-                for b2 in xrange(2+1):
-                    b2 += dom_cn[1] - 1
-                    for d1 in xrange(-1, 1+1):
-                        for d2 in xrange(-1, 1+1):
-                            cn_test = np.array([1, 1, b1, b2, b1+d1, b2+d2])
-                            cn_test[cn_test < 0] += 100
-                            self.assertIn(tuple(cn_test.flatten()), built_cns[n])
-                            num_cns += 1
-
-            self.assertTrue(num_cns == len(built_cns[n]))
 
 
     def test_simple_genome_graph(self):

@@ -62,6 +62,19 @@ class likelihood_unittest(unittest.TestCase):
         return cn, h, l, phi, r, x
 
 
+    def generate_count_data(self):
+
+        N = 100
+        r = 75.
+
+        mu = np.random.uniform(low=100000, high=1000000, size=N)
+
+        nb_p = mu / (r + mu)
+        x = np.random.negative_binomial(r, 1.-nb_p)
+
+        return mu, x
+
+
     def test_expected_read_count_opt(self):
 
         for total_cn in (True, False):
@@ -99,41 +112,30 @@ class likelihood_unittest(unittest.TestCase):
 
     def test_log_likelihood_cn_negbin_opt(self):
 
-        for total_cn in (True, False):
-            cn, h, l, phi, r, x = self.generate_simple_data(total_cn)
+        mu, x = self.generate_count_data()
 
-            emission = likelihood_unopt.NegBinLikelihood(total_cn=total_cn)
-            emission.h = h
-            emission.phi = phi
-            emission.r = r
+        dist = likelihood_unopt.NegBinDistribution()
 
-            mu = emission.expected_read_count_unopt(l, cn)
+        unopt = dist.log_likelihood_unopt(x, mu)
+        opt = dist.log_likelihood(x, mu)
 
-            unopt = emission._log_likelihood_unopt(x, mu)
-            opt = emission._log_likelihood(x, mu)
+        error = np.sum(unopt - opt)
 
-            error = np.sum(unopt - opt)
-
-            self.assertAlmostEqual(error, 0.0, places=3)
+        self.assertAlmostEqual(error, 0.0, places=3)
 
 
     def test_log_likelihood_cn_poisson_opt(self):
 
-        for total_cn in (True, False):
-            cn, h, l, phi, r, x = self.generate_simple_data(total_cn)
+        mu, x = self.generate_count_data()
 
-            emission = likelihood_unopt.PoissonLikelihood(total_cn=total_cn)
-            emission.h = h
-            emission.phi = phi
+        dist = likelihood_unopt.PoissonDistribution()
 
-            mu = emission.expected_read_count_unopt(l, cn)
+        unopt = dist.log_likelihood_unopt(x, mu)
+        opt = dist.log_likelihood(x, mu)
 
-            unopt = emission._log_likelihood_unopt(x, mu)
-            opt = emission._log_likelihood(x, mu)
+        error = np.sum(unopt - opt)
 
-            error = np.sum(unopt - opt)
-
-            self.assertAlmostEqual(error, 0.0, places=3)
+        self.assertAlmostEqual(error, 0.0, places=3)
 
 
     def test_log_likelihood_cn_negbin_partial_h_opt(self):
@@ -156,21 +158,16 @@ class likelihood_unittest(unittest.TestCase):
 
     def test_log_likelihood_cn_negbin_partial_r_opt(self):
 
-        for total_cn in (True, False):
-            cn, h, l, phi, r, x = self.generate_simple_data(total_cn)
+        mu, x = self.generate_count_data()
 
-            emission = likelihood_unopt.NegBinLikelihood(total_cn=total_cn)
-            emission.h = h
-            emission.phi = phi
-            emission.r = r
+        dist = likelihood_unopt.NegBinDistribution()
 
-            mu = emission.expected_read_count(l, cn)
-            unopt = emission._log_likelihood_partial_r_unopt(x, mu)
-            opt = emission._log_likelihood_partial_r(x, mu)
+        unopt = dist.log_likelihood_partial_r_unopt(x, mu)
+        opt = dist.log_likelihood_partial_r(x, mu)
 
-            error = np.sum(unopt - opt)
+        error = np.sum(unopt - opt)
 
-            self.assertAlmostEqual(error, 0.0, places=3)
+        self.assertAlmostEqual(error, 0.0, places=3)
 
 
     def test_log_likelihood_cn_poisson_partial_h_opt(self):
@@ -239,27 +236,22 @@ class likelihood_unittest(unittest.TestCase):
 
     def test_log_likelihood_cn_negbin_partial_r(self):
 
-        for total_cn in (True, False):
-            cn, h, l, phi, r, x = self.generate_simple_data(total_cn)
+        mu, x = self.generate_count_data()
 
-            def evaluate_log_likelihood(r, x, l, cn, phi):
-                emission = likelihood.NegBinLikelihood(total_cn=total_cn)
-                emission.h = h
-                emission.phi = phi
-                emission.r = r
-                return emission.log_likelihood(x, l, cn)
+        dist = likelihood_unopt.NegBinDistribution()
 
-            def evaluate_log_likelihood_partial_r(r, x, l, cn, phi):
-                emission = likelihood.NegBinLikelihood(total_cn=total_cn)
-                emission.h = h
-                emission.phi = phi
-                emission.r = r
-                mu = emission.expected_read_count(l, cn)
-                return emission._log_likelihood_partial_r(x, mu)
+        def evaluate_log_likelihood(r):
+            dist.r = r
+            return dist.log_likelihood(x, mu)
 
-            assert_grad_correct(evaluate_log_likelihood,
-                evaluate_log_likelihood_partial_r, r,
-                x, l, cn, phi)
+        def evaluate_log_likelihood_partial_r(r):
+            dist.r = r
+            return dist.log_likelihood_partial_r(x, mu)[:,None]
+
+        r = np.array([75.])
+
+        assert_grad_correct(evaluate_log_likelihood,
+            evaluate_log_likelihood_partial_r, r)
 
 
     def test_log_likelihood_cn_poisson_partial_h(self):

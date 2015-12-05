@@ -92,7 +92,7 @@ class segalg_unittest(unittest.TestCase):
             'idx_2':[1, 1, 2, 3, 4, 4],
         })
 
-        df_reindex = remixt.simulations.pipeline.reindex_segments(df_1, df_2)
+        df_reindex = remixt.segalg.reindex_segments(df_1, df_2)
 
         df_reindex = df_reindex.reindex(columns=df_result.columns)
 
