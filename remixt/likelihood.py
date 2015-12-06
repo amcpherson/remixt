@@ -371,7 +371,7 @@ class PoissonDistribution(object):
         
             mu^x * e^-mu / x!
             
-        The log likelihood with respect to mu is thus:
+        The log likelihood is thus:
         
             x * log(mu) - mu - log(x!)
         """
@@ -515,9 +515,9 @@ class NegBinDistribution(object):
             C(x + r - 1, x) * p^x * (1-p)^r
             
         where p = mu / (r + mu), with mu the mean of the distribution.  The log
-        likelihood with respect to mu is thus:
+        likelihood is thus:
         
-            log(G(x+r)) - log(x!) - log(G(r)) + x * log(p) + r * log(1 - p)
+            log(G(x+r)) - log(G(x+1)) - log(G(r)) + x * log(p) + r * log(1 - p)
         """
         
         nb_p = mu / (self.r + mu)
