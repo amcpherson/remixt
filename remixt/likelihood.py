@@ -3,6 +3,7 @@ import pandas as pd
 import scipy
 import scipy.misc
 from scipy.special import gammaln
+from scipy.special import betaln
 from scipy.special import digamma
 
 import remixt.nb_overdispersion
@@ -584,7 +585,6 @@ class NegBinDistribution(object):
 
 
 
-
 class NegBinLikelihood(ReadCountLikelihood):
 
     def __init__(self, **kwargs):
@@ -710,5 +710,144 @@ class NegBinLikelihood(ReadCountLikelihood):
 
 
 
+class BetaBinDistribution(object):
+
+    def __init__(self, **kwargs):
+        """ Beta binomial allele counts likelihood model.
+
+        Attributes:
+            M (numpy.array): beta binomial allele counts over-dispersion
+
+        """
+
+        self.M = 100.
+
+
+    def log_likelihood(self, x, p):
+        """ Calculate beta binomial allele count log likelihood.
+        
+        Args:
+            x (numpy.array): measured major, minor read counts
+            p (numpy.array): expected minor allele fraction
+        
+        Returns:
+            float: log likelihood per segment
+            
+        The pmf of the beta binomial is:
+        
+            C(n, k) * B(k + M * p, n - k + M * (1 - p)) / B(M * p, M * (1 - p))
+
+        Where p=mu[1]/(mu[0]+mu[1]), k=x[1], n=x[0]+x[1], and M is the over-dispersion
+        parameter.
+
+        The log likelihood is thus:
+        
+            log(G(n+1)) - log(G(k+1)) - log(G(n-k+1))
+                + log(G(k + M * p)) + log(G(n - k + M * (1 - p)))
+                - log(G(n + M))
+                - log(G(M * p)) - log(G(M * (1 - p)))
+                + log(G(M))
+
+        """
+
+        k = x[:,1]
+        n = x[:,0] + x[:,1]
+        M = self.M
+
+        ll = (gammaln(n+1) - gammaln(k+1) - gammaln(n-k+1)
+            + gammaln(k + M * p) + gammaln(n - k + M * (1 - p))
+            - gammaln(n + M)
+            - gammaln(M * p) - gammaln(M * (1 - p))
+            + gammaln(M))
+        
+        return ll
+
+
+    def log_likelihood_partial_p(self, x, p):
+        """ Calculate the partial derivative of the beta binomial allele count
+        log likelihood with respect to p
+
+        Args:
+            x (numpy.array): measured major, minor, and total read counts
+            p (numpy.array): expected minor allele fraction
+        
+        Returns:
+            numpy.array: log likelihood derivative per segment per clone
+
+        The log likelihood of the beta binomial in terms of p, and with beta
+        functions expanded is:
+
+            log(G(k + M * p))
+                + log(G(n - k + M * (1 - p)))
+                - log(G(M * p))
+                - log(G(M * (1 - p)))
+
+        The partial derivative of the log pmf of the beta binomial with 
+        respect to p is:
+
+            M * digamma(k + M * p)
+                + (-M) * digamma(n - k + M * (1 - p))
+                - M * digamma(M * p)
+                - (-M) * digamma(M * (1 - p))
+
+        """
+
+        k = x[:,1]
+        n = x[:,0] + x[:,1]
+        M = self.M
+
+        partial_p = (M * digamma(k + M * p)
+            + (-M) * digamma(n - k + M * (1 - p))
+            - M * digamma(M * p)
+            - (-M) * digamma(M * (1 - p)))
+        
+        return partial_p
+
+
+    def log_likelihood_partial_M(self, x, p):
+        """ Calculate the partial derivative of the beta binomial allele count
+        log likelihood with respect to p
+
+        Args:
+            x (numpy.array): measured major, minor, and total read counts
+            p (numpy.array): expected minor allele fraction
+        
+        Returns:
+            numpy.array: log likelihood derivative per segment per clone
+
+        The log likelihood of the beta binomial in terms of M, and with beta
+        functions expanded is:
+
+            log(G(k + M * p))
+                + log(G(n - k + M * (1 - p)))
+                - log(G(n + M))
+                - log(G(M * p))
+                - log(G(M * (1 - p)))
+                + log(G(M))
+
+        The partial derivative of the log pmf of the beta binomial with 
+        respect to p is:
+
+            p * digamma(k + M * p)
+                + (1 - p) * digamma(n - k + M * (1 - p))
+                - digamma(n + M)
+                - p * digamma(M * p)
+                - (1 - p) * digamma(M * (1 - p))
+                + digamma(M)
+
+        """
+
+        k = x[:,1]
+        n = x[:,0] + x[:,1]
+        M = self.M
+
+        partial_M = (p * digamma(k + M * p)
+            + (1 - p) * digamma(n - k + M * (1 - p))
+            - digamma(n + M)
+            - p * digamma(M * p)
+            - (1 - p) * digamma(M * (1 - p))
+            + digamma(M))
+
+        return partial_M
 
 

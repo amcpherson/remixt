@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import scipy
 import scipy.optimize
+from scipy.special import gammaln, betaln
 import statsmodels.tools.numdiff
 
 import remixt.simulations.simple as sim_simple
@@ -73,6 +74,16 @@ class likelihood_unittest(unittest.TestCase):
         x = np.random.negative_binomial(r, 1.-nb_p)
 
         return mu, x
+
+
+    def generate_allele_data(self):
+
+        N = 100
+
+        p = np.random.uniform(low=0.01, high=0.99, size=N)
+        x = np.random.uniform(low=10000, high=50000, size=(N,2))
+
+        return p, x
 
 
     def test_expected_read_count_opt(self):
@@ -274,6 +285,72 @@ class likelihood_unittest(unittest.TestCase):
             assert_grad_correct(evaluate_log_likelihood,
                 evaluate_log_likelihood_partial_h, h,
                 x, l, cn, phi)
+
+
+    def test_log_likelihood_cn_betabin_likelihood(self):
+
+        p, x = self.generate_allele_data()
+
+        k = x[:,1]
+        n = x[:,0] + x[:,1]
+
+        M = 123.
+        a = M * p
+        b = M - M * p
+
+        #
+        # Beta-binomial
+        # comb(n,k) * B(k+a, n-k+b) / B(a,b)
+        #
+
+        expected = (gammaln(n+1)
+            - gammaln(k+1)
+            - gammaln(n-k+1)
+            + betaln(k+a, n-k+b)
+            - betaln(a,b))
+
+        dist = likelihood.BetaBinDistribution()
+        dist.M = M
+
+        calculated = dist.log_likelihood(x, p)
+
+        np.testing.assert_almost_equal(expected, calculated, 5)
+
+
+    def test_log_likelihood_cn_betabin_partial_p(self):
+
+        p, x = self.generate_allele_data()
+
+        dist = likelihood.BetaBinDistribution()
+
+        def evaluate_log_likelihood(p):
+            return dist.log_likelihood(x, p).sum()
+
+        def evaluate_log_likelihood_partial_p(p):
+            return dist.log_likelihood_partial_p(x, p)
+
+        assert_grad_correct(evaluate_log_likelihood,
+            evaluate_log_likelihood_partial_p, p)
+
+
+    def test_log_likelihood_cn_betabin_partial_M(self):
+
+        p, x = self.generate_allele_data()
+
+        dist = likelihood.BetaBinDistribution()
+
+        def evaluate_log_likelihood(M):
+            dist.M = M
+            return dist.log_likelihood(x, p)
+
+        def evaluate_log_likelihood_partial_M(M):
+            dist.M = M
+            return dist.log_likelihood_partial_M(x, p)[:,None]
+
+        M = np.array([50.])
+
+        assert_grad_correct(evaluate_log_likelihood,
+            evaluate_log_likelihood_partial_M, M)
 
 
 if __name__ == '__main__':
