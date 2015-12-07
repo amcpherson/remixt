@@ -14,6 +14,8 @@ import remixt.simulations.simple as sim_simple
 import remixt.simulations.experiment as sim_experiment
 import remixt.likelihood as likelihood
 import remixt.tests.unopt.likelihood as likelihood_unopt
+import remixt.likelihood
+import remixt.paramlearn
 
 
 np.random.seed(2014)
@@ -287,34 +289,22 @@ class likelihood_unittest(unittest.TestCase):
                 x, l, cn, phi)
 
 
-    def test_log_likelihood_cn_betabin_likelihood(self):
+    def test_learn_negbin_r_partial(self):
 
-        p, x = self.generate_allele_data()
+        N = 1000
 
-        k = x[:,1]
-        n = x[:,0] + x[:,1]
+        l = np.random.uniform(low=100000, high=1000000, size=N)
+        x = np.random.uniform(low=0.02, high=0.1, size=N) * l
 
-        M = 123.
-        a = M * p
-        b = M - M * p
+        negbin = remixt.likelihood.NegBinDistribution()
 
-        #
-        # Beta-binomial
-        # comb(n,k) * B(k+a, n-k+b) / B(a,b)
-        #
+        g0 = remixt.paramlearn._sum_adjacent(x / l) / 2.
+        r0 = 100.
+        param0 = np.concatenate([g0, [r0]])
 
-        expected = (gammaln(n+1)
-            - gammaln(k+1)
-            - gammaln(n-k+1)
-            + betaln(k+a, n-k+b)
-            - betaln(a,b))
-
-        dist = likelihood.BetaBinDistribution()
-        dist.M = M
-
-        calculated = dist.log_likelihood(x, p)
-
-        np.testing.assert_almost_equal(expected, calculated, 5)
+        assert_grad_correct(remixt.paramlearn.nll_negbin,
+            remixt.paramlearn.nll_negbin_partial_param, param0,
+            negbin, x, l)
 
 
     def test_log_likelihood_cn_betabin_partial_p(self):

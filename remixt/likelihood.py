@@ -6,7 +6,6 @@ from scipy.special import gammaln
 from scipy.special import betaln
 from scipy.special import digamma
 
-import remixt.nb_overdispersion
 import remixt.utils
 
 
@@ -31,7 +30,7 @@ class ProbabilityError(ValueError):
 
 
 def estimate_phi(x):
-    """ Infer proportion of genotypable reads.
+    """ Estimate proportion of genotypable reads.
 
     Args:
         x (numpy.array): major, minor, and total read counts
@@ -69,7 +68,7 @@ def proportion_measureable_matrix(phi, total_cn=True):
 
 
 def calculate_mean_cn(h, x, l):
-    """ Infer proportion of genotypable reads.
+    """ Calculate the mean raw copy number.
 
     Args:
         h (numpy.array): haploid read depths, h[0] for normal
@@ -172,8 +171,8 @@ class ReadCountLikelihood(object):
         self._phi[self._phi < 0.] = 0.
 
 
-    def estimate_parameters(self, x, l):
-        """ Offline parameter inference.
+    def learn_parameters(self, x, l):
+        """ Offline parameter learning.
 
         Args:
             x (numpy.array): major, minor, and total read counts
@@ -484,23 +483,6 @@ class NegBinDistribution(object):
         self.r = 100.
 
 
-    def estimate_parameters(self, x, l):
-        """ Offline parameter inference.
-
-        Args:
-            x (numpy.array): observed major, minor, and total read counts
-            l (numpy.array): observed lengths of segments
-
-        """
-        
-        super(NegBinLikelihood, self).estimate_parameters(x, l)
-
-        K = (2, 3)[self.total_cn]
-        p = proportion_measureable_matrix(self.phi, total_cn=self.total_cn)
-        
-        self.r = np.array([remixt.nb_overdispersion.infer_disperion(x[:,k], l*p[:,k]) for k in xrange(K)])
-
-
     def log_likelihood(self, x, mu):
         """ Calculate negative binomial read count log likelihood.
         
@@ -615,8 +597,8 @@ class NegBinLikelihood(ReadCountLikelihood):
             self.negbin[idx].r = max(0., val)
 
 
-    def estimate_parameters(self, x, l):
-        """ Offline parameter inference.
+    def learn_parameters(self, x, l):
+        """ Offline parameter learning.
 
         Args:
             x (numpy.array): observed major, minor, and total read counts
@@ -624,12 +606,10 @@ class NegBinLikelihood(ReadCountLikelihood):
 
         """
         
-        super(NegBinLikelihood, self).estimate_parameters(x, l)
+        super(NegBinLikelihood, self).learn_parameters(x, l)
 
-        K = (2, 3)[self.total_cn]
-        p = proportion_measureable_matrix(self.phi, total_cn=self.total_cn)
-        
-        self.r = np.array([remixt.nb_overdispersion.infer_disperion(x[:,k], l*p[:,k]) for k in xrange(K)])
+        for negbin in self.negbin:
+            remixt.paramlearn.learn_negbin_r_adjacent(negbin, x, l)
 
 
     def _log_likelihood(self, x, l, cn):

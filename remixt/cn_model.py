@@ -16,7 +16,6 @@ from hmmlearn._hmmc import _forward as hmm_forward
 from hmmlearn._hmmc import _backward as hmm_backward
 
 import remixt.genome_graph
-import remixt.nb_overdispersion
 import remixt.utils
 import remixt.em
 
