@@ -46,24 +46,18 @@ def estimate_phi(x):
 
 
 
-def proportion_measureable_matrix(phi, total_cn=True):
+def proportion_measureable_matrix(phi):
     """ Proportion reads measureable matrix.
 
     Args:
         phi (numpy.array): estimate of proportion of genotypable reads.    
-
-    KwArgs:
-        total_cn (boolean): include proportion for total copy number
 
     Returns:
         numpy.array: N * K dim array, segment to measurement transform
 
     """
 
-    if total_cn:
-        return np.vstack([phi, phi, np.ones(phi.shape)]).T
-    else:
-        return np.vstack([phi, phi]).T
+    return np.vstack([phi, phi, np.ones(phi.shape)]).T
 
 
 
@@ -81,7 +75,7 @@ def calculate_mean_cn(h, x, l):
     """
 
     phi = estimate_phi(x)
-    p = proportion_measureable_matrix(phi, total_cn=True)
+    p = proportion_measureable_matrix(phi)
 
     # Avoid divide by zero
     x = x + 1e-16
@@ -108,7 +102,6 @@ class ReadCountLikelihood(object):
 
         KwArgs:
             min_length_likelihood (int): minimum length for likelihood calculation
-            total_cn (boolean): model total copy number
 
         Attributes:
             h (numpy.array): haploid read depths, h[0] for normal
@@ -117,7 +110,6 @@ class ReadCountLikelihood(object):
         """
 
         self.min_length_likelihood = kwargs.get('min_length_likelihood', 10000)
-        self.total_cn = kwargs.get('total_cn', True)
 
         self.param_partial_func = dict()
         self.param_partial_func['h'] = self._log_likelihood_partial_h
@@ -193,9 +185,6 @@ class ReadCountLikelihood(object):
 
         q = np.array([[1, 0, 1], [0, 1, 1]])
 
-        if not self.total_cn:
-            q = q[:,0:2]
-
         return q
 
 
@@ -211,7 +200,7 @@ class ReadCountLikelihood(object):
         """
         
         h = self.h
-        p = proportion_measureable_matrix(self.phi, total_cn=self.total_cn)
+        p = proportion_measureable_matrix(self.phi)
         q = self.allele_measurement_matrix()
 
         gamma = np.sum(cn * np.vstack([h, h]).T, axis=-2)
@@ -246,9 +235,6 @@ class ReadCountLikelihood(object):
 
         """
 
-        if not self.total_cn:
-            x = x[:,0:2]
-
         ll = self._log_likelihood(x, l, cn)
 
         for n in zip(*np.where(np.isnan(ll))):
@@ -277,9 +263,6 @@ class ReadCountLikelihood(object):
             numpy.array: partial derivative of log likelihood per segment per clone
 
         """
-
-        if not self.total_cn:
-            x = x[:,0:2]
 
         mu = self.expected_read_count(l, cn)
 
@@ -317,7 +300,7 @@ class ReadCountLikelihood(object):
 
         partial_mu = self._log_likelihood_partial_mu(x, l, cn)
         
-        p = proportion_measureable_matrix(self.phi, total_cn=self.total_cn)
+        p = proportion_measureable_matrix(self.phi)
         q = self.allele_measurement_matrix()
 
         partial_h = np.einsum('...l,...jk,...kl,...l,...->...j', partial_mu, cn, q, p, l)

@@ -22,7 +22,7 @@ np.random.seed(2014)
 
 class remixt_unittest(unittest.TestCase):
 
-    def generate_simple_data(self, total_cn, N=100, M=3):
+    def generate_simple_data(self, N=100, M=3):
 
         r = np.array([75, 75, 75])
 
@@ -43,11 +43,6 @@ class remixt_unittest(unittest.TestCase):
 
         x = np.array([np.random.negative_binomial(r, 1.-a) for a in nb_p])
         x = x.reshape(nb_p.shape)
-
-        if not total_cn:
-            p = p[:,0:2]
-            r = r[0:2]
-            x = x[:,0:2]
 
         return cn, h, l, phi, r, x
 
@@ -135,31 +130,30 @@ class remixt_unittest(unittest.TestCase):
         
     def test_evaluate_q_derivative(self):
 
-        for total_cn in (True, False):
-            cn, h, l, phi, r, x = self.generate_simple_data(total_cn)
+        cn, h, l, phi, r, x = self.generate_simple_data()
 
-            emission = likelihood.NegBinLikelihood(total_cn=total_cn)
-            emission.h = h
-            emission.phi = phi
-            emission.r = r
+        emission = likelihood.NegBinLikelihood()
+        emission.h = h
+        emission.phi = phi
+        emission.r = r
 
-            N = l.shape[0]
-            M = h.shape[0]
+        N = l.shape[0]
+        M = h.shape[0]
 
-            prior = cn_model.CopyNumberPrior(N, M, self.perfect_cn_prior(cn))
-            prior.set_lengths(l)
-            
-            model = cn_model.HiddenMarkovModel(N, M, emission, prior)
-            model.set_observed_data(x, l)
+        prior = cn_model.CopyNumberPrior(N, M, self.perfect_cn_prior(cn))
+        prior.set_lengths(l)
+        
+        model = cn_model.HiddenMarkovModel(N, M, emission, prior)
+        model.set_observed_data(x, l)
 
-            log_posterior, cns, resps = model.posterior_marginals()
+        log_posterior, cns, resps = model.posterior_marginals()
 
-            estimator = em.ExpectationMaximizationEstimator()
+        estimator = em.ExpectationMaximizationEstimator()
 
-            grad_error = scipy.optimize.check_grad(estimator.evaluate_q, estimator.evaluate_q_derivative,
-                h, model, 'h', cns, resps)
+        grad_error = scipy.optimize.check_grad(estimator.evaluate_q, estimator.evaluate_q_derivative,
+            h, model, 'h', cns, resps)
 
-            self.assertAlmostEqual(grad_error, 0.0, places=-1)
+        self.assertAlmostEqual(grad_error, 0.0, places=-1)
 
 
     def test_build_cn(self):
@@ -202,7 +196,7 @@ class remixt_unittest(unittest.TestCase):
 
         cn_true = cn.copy()
 
-        emission = likelihood.PoissonLikelihood(total_cn=False)
+        emission = likelihood.NegBinLikelihood()
         emission.h = h
         emission.phi = phi
 
@@ -245,7 +239,7 @@ class remixt_unittest(unittest.TestCase):
 
         print 'h', experiment.h
 
-        emission = likelihood.NegBinLikelihood(total_cn=False)
+        emission = likelihood.NegBinLikelihood()
         emission.h = experiment.h
         emission.phi = experiment.phi
         emission.r = experiment.negbin_r[0:2]
@@ -279,7 +273,7 @@ class remixt_unittest(unittest.TestCase):
 
         print 'r', experiment.negbin_r
 
-        emission = likelihood.NegBinLikelihood(total_cn=True)
+        emission = likelihood.NegBinLikelihood()
         emission.h = experiment.h
         emission.phi = experiment.phi
         emission.r = experiment.negbin_r
@@ -307,7 +301,7 @@ class remixt_unittest(unittest.TestCase):
 
         print 'phi', experiment.phi
 
-        emission = likelihood.NegBinLikelihood(total_cn=True)
+        emission = likelihood.NegBinLikelihood()
         emission.h = experiment.h
         emission.phi = experiment.phi
         emission.r = experiment.negbin_r

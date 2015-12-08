@@ -13,10 +13,10 @@ class ReadCountLikelihood(remixt.likelihood.ReadCountLikelihood):
 
         N = cn.shape[0]
         M = cn.shape[1]
-        K = (2, 3)[self.total_cn]
+        K = 3
 
         h = self.h
-        p = remixt.likelihood.proportion_measureable_matrix(self.phi, total_cn=self.total_cn)
+        p = remixt.likelihood.proportion_measureable_matrix(self.phi)
 
         x = np.zeros((N, K))
         
@@ -32,9 +32,7 @@ class ReadCountLikelihood(remixt.likelihood.ReadCountLikelihood):
             
             x[n,0] = l[n] * p[n,0] * gamma[0]
             x[n,1] = l[n] * p[n,1] * gamma[1]
-
-            if self.total_cn:
-                x[n,2] = l[n] * p[n,2] * (gamma[0] + gamma[1])
+            x[n,2] = l[n] * p[n,2] * (gamma[0] + gamma[1])
             
         x += 1e-16
 
@@ -53,7 +51,7 @@ class ReadCountLikelihood(remixt.likelihood.ReadCountLikelihood):
 
         partial_mu = self._log_likelihood_partial_mu_unopt(x, l, cn)
         
-        p = remixt.likelihood.proportion_measureable_matrix(self.phi, total_cn=self.total_cn)
+        p = remixt.likelihood.proportion_measureable_matrix(self.phi)
         q = self.allele_measurement_matrix()
         
         N = x.shape[0]
@@ -82,7 +80,7 @@ class ReadCountLikelihood(remixt.likelihood.ReadCountLikelihood):
         partial_mu = self._log_likelihood_partial_mu_unopt(x, l, cn)
         
         h = self.h
-        p = remixt.likelihood.proportion_measureable_matrix(self.phi, total_cn=self.total_cn)
+        p = remixt.likelihood.proportion_measureable_matrix(self.phi)
         q = self.allele_measurement_matrix()
         
         N = x.shape[0]

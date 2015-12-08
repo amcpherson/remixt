@@ -23,7 +23,7 @@ def calculate_depth(experiment):
     l = experiment.l.copy()
 
     phi = remixt.likelihood.estimate_phi(x)
-    p = remixt.likelihood.proportion_measureable_matrix(phi, total_cn=True)
+    p = remixt.likelihood.proportion_measureable_matrix(phi)
 
     is_filtered = (l > 0) & np.all(p > 0, axis=1)
     x = x[is_filtered,:]

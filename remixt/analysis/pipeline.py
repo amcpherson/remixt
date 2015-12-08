@@ -93,7 +93,7 @@ def fit(
     M = h_init.shape[0]
 
     # Create emission / prior / copy number models
-    emission = remixt.likelihood.NegBinLikelihood(total_cn=True)
+    emission = remixt.likelihood.NegBinLikelihood()
     emission.estimate_parameters(experiment.x, experiment.l)
     emission.h = h_init
 
