@@ -237,8 +237,6 @@ class remixt_unittest(unittest.TestCase):
 
         experiment = self.load_test_experiment()
 
-        print 'h', experiment.h
-
         emission = likelihood.NegBinLikelihood()
         emission.h = experiment.h
         emission.phi = experiment.phi
@@ -261,8 +259,6 @@ class remixt_unittest(unittest.TestCase):
 
         h_init = experiment.h + experiment.h * 0.05 * np.random.randn(*experiment.h.shape)
 
-        print 'h_init', h_init
-
         estimator = em.HardAssignmentEstimator(num_em_iter=1)
         estimator.learn_param(graph, 'h', h_init)
 
@@ -270,8 +266,6 @@ class remixt_unittest(unittest.TestCase):
     def test_learn_r(self):
 
         experiment = self.load_test_experiment()
-
-        print 'r', experiment.negbin_r
 
         emission = likelihood.NegBinLikelihood()
         emission.h = experiment.h
@@ -289,8 +283,6 @@ class remixt_unittest(unittest.TestCase):
         
         r_init = experiment.negbin_r + experiment.negbin_r * 0.10 * np.random.randn(*experiment.negbin_r.shape)
 
-        print 'r_init', r_init
-
         estimator = em.ExpectationMaximizationEstimator(num_em_iter=1)
         estimator.learn_param(model, 'r', r_init)
 
@@ -298,8 +290,6 @@ class remixt_unittest(unittest.TestCase):
     def test_learn_phi(self):
 
         experiment = self.load_test_experiment()
-
-        print 'phi', experiment.phi
 
         emission = likelihood.NegBinLikelihood()
         emission.h = experiment.h
@@ -316,8 +306,6 @@ class remixt_unittest(unittest.TestCase):
         model.set_observed_data(experiment.x, experiment.l)
 
         phi_init = experiment.phi + experiment.phi * 0.02 * np.random.randn(*experiment.phi.shape)
-
-        print 'phi_init', phi_init
 
         estimator = em.ExpectationMaximizationEstimator(num_em_iter=1)
         estimator.learn_param(model, 'phi', phi_init)
