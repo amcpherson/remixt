@@ -264,7 +264,7 @@ class GenomeGraph(object):
         self.mod_seg_edges['side_1'] = 0
         self.mod_seg_edges['side_2'] = 1
 
-        self.mod_seg_edges.sort('n_1')
+        self.mod_seg_edges.sort_values('n_1')
 
         # List of vertices of matching graph
         v_iter = itertools.product(xrange(self.N+1), xrange(2), xrange(2), self.signs)
@@ -437,7 +437,7 @@ class GenomeGraph(object):
         mod_edge_costs = mod_edge_costs[mod_edge_costs['cost'].replace(np.inf, np.nan).notnull()]
 
         # Select least cost edge for duplicated edges
-        mod_edge_costs = mod_edge_costs.sort('cost')
+        mod_edge_costs = mod_edge_costs.sort_values('cost')
         mod_edge_costs = mod_edge_costs.groupby(['vertex_id_1', 'vertex_id_2', 'color'],
                                                 sort=False) \
                                        .first() \
