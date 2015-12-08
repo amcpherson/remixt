@@ -46,6 +46,9 @@ class likelihood_unittest(unittest.TestCase):
         cn = sim_simple.generate_cn(N, M, 2.0, 0.5, 0.5, 2)
         h = np.random.uniform(low=0.5, high=2.0, size=M)
 
+        # Add a 0 copy segment
+        cn[0,:,:] = 0
+
         likelihood_model = likelihood.ReadCountLikelihood()
         likelihood_model.h = h
         likelihood_model.phi = phi
@@ -78,9 +81,11 @@ class likelihood_unittest(unittest.TestCase):
         N = 100
 
         p = np.random.uniform(low=0.01, high=0.99, size=N)
-        x = np.random.uniform(low=10000, high=50000, size=(N,2))
+        n = np.random.randint(low=10000, high=50000, size=N)
 
-        return p, x
+        k = np.random.binomial(n, p)
+
+        return p, n, k
 
 
     def test_expected_read_count_opt(self):
@@ -277,6 +282,25 @@ class likelihood_unittest(unittest.TestCase):
             x, l, cn, phi)
 
 
+    def test_log_likelihood_cn_betabinnegbin_partial_h(self):
+
+        cn, h, l, phi, r, x = self.generate_simple_data()
+
+        emission = likelihood.NegBinBetaBinLikelihood()
+
+        def evaluate_log_likelihood(h, x, l, cn, phi):
+            emission.h = h
+            return emission.log_likelihood(x, l, cn)
+
+        def evaluate_log_likelihood_partial_h(h, x, l, cn, phi):
+            emission.h = h
+            return emission._log_likelihood_partial_h(x, l, cn)
+
+        assert_grad_correct(evaluate_log_likelihood,
+            evaluate_log_likelihood_partial_h, h,
+            x, l, cn, phi)
+
+
     def test_learn_negbin_r_partial(self):
 
         N = 1000
@@ -297,15 +321,15 @@ class likelihood_unittest(unittest.TestCase):
 
     def test_log_likelihood_cn_betabin_partial_p(self):
 
-        p, x = self.generate_allele_data()
+        p, n, k = self.generate_allele_data()
 
         dist = likelihood.BetaBinDistribution()
 
         def evaluate_log_likelihood(p):
-            return dist.log_likelihood(x, p).sum()
+            return dist.log_likelihood(k, n, p).sum()
 
         def evaluate_log_likelihood_partial_p(p):
-            return dist.log_likelihood_partial_p(x, p)
+            return dist.log_likelihood_partial_p(k, n, p)
 
         assert_grad_correct(evaluate_log_likelihood,
             evaluate_log_likelihood_partial_p, p)
@@ -313,22 +337,37 @@ class likelihood_unittest(unittest.TestCase):
 
     def test_log_likelihood_cn_betabin_partial_M(self):
 
-        p, x = self.generate_allele_data()
+        p, n, k = self.generate_allele_data()
 
         dist = likelihood.BetaBinDistribution()
 
         def evaluate_log_likelihood(M):
             dist.M = M
-            return dist.log_likelihood(x, p)
+            return dist.log_likelihood(k, n, p)
 
         def evaluate_log_likelihood_partial_M(M):
             dist.M = M
-            return dist.log_likelihood_partial_M(x, p)[:,None]
+            return dist.log_likelihood_partial_M(k, n, p)[:,None]
 
         M = np.array([50.])
 
         assert_grad_correct(evaluate_log_likelihood,
             evaluate_log_likelihood_partial_M, M)
+
+
+    def test_learn_betabin_r_partial(self):
+
+        p, n, k = self.generate_allele_data()
+
+        betabin = remixt.likelihood.BetaBinDistribution()
+
+        p0 = remixt.paramlearn._sum_adjacent(k.astype(float) / n.astype(float)) / 2.
+        M0 = 100.
+        param0 = np.concatenate([p0, [M0]])
+
+        assert_grad_correct(remixt.paramlearn.nll_betabin,
+            remixt.paramlearn.nll_betabin_partial_param, param0,
+            betabin, k, n)
 
 
 if __name__ == '__main__':

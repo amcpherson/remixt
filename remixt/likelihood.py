@@ -113,16 +113,8 @@ class ReadCountLikelihood(object):
         self.min_length_likelihood = kwargs.get('min_length_likelihood', 10000)
 
         self.param_partial_func = dict()
-        self.param_partial_func['h'] = self._log_likelihood_partial_h
-        self.param_partial_func['phi'] = self._log_likelihood_partial_phi
-
         self.param_bounds = dict()
-        self.param_bounds['h'] = (1e-16, 10.)
-        self.param_bounds['phi'] = (0., 1.)
-
         self.param_per_segment = dict()
-        self.param_per_segment['h'] = False
-        self.param_per_segment['phi'] = True
 
         self.mask = None
 
@@ -190,7 +182,7 @@ class ReadCountLikelihood(object):
 
 
     def expected_read_count(self, l, cn):
-        """Calculate expected major, minor and total read counts.
+        """ Calculate expected major, minor and total read counts.
         
         Args:
             l (numpy.array): segment lengths
@@ -221,6 +213,57 @@ class ReadCountLikelihood(object):
             raise ProbabilityError('mu is nan', n=n, cn=cn[n], l=l[n], h=h, p=p[n], mu=x3[n])
 
         return x3
+
+
+    def expected_total_read_count(self, l, cn):
+        """ Calculate expected total read count.
+        
+        Args:
+            l (numpy.array): segment lengths
+            cn (numpy.array): copy number state
+        
+        Returns:
+            numpy.array: expected total read count
+        """
+        
+        h = self.h
+
+        mu = l * (h * cn.sum(axis=2)).sum(axis=1)
+
+        mu += 1e-16
+
+        for n, ell in zip(*np.where(mu <= 0)):
+            raise ProbabilityError('mu <= 0', n=n, cn=cn[n], l=l[n], h=h, mu=mu[n])
+
+        for n, ell in zip(*np.where(np.isnan(mu))):
+            raise ProbabilityError('mu is nan', n=n, cn=cn[n], l=l[n], h=h, mu=mu[n])
+
+        return mu
+
+
+    def expected_allele_ratio(self, cn):
+        """ Calculate expected minor allele read count ratio.
+        
+        Args:
+            cn (numpy.array): copy number state
+        
+        Returns:
+            numpy.array: expected minor allele read count ratio
+        """
+        
+        h = self.h
+
+        minor = (h * cn[:,:,1]).sum(axis=1)
+        total = (h * cn.sum(axis=2)).sum(axis=1)
+
+        p = minor / total
+
+        p += 1e-16
+
+        for n in zip(*np.where((p <= 0) | (p >= 1))):
+            raise ProbabilityError('(p <= 0) | (p >= 1)', n=n, cn=cn[n], h=h, p=p[n])
+
+        return p
 
 
     def log_likelihood(self, x, l, cn):
@@ -265,8 +308,6 @@ class ReadCountLikelihood(object):
 
         """
 
-        mu = self.expected_read_count(l, cn)
-
         ll_partial = self.param_partial_func[param](x, l, cn)
 
         ll_partial[l < self.min_length_likelihood,:] = 0.0
@@ -274,10 +315,29 @@ class ReadCountLikelihood(object):
         if self.mask is not None:
             ll_partial[~self.mask,:] = 0.0
 
-        for n in zip(*np.where(np.isnan(ll_partial))):
-            raise ProbabilityError('ll derivative is nan', n=n, x=x[n], cn=cn[n], l=l[n], h=h, p=p[n], mu=mu[n])
+        for n, ell in zip(*np.where(np.isnan(ll_partial))):
+            raise ProbabilityError('ll derivative is nan', n=n, x=x[n], cn=cn[n], l=l[n])
 
         return ll_partial
+
+
+class IndepAlleleLikelihood(ReadCountLikelihood):
+
+    def __init__(self, **kwargs):
+        """ Abstract independent allele read count likelihood model.
+
+        """
+
+        super(IndepAlleleLikelihood, self).__init__(**kwargs)
+
+        self.param_partial_func['h'] = self._log_likelihood_partial_h
+        self.param_partial_func['phi'] = self._log_likelihood_partial_phi
+
+        self.param_bounds['h'] = (0., 10.)
+        self.param_bounds['phi'] = (0., 1.)
+
+        self.param_per_segment['h'] = False
+        self.param_per_segment['phi'] = True
 
 
     def _log_likelihood_partial_h(self, x, l, cn):
@@ -340,12 +400,14 @@ class ReadCountLikelihood(object):
 
 
 class PoissonDistribution(object):
+    """ Poisson distribution for read count data.
+    """
 
     def log_likelihood(self, x, mu):
         """ Calculate the poisson read count log likelihood.
         
         Args:
-            x (numpy.array): measured read counts
+            x (numpy.array): observed read counts
             mu (numpy.array): expected read counts
         
         Returns:
@@ -372,7 +434,7 @@ class PoissonDistribution(object):
         with respect to mu
         
         Args:
-            x (numpy.array): measured read counts
+            x (numpy.array): observed read counts
             mu (numpy.array): expected read counts
         
         Returns:
@@ -390,7 +452,7 @@ class PoissonDistribution(object):
         return partial_mu
 
 
-class PoissonLikelihood(ReadCountLikelihood):
+class PoissonLikelihood(IndepAlleleLikelihood):
 
     def __init__(self, **kwargs):
         """ Poisson read count likelihood model.
@@ -457,7 +519,7 @@ class PoissonLikelihood(ReadCountLikelihood):
 class NegBinDistribution(object):
 
     def __init__(self, **kwargs):
-        """ Negative binomial read count likelihood model.
+        """ Negative binomial distribution for read count data.
 
         Attributes:
             r (numpy.array): negative binomial read count over-dispersion
@@ -471,7 +533,7 @@ class NegBinDistribution(object):
         """ Calculate negative binomial read count log likelihood.
         
         Args:
-            x (numpy.array): measured read counts
+            x (numpy.array): observed read counts
             mu (numpy.array): expected read counts
         
         Returns:
@@ -503,7 +565,7 @@ class NegBinDistribution(object):
         log likelihood with respect to mu
 
         Args:
-            x (numpy.array): measured read counts
+            x (numpy.array): observed read counts
             mu (numpy.array): expected read counts
         
         Returns:
@@ -526,7 +588,7 @@ class NegBinDistribution(object):
         log likelihood with respect to r
         
         Args:
-            x (numpy.array): measured read counts
+            x (numpy.array): observed read counts
             mu (numpy.array): expected read counts
         
         Returns:
@@ -551,7 +613,7 @@ class NegBinDistribution(object):
 
 
 
-class NegBinLikelihood(ReadCountLikelihood):
+class NegBinLikelihood(IndepAlleleLikelihood):
 
     def __init__(self, **kwargs):
         """ Negative binomial read count likelihood model.
@@ -677,7 +739,7 @@ class NegBinLikelihood(ReadCountLikelihood):
 class BetaBinDistribution(object):
 
     def __init__(self, **kwargs):
-        """ Beta binomial allele counts likelihood model.
+        """ Beta binomial distribution for allele count data.
 
         Attributes:
             M (numpy.array): beta binomial allele counts over-dispersion
@@ -687,11 +749,12 @@ class BetaBinDistribution(object):
         self.M = 100.
 
 
-    def log_likelihood(self, x, p):
+    def log_likelihood(self, k, n, p):
         """ Calculate beta binomial allele count log likelihood.
         
         Args:
-            x (numpy.array): measured major, minor read counts
+            k (numpy.array): observed minor allelic read counts
+            n (numpy.array): observed total allelic read counts
             p (numpy.array): expected minor allele fraction
         
         Returns:
@@ -714,8 +777,6 @@ class BetaBinDistribution(object):
 
         """
 
-        k = x[:,1]
-        n = x[:,0] + x[:,1]
         M = self.M
 
         ll = (gammaln(n+1) - gammaln(k+1) - gammaln(n-k+1)
@@ -727,12 +788,13 @@ class BetaBinDistribution(object):
         return ll
 
 
-    def log_likelihood_partial_p(self, x, p):
+    def log_likelihood_partial_p(self, k, n, p):
         """ Calculate the partial derivative of the beta binomial allele count
         log likelihood with respect to p
 
         Args:
-            x (numpy.array): measured major, minor, and total read counts
+            k (numpy.array): observed minor allelic read counts
+            n (numpy.array): observed total allelic read counts
             p (numpy.array): expected minor allele fraction
         
         Returns:
@@ -756,8 +818,6 @@ class BetaBinDistribution(object):
 
         """
 
-        k = x[:,1]
-        n = x[:,0] + x[:,1]
         M = self.M
 
         partial_p = (M * digamma(k + M * p)
@@ -768,12 +828,13 @@ class BetaBinDistribution(object):
         return partial_p
 
 
-    def log_likelihood_partial_M(self, x, p):
+    def log_likelihood_partial_M(self, k, n, p):
         """ Calculate the partial derivative of the beta binomial allele count
         log likelihood with respect to p
 
         Args:
-            x (numpy.array): measured major, minor, and total read counts
+            k (numpy.array): observed minor allelic read counts
+            n (numpy.array): observed total allelic read counts
             p (numpy.array): expected minor allele fraction
         
         Returns:
@@ -801,8 +862,6 @@ class BetaBinDistribution(object):
 
         """
 
-        k = x[:,1]
-        n = x[:,0] + x[:,1]
         M = self.M
 
         partial_M = (p * digamma(k + M * p)
@@ -813,5 +872,165 @@ class BetaBinDistribution(object):
             + digamma(M))
 
         return partial_M
+
+
+
+class NegBinBetaBinLikelihood(ReadCountLikelihood):
+
+    def __init__(self, **kwargs):
+        """ Negative binomial read count likelihood model.
+
+        Attributes:
+            r (numpy.array): negative binomial read count over-dispersion
+
+        """
+
+        super(NegBinBetaBinLikelihood, self).__init__(**kwargs)
+
+        self.param_partial_func['h'] = self._log_likelihood_partial_h
+        # self.param_partial_func['r'] = self._log_likelihood_partial_r
+        # self.param_partial_func['M'] = self._log_likelihood_partial_M
+
+        self.param_bounds['h'] = (0., 10.)
+        self.param_bounds['r'] = (0., np.inf)
+        self.param_bounds['M'] = (0., np.inf)
+
+        self.param_per_segment['h'] = False
+        self.param_per_segment['r'] = False
+        self.param_per_segment['M'] = False
+
+        self.negbin = NegBinDistribution()
+        self.betabin = BetaBinDistribution()
+
+
+    @property
+    def r(self):
+        return self.negbin.r
+    @r.setter
+    def r(self, value):
+        self.negbin.r = max(0., value)
+
+
+    @property
+    def M(self):
+        return self.betabin.M
+    @M.setter
+    def M(self, value):
+        self.betabin.M = max(0., value)
+
+
+    def learn_parameters(self, x, l):
+        """ Offline parameter learning.
+
+        Args:
+            x (numpy.array): observed major, minor, and total read counts
+            l (numpy.array): observed lengths of segments
+
+        """
+        
+        super(NegBinBetaBinLikelihood, self).learn_parameters(x, l)
+
+        remixt.paramlearn.learn_negbin_r_adjacent(self.negbin, x[:,2], l)
+        remixt.paramlearn.learn_betabin_M_adjacent(self.betabin, x[:,1], x[:,:2].sum(axis=1))
+
+
+    def _log_likelihood(self, x, l, cn):
+        """ Calculate negative binomial read count log likelihood.
+        
+        Args:
+            x (numpy.array): major, minor, and total read counts
+            l (numpy.array): segment lengths
+            cn (numpy.array): copy number state
+        
+        Returns:
+            float: log likelihood per segment
+
+        """
+        
+        N = x.shape[0]
+        K = x.shape[1]
+
+        mu = self.expected_total_read_count(l, cn)
+        p = self.expected_allele_ratio(cn)
+
+        ll = (self.negbin.log_likelihood(x[:,2], mu)
+            + self.betabin.log_likelihood(x[:,1], x[:,:2].sum(axis=1), p))
+
+        ll[np.isnan(p)] = 0.
+
+        return ll
+
+
+    def _mu_partial_h(self, l, cn):
+        """ Calculate partial derivative of expected total read count
+        with respect to h.
+
+        Args:
+            l (numpy.array): segment lengths
+            cn (numpy.array): copy number state
+        
+        Returns:
+            numpy.array: partial derivative per segment per clone
+
+        """
+
+        return (l.T * cn.sum(axis=2).T).T
+
+
+    def _p_partial_h(self, cn):
+        """ Calculate partial derivative of allele ratio with respect to h.
+
+        Args:
+            cn (numpy.array): copy number state
+        
+        Returns:
+            numpy.array: partial derivative per segment per clone
+
+        """
+
+        h = self.h
+
+        total = (h * cn.sum(axis=2)).sum(axis=1)
+        total_partial_h = cn.sum(axis=2)
+
+        minor = (h * cn[:,:,1]).sum(axis=1)
+        minor_partial_h = cn[:,:,1]
+
+        p_partial_h = ((minor_partial_h.T * total - minor * total_partial_h.T) / np.square(total).T).T
+
+        return p_partial_h
+
+
+    def _log_likelihood_partial_h(self, x, l, cn):
+        """ Evaluate partial derivative of log likelihood with respect to h.
+
+        Args:
+            x (numpy.array): major, minor, and total read counts
+            l (numpy.array): segment lengths
+            cn (numpy.array): copy number state
+        
+        Returns:
+            numpy.array: log likelihood derivative per segment per clone
+
+        """
+        
+        N = x.shape[0]
+        K = x.shape[1]
+
+        mu = self.expected_total_read_count(l, cn)
+        p = self.expected_allele_ratio(cn)
+
+        mu_partial_h = self._mu_partial_h(l, cn)
+        p_partial_h = self._p_partial_h(cn)
+
+        partial_h = (self.negbin.log_likelihood_partial_mu(x[:,2], mu).T * mu_partial_h.T
+            + self.betabin.log_likelihood_partial_p(x[:,1], x[:,:2].sum(axis=1), p).T * p_partial_h.T).T
+
+        partial_h[np.isnan(p),:] = 0.
+
+        for n, m in zip(*np.where(np.isnan(partial_h))):
+            raise ProbabilityError('ll derivative is nan', n=n, h=self.h, x=x[n], l=l[n], cn=cn[n])
+
+        return partial_h
 
 

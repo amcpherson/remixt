@@ -134,10 +134,9 @@ class remixt_unittest(unittest.TestCase):
 
         cn, h, l, phi, r, x = self.generate_simple_data()
 
-        emission = likelihood.NegBinLikelihood()
+        emission = likelihood.NegBinBetaBinLikelihood()
         emission.h = h
-        emission.phi = phi
-        emission.r = r
+        emission.learn_parameters(x, l)
 
         N = l.shape[0]
         M = h.shape[0]
@@ -203,7 +202,7 @@ class remixt_unittest(unittest.TestCase):
 
         cn_true = cn.copy()
 
-        emission = likelihood.NegBinLikelihood()
+        emission = likelihood.NegBinBetaBinLikelihood()
         emission.h = h
         emission.phi = phi
 
@@ -244,10 +243,9 @@ class remixt_unittest(unittest.TestCase):
 
         experiment = self.load_test_experiment()
 
-        emission = likelihood.NegBinLikelihood()
+        emission = likelihood.NegBinBetaBinLikelihood()
         emission.h = experiment.h
-        emission.phi = experiment.phi
-        emission.r = experiment.negbin_r[0:2]
+        emission.learn_parameters(experiment.x, experiment.l)
 
         N = experiment.l.shape[0]
         M = experiment.h.shape[0]
