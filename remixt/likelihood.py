@@ -117,7 +117,7 @@ class ReadCountLikelihood(object):
         self.param_partial_func['phi'] = self._log_likelihood_partial_phi
 
         self.param_bounds = dict()
-        self.param_bounds['h'] = (0., 10.)
+        self.param_bounds['h'] = (1e-16, 10.)
         self.param_bounds['phi'] = (0., 1.)
 
         self.param_per_segment = dict()
@@ -565,7 +565,7 @@ class NegBinLikelihood(ReadCountLikelihood):
 
         self.param_partial_func['r'] = self._log_likelihood_partial_r
 
-        self.param_bounds['r'] = (0., np.inf)
+        self.param_bounds['r'] = (1e-16, np.inf)
 
         self.param_per_segment['r'] = False
 
