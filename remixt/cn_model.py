@@ -171,6 +171,9 @@ class HiddenMarkovModel(object):
 
         """
 
+        for n in zip(*np.where(x[:,0] < x[:,1])):
+            raise ValueError('x[:,0] < x[:,1] for {0}'.format(x[n]))
+
         self.x = x
         self.l = l
 
@@ -204,6 +207,9 @@ class HiddenMarkovModel(object):
                 continue
                 
             cn = np.array([np.ones(2)] + [base_cn] + list(subclone_cn))
+
+            if np.any(cn[1:,0] != cn[1:,1]) and np.all(cn[1:,0] <= cn[1:,1]):
+                continue
 
             cn = np.array([cn] * self.N)
 

@@ -1007,6 +1007,10 @@ class ExperimentSampler(object):
 
             extra_params['negbin_r'] = self.negbin_r
 
+        # Reorder x as segment * major/minor/total
+        x[:,0:2].sort(axis=1)
+        x[:,0:2] = x[:,2:0:-1]
+
         breakpoints = genome_mixture.breakpoints.copy()
 
         num_breakpoints = len(breakpoints) + self.num_false_breakpoints

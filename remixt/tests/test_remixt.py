@@ -43,6 +43,8 @@ class remixt_unittest(unittest.TestCase):
 
         x = np.array([np.random.negative_binomial(r, 1.-a) for a in nb_p])
         x = x.reshape(nb_p.shape)
+        x[:,0:2].sort(axis=1)
+        x[:,0:2] = x[:,2:0:-1]
 
         return cn, h, l, phi, r, x
 
@@ -161,8 +163,11 @@ class remixt_unittest(unittest.TestCase):
         prior = cn_model.CopyNumberPrior(1, 3, self.uniform_cn_prior())
         model = cn_model.HiddenMarkovModel(1, 3, None, prior)
 
-        model.cn_max = 6
-        model.cn_dev_max = 2
+        cn_max = 6
+        cn_dev_max = 1
+
+        model.cn_max = cn_max
+        model.cn_dev_max = cn_dev_max
 
         # Build cn list using the method from CopyNumberModel
         built_cns = set()
@@ -176,18 +181,20 @@ class remixt_unittest(unittest.TestCase):
             built_cns.add(cn_tuple)
 
         # Build the naive way
-        num_cns = 0
-        for b1 in xrange(6+1):
-            for b2 in xrange(6+1):
-                for d1 in xrange(-2, 2+1):
-                    for d2 in xrange(-2, 2+1):
-                        if b1 + d1 < 0 or b2 + d2 < 0 or b1 + d1 > 6 or b2 + d2 > 6:
+        expected_cns = set()
+        for b1 in xrange(cn_max+1):
+            for b2 in xrange(cn_max+1):
+                for d1 in xrange(-cn_dev_max, cn_dev_max+1):
+                    for d2 in xrange(-cn_dev_max, cn_dev_max+1):
+                        if b1 + d1 < 0 or b2 + d2 < 0 or b1 + d1 > cn_max or b2 + d2 > cn_max:
+                            continue
+                        if (b1 != b2 or b1+d1 != b2+d2) and (b1 <= b2 and b1+d1 <= b2+d2):
                             continue
                         cn_tuple = (1, 1, b1, b2, b1+d1, b2+d2)
                         self.assertIn(cn_tuple, built_cns)
-                        num_cns += 1
+                        expected_cns.add(cn_tuple)
 
-        self.assertTrue(num_cns == len(built_cns))
+        self.assertTrue(expected_cns == built_cns)
 
 
     def test_simple_genome_graph(self):
