@@ -94,7 +94,7 @@ def fit(
 
     # Create emission / prior / copy number models
     emission = remixt.likelihood.NegBinLikelihood()
-    emission.estimate_parameters(experiment.x, experiment.l)
+    emission.learn_parameters(experiment.x, experiment.l)
     emission.h = h_init
 
     cn_probs = create_cn_prior_matrix(cn_proportions_filename)

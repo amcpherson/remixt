@@ -7,6 +7,7 @@ from scipy.special import betaln
 from scipy.special import digamma
 
 import remixt.utils
+import remixt.paramlearn
 
 
 
@@ -591,8 +592,8 @@ class NegBinLikelihood(ReadCountLikelihood):
         
         super(NegBinLikelihood, self).learn_parameters(x, l)
 
-        for negbin in self.negbin:
-            remixt.paramlearn.learn_negbin_r_adjacent(negbin, x, l)
+        for k, negbin in enumerate(self.negbin):
+            remixt.paramlearn.learn_negbin_r_adjacent(negbin, x[:,k], l)
 
 
     def _log_likelihood(self, x, l, cn):
