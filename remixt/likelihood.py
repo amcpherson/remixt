@@ -956,8 +956,6 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
         ll = (self.negbin.log_likelihood(x[:,2], mu)
             + self.betabin.log_likelihood(x[:,1], x[:,:2].sum(axis=1), p))
 
-        ll[np.isnan(p)] = 0.
-
         return ll
 
 
@@ -1025,8 +1023,6 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
 
         partial_h = (self.negbin.log_likelihood_partial_mu(x[:,2], mu).T * mu_partial_h.T
             + self.betabin.log_likelihood_partial_p(x[:,1], x[:,:2].sum(axis=1), p).T * p_partial_h.T).T
-
-        partial_h[np.isnan(p),:] = 0.
 
         for n, m in zip(*np.where(np.isnan(partial_h))):
             raise ProbabilityError('ll derivative is nan', n=n, h=self.h, x=x[n], l=l[n], cn=cn[n])

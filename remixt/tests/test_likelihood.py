@@ -47,7 +47,7 @@ class likelihood_unittest(unittest.TestCase):
         h = np.random.uniform(low=0.5, high=2.0, size=M)
 
         # Add a 0 copy segment
-        cn[0,:,:] = 0
+        cn[0,1:,:] = 0
 
         likelihood_model = likelihood.ReadCountLikelihood()
         likelihood_model.h = h
