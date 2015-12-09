@@ -369,6 +369,21 @@ class likelihood_unittest(unittest.TestCase):
             remixt.paramlearn.nll_betabin_partial_param, param0,
             betabin, k, n)
 
+    def test_log_likelihood_cn_betabinnegbin_cornercases(self):
+
+        cn, h, l, phi, r, x = self.generate_simple_data()
+
+        emission = likelihood.NegBinBetaBinLikelihood()
+        emission.h = np.array([1e-16, 10., 1e-16])
+
+        cn[:,:,:] = np.array([[1., 1.], [0., 1.], [1., 0.]])
+
+        ll = emission.log_likelihood(x, l, cn)
+        ll_partial_h = emission.log_likelihood_partial_param(x, l, cn, 'h')
+
+        self.assertTrue(not np.any(np.isnan(ll)))
+        self.assertTrue(not np.any(np.isnan(ll_partial_h)))
+
 
 if __name__ == '__main__':
     unittest.main()

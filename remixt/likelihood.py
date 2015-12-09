@@ -258,7 +258,7 @@ class ReadCountLikelihood(object):
 
         p = minor / total
 
-        p += 1e-16
+        p = np.clip(p, 1e-16, 1.-1e-16)
 
         for n in zip(*np.where((p <= 0) | (p >= 1))):
             raise ProbabilityError('(p <= 0) | (p >= 1)', n=n, cn=cn[n], h=h, p=p[n])
