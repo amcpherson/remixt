@@ -247,13 +247,15 @@ def create_cn_table(experiment, likelihood, cn, h):
             'major_readcount':experiment.x[:,0],
             'minor_readcount':experiment.x[:,1],
             'readcount':experiment.x[:,2],
-        })    
+        })
 
     data['major_cov'] = data['major_readcount'] / (likelihood.phi * data['length'])
     data['minor_cov'] = data['minor_readcount'] / (likelihood.phi * data['length'])
 
     data['major_raw'] = (data['major_cov'] - h[0]) / h[1:].sum()
     data['minor_raw'] = (data['minor_cov'] - h[0]) / h[1:].sum()
+    
+    data['ratio_raw'] = experiment.x[:,1] / experiment.x[:,:2].sum(axis=1)
 
     x_e = likelihood.expected_read_count(experiment.l, cn)
 

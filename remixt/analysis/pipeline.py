@@ -137,6 +137,7 @@ def fit(
     cn_table['major_expected'] = emission.expected_read_count(experiment.l, cn)[:,0]
     cn_table['minor_expected'] = emission.expected_read_count(experiment.l, cn)[:,1]
     cn_table['total_expected'] = emission.expected_read_count(experiment.l, cn)[:,2]
+    cn_table['ratio_expected'] = emission.expected_allele_ratio(cn)
     cn_table['major_residual'] = np.absolute(cn_table['major_readcount'] - cn_table['major_expected'])
     cn_table['minor_residual'] = np.absolute(cn_table['minor_readcount'] - cn_table['minor_expected'])
     cn_table['total_residual'] = np.absolute(cn_table['readcount'] - cn_table['total_expected'])
