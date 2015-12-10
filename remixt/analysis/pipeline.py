@@ -93,7 +93,7 @@ def fit(
     M = h_init.shape[0]
 
     # Create emission / prior / copy number models
-    emission = remixt.likelihood.NegBinLikelihood()
+    emission = remixt.likelihood.NegBinBetaBinLikelihood()
     emission.learn_parameters(experiment.x, experiment.l)
     emission.h = h_init
 
@@ -158,6 +158,8 @@ def fit(
 
     # Create a table of relevant statistics
     stats_table = {
+        'negbin_r':emission.r,
+        'betabin_r':emission.M,
         'log_posterior':log_posterior,
         'log_posterior_graph':log_posterior_graph,
         'h_converged':h_converged,
