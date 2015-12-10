@@ -7,6 +7,7 @@ import gzip
 import tarfile
 
 import pypeliner
+import pypeliner.workflow
 import pypeliner.managed as mgd
 
 import remixt.seqdataio as seqdataio
@@ -49,27 +50,37 @@ if __name__ == '__main__':
 
     pyp = pypeliner.app.Pypeline([extract_seqdata], config)
 
-    pyp.sch.setobj(mgd.OutputChunks('chromosome'), config['chromosomes'])
+    workflow = pypeliner.workflow.Workflow()
 
-    pyp.sch.commandline('read_concordant', ('chromosome',), {'mem':16},
-        os.path.join(bin_directory, 'bamconcordantreads'),
-        '--clipmax', '8',
-        '--flen', '1000',
-        '--chr', mgd.InputInstance('chromosome'),
-        '-b', mgd.InputFile(args['bam_file']),
-        '-s', mgd.InputFile(config['snp_positions']),
-        '-r', mgd.TempOutputFile('reads', 'chromosome'),
-        '-a', mgd.TempOutputFile('alleles', 'chromosome'),
+    workflow.setobj(obj=mgd.OutputChunks('chromosome'), value=config['chromosomes'])
+
+    workflow.commandline(
+        name='read_concordant',
+        axes=('chromosome',),
+        ctx={'mem':16},
+        args=(
+            os.path.join(bin_directory, 'bamconcordantreads'),
+            '--clipmax', '8',
+            '--flen', '1000',
+            '--chr', mgd.InputInstance('chromosome'),
+            '-b', mgd.InputFile(args['bam_file']),
+            '-s', mgd.InputFile(config['snp_positions']),
+            '-r', mgd.TempOutputFile('reads', 'chromosome'),
+            '-a', mgd.TempOutputFile('alleles', 'chromosome'),
+        )
     )
 
-    pyp.sch.transform('create_seqdata', (), {'mem':4},
-        seqdataio.create_seqdata,
-        None,
-        mgd.OutputFile(args['seqdata_file']),
-        mgd.TempInputFile('reads', 'chromosome'),
-        mgd.TempInputFile('alleles', 'chromosome'),
+    workflow.transform(
+        name='create_seqdata',
+        ctx={'mem':4},
+        func=seqdataio.create_seqdata,
+        args=(
+            mgd.OutputFile(args['seqdata_file']),
+            mgd.TempInputFile('reads', 'chromosome'),
+            mgd.TempInputFile('alleles', 'chromosome'),
+        )
     )
 
-    pyp.run()
+    pyp.run(workflow)
 
 

@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 
 import pypeliner
+import pypeliner.workflow
 import pypeliner.managed as mgd
 
 import remixt
@@ -45,37 +46,48 @@ if __name__ == '__main__':
 
     pyp = pypeliner.app.Pypeline([remixt], args)
 
-    pyp.sch.transform('init', (), {'mem':8},
-        remixt.analysis.pipeline.init,
-        None,
-        mgd.TempOutputFile('experiment.pickle'),
-        mgd.TempOutputFile('h_init', 'byh'),
-        mgd.TempOutputFile('init_results'),
-        mgd.InputFile(args['counts']),
-        mgd.InputFile(args['breakpoints']),
-        num_clones=args['num_clones'],
+    workflow = pypeliner.workflow.Workflow(default_ctx={'mem':8})
+
+    workflow.transform(
+        name='init',
+        func=remixt.analysis.pipeline.init,
+        args=(
+            mgd.TempOutputFile('experiment.pickle'),
+            mgd.TempOutputFile('h_init', 'byh'),
+            mgd.TempOutputFile('init_results'),
+            mgd.InputFile(args['counts']),
+            mgd.InputFile(args['breakpoints']),
+        ),
+        kwargs={
+            'num_clones':args['num_clones'],
+        }
     )
 
-    pyp.sch.transform('fit', ('byh',), {'mem':8},
-        remixt.analysis.pipeline.fit,
-        None,
-        mgd.TempOutputFile('fit_results', 'byh'),
-        mgd.TempInputFile('experiment.pickle'),
-        mgd.TempInputFile('h_init', 'byh'),
-        args['cn_proportions'],
+    workflow.transform(
+        name='fit',
+        axes=('byh',),
+        func=remixt.analysis.pipeline.fit,
+        args=(
+            mgd.TempOutputFile('fit_results', 'byh'),
+            mgd.TempInputFile('experiment.pickle'),
+            mgd.TempInputFile('h_init', 'byh'),
+            args['cn_proportions'],
+        ),
     )
 
-    pyp.sch.transform('collate', (), {'mem':1},
-        remixt.analysis.pipeline.collate,
-        None,
-        mgd.OutputFile(args['results']),
-        mgd.InputFile(args['breakpoints']),
-        mgd.TempInputFile('experiment.pickle'),
-        mgd.TempInputFile('init_results'),
-        mgd.TempInputFile('fit_results', 'byh'),
+    workflow.transform(
+        name='collate',
+        func=remixt.analysis.pipeline.collate,
+        args=(
+            mgd.OutputFile(args['results']),
+            mgd.InputFile(args['breakpoints']),
+            mgd.TempInputFile('experiment.pickle'),
+            mgd.TempInputFile('init_results'),
+            mgd.TempInputFile('fit_results', 'byh'),
+        ),
     )
 
-    pyp.run()
+    pyp.run(workflow)
 
 
 

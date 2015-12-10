@@ -10,6 +10,7 @@ import pandas as pd
 import scipy.stats
 
 import pypeliner
+import pypeliner.workflow
 import pypeliner.managed as mgd
 
 import remixt
@@ -68,95 +69,129 @@ if __name__ == '__main__':
 
     pyp = pypeliner.app.Pypeline([remixt, prepare_counts], config)
 
+    workflow = pypeliner.workflow.Workflow()
+
     tumour_fnames = dict(enumerate(args['tumour_files']))
     count_fnames = dict(enumerate(args['count_files']))
 
-    pyp.sch.setobj(mgd.OutputChunks('bytumour'), tumour_fnames.keys())
+    workflow.setobj(obj=mgd.OutputChunks('bytumour'), value=tumour_fnames.keys())
 
-    pyp.sch.transform('calc_fragment_stats', ('bytumour',), {'mem':16},
-        remixt.analysis.stats.calculate_fragment_stats,
-        mgd.TempOutputObj('fragstats', 'bytumour'),
-        mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_fnames),
+    workflow.transform(
+        name='calc_fragment_stats',
+        axes=('bytumour',),
+        ctx={'mem':16},
+        func=remixt.analysis.stats.calculate_fragment_stats,
+        ret=mgd.TempOutputObj('fragstats', 'bytumour'),
+        args=(mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_fnames),),
     )
 
-    pyp.sch.setobj(mgd.OutputChunks('bychromosome'), config['chromosomes'])
+    workflow.setobj(obj=mgd.OutputChunks('bychromosome'), value=config['chromosomes'])
 
-    pyp.sch.transform('infer_haps', ('bychromosome',), {'mem':16},
-        remixt.analysis.haplotype.infer_haps,
-        None,
-        mgd.TempOutputFile('haps.tsv', 'bychromosome'),
-        mgd.InputFile(args['normal_file']),
-        mgd.InputInstance('bychromosome'),
-        mgd.TempFile('haplotyping', 'bychromosome'),
-        config,
+    workflow.transform(
+        name='infer_haps',
+        axes=('bychromosome',),
+        ctx={'mem':16},
+        func=remixt.analysis.haplotype.infer_haps,
+        args=(
+            mgd.TempOutputFile('haps.tsv', 'bychromosome'),
+            mgd.InputFile(args['normal_file']),
+            mgd.InputInstance('bychromosome'),
+            mgd.TempFile('haplotyping', 'bychromosome'),
+            config,
+        )
     )
 
-    pyp.sch.transform('merge_haps', (), {'mem':16},
-        remixt.utils.merge_tables,
-        None,
-        mgd.TempOutputFile('haps.tsv'),
-        mgd.TempInputFile('haps.tsv', 'bychromosome'),
+    workflow.transform(
+        name='merge_haps',
+        ctx={'mem':16},
+        func=remixt.utils.merge_tables,
+        args=(
+            mgd.TempOutputFile('haps.tsv'),
+            mgd.TempInputFile('haps.tsv', 'bychromosome'),
+        )
     )
 
-    pyp.sch.transform('create_readcounts', ('bytumour',), {'mem':16},
-        prepare_counts.create_counts,
-        None,
-        mgd.TempOutputFile('segment_counts.tsv', 'bytumour'),
-        mgd.TempOutputFile('allele_counts.tsv', 'bytumour'),
-        mgd.InputFile(args['segment_file']),
-        mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_fnames),
-        mgd.TempInputFile('haps.tsv'),
+    workflow.transform(
+        name='create_readcounts',
+        axes=('bytumour',),
+        ctx={'mem':16},
+        func=prepare_counts.create_counts,
+        args=(
+            mgd.TempOutputFile('segment_counts.tsv', 'bytumour'),
+            mgd.TempOutputFile('allele_counts.tsv', 'bytumour'),
+            mgd.InputFile(args['segment_file']),
+            mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_fnames),
+            mgd.TempInputFile('haps.tsv'),
+        )
     )
 
-    pyp.sch.transform('phase_segments', (), {'mem':16},
-        prepare_counts.phase_segments,
-        None,
-        mgd.TempInputFile('allele_counts.tsv', 'bytumour'),
-        mgd.TempOutputFile('phased_allele_counts.tsv', 'bytumour2'),
+    workflow.transform(
+        name='phase_segments',
+        ctx={'mem':16},
+        func=prepare_counts.phase_segments,
+        args=(
+            mgd.TempInputFile('allele_counts.tsv', 'bytumour'),
+            mgd.TempOutputFile('phased_allele_counts.tsv', 'bytumour', axes_origin=[]),
+        )
     )
 
-    pyp.sch.changeaxis('phased_axis', (), 'phased_allele_counts.tsv', 'bytumour2', 'bytumour')
-
-    pyp.sch.transform('sample_gc', ('bytumour',), {'mem':16},
-        remixt.analysis.gcbias.sample_gc,
-        None,
-        mgd.TempOutputFile('gcsamples.tsv', 'bytumour'),
-        mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_fnames),
-        mgd.TempInputObj('fragstats', 'bytumour').prop('fragment_mean'),
-        config,
+    workflow.transform(
+        name='sample_gc',
+        axes=('bytumour',),
+        ctx={'mem':16},
+        func=remixt.analysis.gcbias.sample_gc,
+        args=(
+            mgd.TempOutputFile('gcsamples.tsv', 'bytumour'),
+            mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_fnames),
+            mgd.TempInputObj('fragstats', 'bytumour').prop('fragment_mean'),
+            config,
+        )
     )
 
-    pyp.sch.transform('gc_lowess', ('bytumour',), {'mem':16},
-        remixt.analysis.gcbias.gc_lowess,
-        None,
-        mgd.TempInputFile('gcsamples.tsv', 'bytumour'),
-        mgd.TempOutputFile('gcloess.tsv', 'bytumour'),
-        mgd.TempOutputFile('gctable.tsv', 'bytumour'),
+    workflow.transform(
+        name='gc_lowess',
+        axes=('bytumour',),
+        ctx={'mem':16},
+        func=remixt.analysis.gcbias.gc_lowess,
+        args=(
+            mgd.TempInputFile('gcsamples.tsv', 'bytumour'),
+            mgd.TempOutputFile('gcloess.tsv', 'bytumour'),
+            mgd.TempOutputFile('gctable.tsv', 'bytumour'),
+        )
     )
 
-    pyp.sch.commandline('gc_segment', ('bytumour',), {'mem':16},
-        os.path.join(bin_directory, 'estimategc'),
-        '-m', config['mappability_filename'],
-        '-g', config['genome_fasta'],
-        '-c', mgd.TempInputFile('segment_counts.tsv', 'bytumour'),
-        '-i',
-        '-o', '4',
-        '-u', mgd.TempInputObj('fragstats', 'bytumour').prop('fragment_mean'),
-        '-s', mgd.TempInputObj('fragstats', 'bytumour').prop('fragment_stddev'),
-        '-a', config['mappability_length'],
-        '-l', mgd.TempInputFile('gcloess.tsv', 'bytumour'),
-        '>', mgd.TempOutputFile('segment_counts_lengths.tsv', 'bytumour'),
+    workflow.commandline(
+        name='gc_segment',
+        axes=('bytumour',),
+        ctx={'mem':16},
+        args=(
+            os.path.join(bin_directory, 'estimategc'),
+            '-m', config['mappability_filename'],
+            '-g', config['genome_fasta'],
+            '-c', mgd.TempInputFile('segment_counts.tsv', 'bytumour'),
+            '-i',
+            '-o', '4',
+            '-u', mgd.TempInputObj('fragstats', 'bytumour').prop('fragment_mean'),
+            '-s', mgd.TempInputObj('fragstats', 'bytumour').prop('fragment_stddev'),
+            '-a', config['mappability_length'],
+            '-l', mgd.TempInputFile('gcloess.tsv', 'bytumour'),
+            '>', mgd.TempOutputFile('segment_counts_lengths.tsv', 'bytumour'),
+        )
     )
 
-    pyp.sch.transform('prepare_counts', ('bytumour',), {'mem':16},
-        prepare_counts.prepare_counts,
-        None,
-        mgd.TempInputFile('segment_counts_lengths.tsv', 'bytumour'),
-        mgd.TempInputFile('phased_allele_counts.tsv', 'bytumour'),
-        mgd.OutputFile('count_file', 'bytumour', fnames=count_fnames),
+    workflow.transform(
+        name='prepare_counts',
+        axes=('bytumour',),
+        ctx={'mem':16},
+        func=prepare_counts.prepare_counts,
+        args=(
+            mgd.TempInputFile('segment_counts_lengths.tsv', 'bytumour'),
+            mgd.TempInputFile('phased_allele_counts.tsv', 'bytumour'),
+            mgd.OutputFile('count_file', 'bytumour', fnames=count_fnames),
+        )
     )
 
-    pyp.run()
+    pyp.run(workflow)
 
 
 def create_counts(segment_counts_filename, allele_counts_filename, segment_filename, seqdata_filename, haps_filename):
