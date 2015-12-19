@@ -42,17 +42,25 @@ if __name__ == '__main__':
         default=default_cn_proportions_filename,
         help='Number of clones')
 
+    argparser.add_argument('--experiment',
+        help='Debug output experiment pickle')
+
     args = vars(argparser.parse_args())
 
     pyp = pypeliner.app.Pypeline([remixt], args)
 
     workflow = pypeliner.workflow.Workflow(default_ctx={'mem':8})
 
+    if args['experiment'] is None:
+        experiment_file = mgd.TempFile('experiment.pickle')
+    else:
+        experiment_file = mgd.File('experiment.pickle', fnames=args['experiment'])
+
     workflow.transform(
         name='init',
         func=remixt.analysis.pipeline.init,
         args=(
-            mgd.TempOutputFile('experiment.pickle'),
+            experiment_file.as_output(),
             mgd.TempOutputFile('h_init', 'byh'),
             mgd.TempOutputFile('init_results'),
             mgd.InputFile(args['counts']),
@@ -69,7 +77,7 @@ if __name__ == '__main__':
         func=remixt.analysis.pipeline.fit,
         args=(
             mgd.TempOutputFile('fit_results', 'byh'),
-            mgd.TempInputFile('experiment.pickle'),
+            experiment_file.as_input(),
             mgd.TempInputFile('h_init', 'byh'),
             args['cn_proportions'],
         ),
@@ -81,7 +89,7 @@ if __name__ == '__main__':
         args=(
             mgd.OutputFile(args['results']),
             mgd.InputFile(args['breakpoints']),
-            mgd.TempInputFile('experiment.pickle'),
+            experiment_file.as_input(),
             mgd.TempInputFile('init_results'),
             mgd.TempInputFile('fit_results', 'byh'),
         ),
