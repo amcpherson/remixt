@@ -40,12 +40,10 @@ class ProbabilityError(ValueError):
 
 class CopyNumberPrior(object):
 
-    def __init__(self, N, M, cn_prob, allele_specific=True):
+    def __init__(self, cn_prob, allele_specific=True):
         """Create a copy number model.
 
         Args:
-            N (int): number of segments
-            M (int): number of clones including normal
             cn_prob (numpy.array): copy number prior probability matrix
 
         KwArgs:
@@ -57,8 +55,6 @@ class CopyNumberPrior(object):
 
         """
 
-        self.N = N
-        self.M = M
         self.allele_specific = allele_specific
 
         self.cn_max = cn_prob.shape[0] - 2
@@ -392,7 +388,7 @@ class HiddenMarkovModel(object):
 
 
 
-def decode_breakpoints_naive(self, cn, adjacencies, breakpoints):
+def decode_breakpoints_naive(cn, adjacencies, breakpoints):
     """ Naive decoding of breakpoint copy number.  Finds most likely set of copy numbers given h.
 
     Args:

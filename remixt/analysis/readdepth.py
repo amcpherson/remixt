@@ -63,15 +63,16 @@ def calculate_minor_modes(read_depth):
     return means
 
 
-def calculate_candidate_h(minor_modes, mix_frac_resolution=20, num_clones=None):
+def calculate_candidate_h(minor_modes, num_clones=None, num_mix_samples=20, dirichlet_alpha=0.1):
     """ Calculate modes in distribution of read depths for minor allele
 
     Args:
         minor_modes (list): minor read depth modes
 
     Kwargs:
-        mix_frac_resolution (int): number of mixture fraction candidates
-        num_clones (int): number of clones, default 2 and 3
+        num_clones (int): number of clones, if None, sample from poisson
+        num_mix_samples (int): number of mixture fraction samples
+        dirichlet_alpha (float): alpha parameter for dirichlet sampling
 
     Returns:
         list of numpy.array: candidate haploid normal and tumour read depths
@@ -80,7 +81,6 @@ def calculate_candidate_h(minor_modes, mix_frac_resolution=20, num_clones=None):
 
     h_normal = minor_modes.min()
     
-    h_tumour_candidates = list()
     h_candidates = list()
 
     for h_tumour in minor_modes:
@@ -92,29 +92,19 @@ def calculate_candidate_h(minor_modes, mix_frac_resolution=20, num_clones=None):
         # Consider the possibility that the first minor mode
         # is composed of segments with 2 minor copies
         for scale in (1., 0.5):
+            for _ in xrange(num_mix_samples):
+                if num_clones is None:
+                    while True:
+                        num_tumour_clones = np.random.geometric(p=0.5)
+                        if num_tumour_clones <= 3:
+                            break
+                else:
+                    num_tumour_clones = num_clones - 1
 
-            h_tumour_scaled = h_tumour * scale
+                mix = np.random.dirichlet([dirichlet_alpha] * num_tumour_clones)
 
-            h_tumour_candidates.append(h_tumour_scaled)
+                h = np.array([h_normal] + list(h_tumour * scale * mix))
 
-            if num_clones is None or num_clones == 2:
-                h_candidates.append(np.array([h_normal, h_tumour_scaled]))
-
-    # Maximum of 3 clones
-    mix_iter = itertools.product(xrange(1, mix_frac_resolution+1), repeat=2)
-    for mix in mix_iter:
-        if mix != tuple(reversed(sorted(mix))):
-            continue
-
-        if sum(mix) != mix_frac_resolution:
-            continue
-        
-        mix = np.array(mix) / float(mix_frac_resolution)
-
-        for h_tumour in h_tumour_candidates:
-            h = np.array([h_normal] + list(h_tumour*mix))
-
-            if num_clones is None or num_clones == 3:
                 h_candidates.append(h)
 
     return h_candidates

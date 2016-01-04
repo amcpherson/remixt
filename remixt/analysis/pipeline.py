@@ -45,13 +45,13 @@ def create_cn_prior_matrix(cn_proportions_filename):
 
 
 def init(
-        experiment_filename,
-        candidate_h_filename_callback,
-        results_filename,
-        segment_allele_count_filename,
-        breakpoint_filename,
-        num_clones=None,
-    ):
+    experiment_filename,
+    candidate_h_filename_callback,
+    results_filename,
+    segment_allele_count_filename,
+    breakpoint_filename,
+    num_clones=None,
+):
 
     # Prepare experiment file
     experiment = remixt.analysis.experiment.create_experiment(
@@ -76,41 +76,61 @@ def init(
         store['minor_modes'] = pd.Series(minor_modes, index=xrange(len(minor_modes)))
 
 
-def fit(
-        results_filename,
-        experiment_filename,
-        h_init_filename,
-        cn_proportions_filename,
-    ):
-
-    with open(experiment_filename, 'r') as f:
-        experiment = pickle.load(f)
-
-    with open(h_init_filename, 'r') as f:
-        h_init = pickle.load(f)
-
+def fit_hmm_viterbi(experiment, emission, prior, h_init):
     N = experiment.l.shape[0]
     M = h_init.shape[0]
 
-    # Create emission / prior / copy number models
-    emission = remixt.likelihood.NegBinBetaBinLikelihood()
-    emission.learn_parameters(experiment.x, experiment.l)
-    emission.h = h_init
+    results = dict()
+    results['stats'] = dict()
 
-    cn_probs = create_cn_prior_matrix(cn_proportions_filename)
-    prior = remixt.cn_model.CopyNumberPrior(N, M, cn_probs)
-    prior.set_lengths(experiment.l)
+    # Initialize haploid depths
+    emission.h = h_init
 
     model = remixt.cn_model.HiddenMarkovModel(N, M, emission, prior)
     model.set_observed_data(experiment.x, experiment.l)
 
-    # Mask amplifications from likelihood
-    emission.add_amplification_mask(experiment.x, experiment.l, model.cn_max)
+    # Estimate haploid depths
+    estimator = remixt.em.ExpectationMaximizationEstimator()
+    h, log_posterior, h_converged = estimator.learn_param(model, 'h', h_init)
+    results['h'] = h
+    results['stats']['h_log_posterior'] = log_posterior
+    results['stats']['h_converged'] = h_converged
+    results['stats']['h_em_iter'] = estimator.em_iter
+
+    # Infer copy number from viterbi
+    log_posterior_viterbi, cn = model.optimal_state()
+
+    # Naive breakpoint copy number
+    brk_cn = remixt.cn_model.decode_breakpoints_naive(cn, experiment.adjacencies, experiment.breakpoints)
+
+    # Infer copy number
+    results['cn'] = cn
+    results['brk_cn'] = brk_cn
+    results['stats']['viterbi_log_posterior'] = log_posterior_viterbi
+
+    return results
+
+
+def fit_hmm_graph(experiment, emission, prior, h_init):
+    N = experiment.l.shape[0]
+    M = h_init.shape[0]
+
+    results = dict()
+    results['stats'] = dict()
+
+    # Initialize haploid depths
+    emission.h = h_init
+
+    model = remixt.cn_model.HiddenMarkovModel(N, M, emission, prior)
+    model.set_observed_data(experiment.x, experiment.l)
 
     # Estimate haploid depths
     estimator = remixt.em.ExpectationMaximizationEstimator()
     h, log_posterior, h_converged = estimator.learn_param(model, 'h', h_init)
-    h_em_iter = estimator.em_iter
+    results['h'] = h
+    results['stats']['h_log_posterior'] = log_posterior
+    results['stats']['h_converged'] = h_converged
+    results['stats']['h_em_iter'] = estimator.em_iter
 
     # Set to allele independent prior as allele dependence will
     # cause the genome graph algorithm to fail
@@ -126,9 +146,96 @@ def fit(
 
     # Infer copy number
     log_posterior_graph, cn = graph.optimize()
-    brk_cn = graph.breakpoint_copy_number
-    graph_opt_iter = graph.opt_iter
-    decreased_log_posterior = graph.decreased_log_posterior
+    results['cn'] = cn
+    results['brk_cn'] = graph.breakpoint_copy_number
+    results['stats']['graph_opt_iter'] = graph.opt_iter
+    results['stats']['graph_log_posterior'] = log_posterior_graph
+    results['stats']['graph_decreased_log_posterior'] = graph.decreased_log_posterior
+
+    return results
+
+
+def fit_graph(experiment, emission, prior, h_init):
+    N = experiment.l.shape[0]
+    M = h_init.shape[0]
+
+    results = dict()
+    results['stats'] = dict()
+
+    # Infer initial copy number from viterbi with 1 tumour clone
+    h_init_single = np.zeros((2,))
+    h_init_single[0] = h_init[0]
+    h_init_single[1] = h_init[1:].sum()
+    emission.h = h_init_single
+    model = remixt.cn_model.HiddenMarkovModel(N, 2, emission, prior)
+    model.set_observed_data(experiment.x, experiment.l)
+    _, cn = model.optimal_state()
+    cn_init = np.ones((N, M, 2))
+    for m in xrange(1, M):
+        cn_init[:,m,:] = cn[:,1,:]
+
+    # Initialize haploid depths
+    emission.h = h_init
+
+    # Create genome graph
+    graph = remixt.genome_graph.GenomeGraph(emission, prior, experiment.adjacencies, experiment.breakpoints)
+    graph.set_observed_data(experiment.x, experiment.l)
+    graph.init_copy_number(cn_init)
+
+    # Estimate haploid depths and copy number
+    estimator = remixt.em.HardAssignmentEstimator()
+    h, log_posterior, h_converged = estimator.learn_param(graph, 'h', h_init)
+
+    results['h'] = h
+    results['cn'] = graph.cn
+    results['brk_cn'] = graph.breakpoint_copy_number
+    results['stats']['h_em_iter'] = estimator.em_iter
+    results['stats']['graph_opt_iter'] = graph.opt_iter
+    results['stats']['graph_log_posterior'] = log_posterior
+    results['stats']['graph_decreased_log_posterior'] = graph.decreased_log_posterior
+
+    return results
+
+
+def fit(
+    results_filename,
+    experiment_filename,
+    h_init_filename,
+    cn_proportions_filename,
+    fit_method,
+):
+
+    with open(experiment_filename, 'r') as f:
+        experiment = pickle.load(f)
+
+    with open(h_init_filename, 'r') as f:
+        h_init = pickle.load(f)
+
+    # Create emission / prior / copy number models
+    emission = remixt.likelihood.NegBinBetaBinLikelihood()
+    emission.learn_parameters(experiment.x, experiment.l)
+    emission.h = h_init
+
+    # Create prior probability model
+    cn_probs = create_cn_prior_matrix(cn_proportions_filename)
+    prior = remixt.cn_model.CopyNumberPrior(cn_probs)
+    prior.set_lengths(experiment.l)
+
+    # Mask amplifications from likelihood
+    emission.add_amplification_mask(experiment.x, experiment.l, prior.cn_max)
+
+    if fit_method == 'hmm_viterbi':
+        fit_results = fit_hmm_viterbi(experiment, emission, prior, h_init)
+    elif fit_method == 'hmm_graph':
+        fit_results = fit_hmm_graph(experiment, emission, prior, h_init)
+    elif fit_method == 'graph':
+        fit_results = fit_graph(experiment, emission, prior, h_init)
+    else:
+        raise ValueError('unknown fit method {}'.format(fit_method))
+
+    h = fit_results['h']
+    cn = fit_results['cn']
+    brk_cn = fit_results['brk_cn']
 
     # Create copy number table
     cn_table = remixt.analysis.experiment.create_cn_table(experiment, emission, cn, h)
@@ -158,18 +265,11 @@ def fit(
     brk_cn_table = pd.concat([brk_cn_table_1, brk_cn_table_2], ignore_index=True)
 
     # Create a table of relevant statistics
-    stats_table = {
-        'negbin_r':emission.r,
-        'betabin_r':emission.M,
-        'log_posterior':log_posterior,
-        'log_posterior_graph':log_posterior_graph,
-        'h_converged':h_converged,
-        'h_em_iter':h_em_iter,
-        'num_clones':len(h),
-        'num_segments':len(experiment.x),
-        'graph_opt_iter':graph_opt_iter,
-        'decreased_log_posterior':decreased_log_posterior,
-    }
+    stats_table = fit_results['stats'].copy()
+    stats_table['negbin_r'] = emission.r,
+    stats_table['betabin_r'] = emission.M,
+    stats_table['num_clones'] = len(h),
+    stats_table['num_segments'] = len(experiment.x),
     stats_table = pd.DataFrame(stats_table, index=[0])
 
     # Store in hdf5 format
