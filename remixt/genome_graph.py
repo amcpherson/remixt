@@ -684,10 +684,7 @@ class GenomeGraph(object):
 
         """
 
-        if M == 2:
-            return [np.array([0, 1])]
-        elif M == 3:
-            return [np.array([0, 1, 0]), np.array([0, 0, 1]), np.array([0, 1, -1]), np.array([0, 1, 1])]
+        return list(np.eye(M-1, M, 1, dtype=int))
 
 
     def optimize(self, max_iter=1000):
