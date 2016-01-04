@@ -7,8 +7,51 @@ import pickle
 import numpy as np
 import pandas as pd
 
+import blossomv
 
 blossomv_bin = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir, 'bin', 'blossom5'))
+
+
+def min_weight_perfect_matching(edges):
+    blossom_input_filename = str(uuid.uuid4())
+    blossom_output_filename = str(uuid.uuid4())
+
+    number_of_nodes = np.array(edges.keys()).max() + 1
+
+    with open(blossom_input_filename, 'w') as graph_file:
+        
+        graph_file.write('{} {}\n'.format(number_of_nodes, len(edges)))
+
+        for (i, j), w in edges.iteritems():
+            graph_file.write('{} {} {}\n'.format(i, j, w))
+
+    subprocess.check_call([blossomv_bin,
+                           '-e', blossom_input_filename,
+                           '-w', blossom_output_filename], stdout=subprocess.PIPE)
+
+    min_cost_edges = set()
+
+    with open(blossom_output_filename, 'r') as graph_file:
+        
+        first = True
+        
+        for line in graph_file:
+            
+            if first:
+                num_vertices, num_edges = [int(a) for a in line.split()]
+                first = False
+                continue
+            
+            vertex_id_1, vertex_id_2 = [int(a) for a in line.split()]
+
+            min_cost_edges.add((vertex_id_1, vertex_id_2))
+            min_cost_edges.add((vertex_id_2, vertex_id_1))
+
+    os.remove(blossom_input_filename)
+    os.remove(blossom_output_filename)
+
+    return min_cost_edges
+
 
 def df_stack(df, cols, suffixes):
 
@@ -459,57 +502,20 @@ class GenomeGraph(object):
 
         mod_edge_costs = self.build_mod_edge_costs(delta)
 
-        blossom_input_filename = str(uuid.uuid4())
-        blossom_output_filename = str(uuid.uuid4())
+        edge_cost_cols = ['vertex_id_1', 'vertex_id_2', 'cost']
 
-        with open(blossom_input_filename, 'w') as graph_file:
-            
-            num_edges = len(mod_edge_costs.index) + len(self.matching_vertex_edges.index)
-            num_vertices = len(self.matching_vertices.index)
-            
-            graph_file.write('{0} {1}\n'.format(num_vertices, num_edges))
+        edge_costs = [
+            self.matching_vertex_edges[edge_cost_cols],
+            mod_edge_costs[edge_cost_cols],
+        ]
+        edge_costs = pd.concat(edge_costs, ignore_index=True)
 
-            # print '# edges ', num_edges
-            # print '# vertices ', num_vertices
+        edge_costs['cost'] = np.rint(edge_costs['cost'] * self.integral_cost_scale).astype(int)
 
-            edge_cost_cols = ['vertex_id_1', 'vertex_id_2', 'cost']
+        edges = edge_costs.set_index(['vertex_id_1', 'vertex_id_2'])['cost'].to_dict()
+        min_cost_edges = blossomv.min_weight_perfect_matching(edges)
 
-            edge_costs = [
-                self.matching_vertex_edges[edge_cost_cols],
-                mod_edge_costs[edge_cost_cols],
-            ]
-            edge_costs = pd.concat(edge_costs, ignore_index=True)
-
-            edge_costs['cost'] = np.rint(edge_costs['cost'] * self.integral_cost_scale).astype(int)
-
-            edge_costs.to_csv(graph_file, sep='\t', columns=edge_cost_cols, index=False, header=False)
-
-        subprocess.check_call([blossomv_bin,
-                               '-e', blossom_input_filename,
-                               '-w', blossom_output_filename], stdout=subprocess.PIPE)
-
-        min_cost_edges = list()
-
-        with open(blossom_output_filename, 'r') as graph_file:
-            
-            first = True
-            
-            for line in graph_file:
-                
-                if first:
-                    num_vertices, num_edges = [int(a) for a in line.split()]
-                    first = False
-                    continue
-                
-                vertex_id_1, vertex_id_2 = [int(a) for a in line.split()]
-
-                min_cost_edges.append((vertex_id_1, vertex_id_2))
-                min_cost_edges.append((vertex_id_2, vertex_id_1))
-
-        os.remove(blossom_input_filename)
-        os.remove(blossom_output_filename)
-
-        min_cost_edges = pd.DataFrame(min_cost_edges, columns=['vertex_id_1', 'vertex_id_2'])
+        min_cost_edges = pd.DataFrame(list(min_cost_edges), columns=['vertex_id_1', 'vertex_id_2'])
 
         min_cost_edges = mod_edge_costs.merge(min_cost_edges)
 
