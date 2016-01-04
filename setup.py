@@ -21,6 +21,7 @@ extensions = [
     Extension('blossomv',
         sources=['remixt/blossomv.pyx'] + blossom_source,
         include_dirs=[blossom_directory],
+        libraries=['rt'],
     )
 ]
 
