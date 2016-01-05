@@ -63,7 +63,7 @@ def calculate_minor_modes(read_depth):
     return means
 
 
-def calculate_candidate_h(minor_modes, num_clones=None, num_mix_samples=20, dirichlet_alpha=0.1):
+def calculate_candidate_h(minor_modes, num_clones=None, num_mix_samples=20, dirichlet_alpha=1.0):
     """ Calculate modes in distribution of read depths for minor allele
 
     Args:
