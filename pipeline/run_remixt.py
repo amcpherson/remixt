@@ -54,7 +54,7 @@ if __name__ == '__main__':
     if args['experiment'] is None:
         experiment_file = mgd.TempFile('experiment.pickle')
     else:
-        experiment_file = mgd.File('experiment.pickle', fnames=args['experiment'])
+        experiment_file = mgd.File(args['experiment'])
 
     workflow.transform(
         name='init',
