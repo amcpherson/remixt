@@ -1,4 +1,5 @@
 import os
+import sys
 from setuptools import setup, find_packages, Extension
 from Cython.Build import cythonize
 
@@ -17,11 +18,15 @@ blossom_source = [
 
 blossom_source = [os.path.join(blossom_directory, filename) for filename in blossom_source]
 
+libraries = []
+if 'linux' in sys.platform:
+    libraries.append('rt')
+
 extensions = [
     Extension('blossomv',
         sources=['remixt/blossomv.pyx'] + blossom_source,
         include_dirs=[blossom_directory],
-        libraries=['rt'],
+        libraries=libraries,
     )
 ]
 
