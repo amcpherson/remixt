@@ -38,6 +38,9 @@ if __name__ == '__main__':
     argparser.add_argument('--num_clones', type=int,
         help='Number of clones')
 
+    argparser.add_argument('--fit_method', default='graph',
+        help='Method for learning copy number')
+
     argparser.add_argument('--cn_proportions',
         default=default_cn_proportions_filename,
         help='Number of clones')
@@ -80,6 +83,7 @@ if __name__ == '__main__':
             experiment_file.as_input(),
             mgd.TempInputFile('h_init', 'byh'),
             args['cn_proportions'],
+            args['fit_method'],
         ),
     )
 
