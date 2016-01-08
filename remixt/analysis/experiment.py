@@ -255,7 +255,7 @@ def create_cn_table(experiment, likelihood, cn, h):
     data['major_raw'] = (data['major_cov'] - h[0]) / h[1:].sum()
     data['minor_raw'] = (data['minor_cov'] - h[0]) / h[1:].sum()
     
-    data['ratio_raw'] = experiment.x[:,1] / experiment.x[:,:2].sum(axis=1)
+    data['ratio_raw'] = experiment.x[:,1].astype(float) / experiment.x[:,:2].sum(axis=1).astype(float)
 
     x_e = likelihood.expected_read_count(experiment.l, cn)
 
