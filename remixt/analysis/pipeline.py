@@ -107,6 +107,7 @@ def fit_hmm_viterbi(experiment, emission, prior, h_init):
     results['cn'] = cn
     results['brk_cn'] = brk_cn
     results['stats']['viterbi_log_posterior'] = log_posterior_viterbi
+    results['stats']['log_posterior'] = log_posterior_viterbi
 
     return results
 
@@ -151,6 +152,7 @@ def fit_hmm_graph(experiment, emission, prior, h_init):
     results['stats']['graph_opt_iter'] = graph.opt_iter
     results['stats']['graph_log_posterior'] = log_posterior_graph
     results['stats']['graph_decreased_log_posterior'] = graph.decreased_log_posterior
+    results['stats']['log_posterior'] = log_posterior_graph
 
     return results
 
@@ -193,6 +195,7 @@ def fit_graph(experiment, emission, prior, h_init):
     results['stats']['graph_opt_iter'] = graph.opt_iter
     results['stats']['graph_log_posterior'] = log_posterior
     results['stats']['graph_decreased_log_posterior'] = graph.decreased_log_posterior
+    results['stats']['log_posterior'] = log_posterior
 
     return results
 
