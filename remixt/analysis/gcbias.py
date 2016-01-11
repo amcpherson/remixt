@@ -17,6 +17,7 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
     genome_fai = remixt.config.get_filename(config, 'genome_fai')
     genome_fasta = remixt.config.get_filename(config, 'genome_fasta')
     mappability_filename = remixt.config.get_filename(config, 'mappability')
+    map_qual_threshold = remixt.config.get_param(config, 'map_qual_threshold')
 
     fragment_length = int(fragment_length)
     gc_window = fragment_length - 2 * position_offset
@@ -30,38 +31,17 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
     genome_length = chrom_info['chrom_length'].sum()
     sample_pos = np.sort(np.random.randint(0, genome_length, num_samples))
 
-    # Calculate mappability for each sample
-    sample_mappability = np.zeros(sample_pos.shape)
-
-    # Iterate large mappability file
-    mappability_iter = pd.read_csv(mappability_filename, sep='\t', header=None, iterator=True, chunksize=10000,
-        converters={'chromosome':str}, names=['chromosome', 'start', 'end', 'score'])
-    for mappability in mappability_iter:
-
-        # Filter extraneous chromosomes
-        mappability = mappability[mappability['chromosome'].isin(chromosomes)]
-
-        # Perfect mappability only
-        mappability = mappability[mappability['score'] == 1]
-
-        # Add chromosome start end and calculate start/end in concatenated genome
-        mappability = mappability.merge(chrom_info[['chrom_start']], left_on='chromosome', right_index=True)
-        mappability['start'] += mappability['chrom_start']
-        mappability['end'] += mappability['chrom_start']
-
-        # Add mappability for current iteration
-        sample_mappability += remixt.segalg.overlapping_counts(sample_pos, mappability[['start', 'end']].values)
-
-    # Filter unmappable positions
-    sample_pos = sample_pos[sample_mappability > 0]
-
-    # Calculate GC for each position
+    # Calculate GC/mappability for each position
     sample_gc_count = np.zeros(sample_pos.shape)
+    sample_mappability = np.ones(sample_pos.shape)
     for chrom_id, sequence in remixt.utils.read_sequences(genome_fasta):
 
         # Ignore extraneous chromosomes
         if chrom_id not in chromosomes:
             continue
+
+        # Read indicator of mappability based on threshold
+        mappability = read_mappability_indicator(mappability_filename, chrom_id, len(sequence), map_qual_threshold)
 
         # Start and end of current chromosome in concatenated genome
         chrom_start, chrom_end = chrom_info.loc[chrom_id, ['chrom_start', 'chrom_end']].values
@@ -78,15 +58,22 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
         # Calculate filter of positions in this chromosome
         chrom_sample_idx = (sample_pos >= chrom_start) & (sample_pos < chrom_end)
 
+        # Calculate positions within this chromosome
+        sample_chrom_pos = sample_pos[chrom_sample_idx] - chrom_start
+
+        # Set the mappability indicator of the start positions of each read
+        sample_mappability[chrom_sample_idx] *= mappability[sample_chrom_pos]
+
         # Calculate last position in window
-        chrom_window_end = sample_pos[chrom_sample_idx] - chrom_start + fragment_length - position_offset - 1
+        chrom_window_end = sample_chrom_pos + fragment_length - position_offset - 1
 
         # Add the gc count for filtered positions
         sample_gc_count[chrom_sample_idx] += gc_count[chrom_window_end]
 
-    # Filter nan gc count values
-    sample_pos = sample_pos[~np.isnan(sample_gc_count)]
-    sample_gc_count = sample_gc_count[~np.isnan(sample_gc_count)]
+    # Filter unmappable positions and nan gc count values
+    sample_filter = ((sample_mappability > 0) & (~np.isnan(sample_gc_count)))
+    sample_pos = sample_pos[sample_filter]
+    sample_gc_count = sample_gc_count[sample_filter]
 
     sample_gc_percent = sample_gc_count / float(gc_window)
 
@@ -163,17 +150,17 @@ def gc_lowess(gc_samples_filename, gc_dist_filename, gc_table_filename, gc_resol
     gc_binned[['smoothed']].to_csv(gc_dist_filename, sep='\t', index=False, header=False)
 
 
-def read_mappability_indicator(mappability_filename, chromosome, max_chromosome_length):
+def read_mappability_indicator(mappability_filename, chromosome, max_chromosome_length, map_qual_threshold):
     """ Read a mappability wig file into a mappability vector
     """
-    mappability_table = pd.read_csv(mappability_filename, sep='\t', header=None,
-        converters={'chromosome':str}, names=['chromosome', 'start', 'end', 'score'])
+    with pd.HDFStore(mappability_filename, 'r') as store:
+        mappability_table = store.select('chromosome_'+chromosome, 'quality >= map_qual_threshold')
 
     mappability = np.zeros(max_chromosome_length, dtype=np.uint8)
 
-    for start, end, value in mappability_table.loc[mappability_table['chromosome'] == chromosome, ['start', 'end', 'score']].values:
+    for start, end in mappability_table[['start', 'end']].values:
         end = min(end, max_chromosome_length)
-        mappability[start:end] = value
+        mappability[start:end] = 1
 
     return mappability
 
@@ -231,6 +218,7 @@ def calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_file
     position_offset = remixt.config.get_param(config, 'gc_position_offset')
     genome_fasta = remixt.config.get_filename(config, 'genome_fasta')
     mappability_filename = remixt.config.get_filename(config, 'mappability')
+    map_qual_threshold = remixt.config.get_param(config, 'map_qual_threshold')
     read_length = remixt.config.get_param(config, 'mappability_length')
 
     gc_dist = GCCurve()
@@ -244,7 +232,7 @@ def calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_file
     for chromosome, chrom_seg in segments.groupby('chromosome', sort=False):
         gc_cumsum = read_gc_cumsum(genome_fasta, chromosome)
         chromosome_length = gc_cumsum.shape[0]
-        mappability = read_mappability_indicator(mappability_filename, chromosome, chromosome_length)
+        mappability = read_mappability_indicator(mappability_filename, chromosome, chromosome_length, map_qual_threshold)
 
         for idx, (start, end) in chrom_seg[['start', 'end']].iterrows():
             segments.loc[idx, 'bias'] = calculate_segment_gc_map_bias(gc_cumsum[start:end], mappability[start:end],

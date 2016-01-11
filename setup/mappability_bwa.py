@@ -1,15 +1,9 @@
-import sys
 import csv
-import subprocess
-from collections import *
-import math
-import random
 import argparse
-import uuid
 import os
-import pickle
-import gzip
 import itertools
+import numpy as np
+import pandas as pd
 
 import pypeliner
 import pypeliner.managed as mgd
@@ -39,7 +33,7 @@ if __name__ == '__main__':
 
     args = vars(argparser.parse_args())
 
-    config = {'ref_data_directory':args['ref_data_dir']}
+    config = {'ref_data_directory': args['ref_data_dir']}
     execfile(default_config_filename, {}, config)
 
     if args['config'] is not None:
@@ -49,53 +43,77 @@ if __name__ == '__main__':
 
     pyp = pypeliner.app.Pypeline([mappability_bwa], config)
 
-    ctx = {'mem':6}
+    workflow = pypeliner.workflow.Workflow(default_ctx={'mem': 6})
     
-    pyp.sch.transform('create_kmers', (), ctx,
-        mappability_bwa.create_kmers,
-        None,
-        mgd.InputFile(config['genome_fasta']),
-        int(config['mappability_length']),
-        mgd.TempOutputFile('kmers'))
+    workflow.transform(
+        name='create_kmers',
+        func=mappability_bwa.create_kmers,
+        args=(
+            mgd.InputFile(config['genome_fasta']),
+            int(config['mappability_length']),
+            mgd.TempOutputFile('kmers'),
+        ),
+    )
 
-    pyp.sch.transform('split_kmers', (), ctx,
-        mappability_bwa.split_file_byline,
-        None,
-        mgd.TempInputFile('kmers'),
-        4000000,
-        mgd.TempOutputFile('kmers', 'bykmer'))
+    workflow.transform(
+        name='split_kmers',
+        func=mappability_bwa.split_file_byline,
+        args=(
+            mgd.TempInputFile('kmers'),
+            4000000,
+            mgd.TempOutputFile('kmers', 'bykmer'),
+        ),
+    )
 
-    pyp.sch.commandline('bwa_aln_kmers', ('bykmer',), ctx,
-        'bwa',
-        'aln',
-        mgd.InputFile(config['genome_fasta']),
-        mgd.TempInputFile('kmers', 'bykmer'),
-        '>',
-        mgd.TempOutputFile('sai', 'bykmer'))
+    workflow.commandline(
+        name='bwa_aln_kmers',
+        axes=('bykmer',),
+        args=(
+            'bwa',
+            'aln',
+            mgd.InputFile(config['genome_fasta']),
+            mgd.TempInputFile('kmers', 'bykmer'),
+            '>',
+            mgd.TempOutputFile('sai', 'bykmer'),
+        ),
+    )
 
-    pyp.sch.commandline('bwa_samse_kmers', ('bykmer',), ctx,
-        'bwa',
-        'samse',
-        mgd.InputFile(config['genome_fasta']),
-        mgd.TempInputFile('sai', 'bykmer'),
-        mgd.TempInputFile('kmers', 'bykmer'),
-        '>',
-        mgd.TempOutputFile('alignments', 'bykmer'))
+    workflow.commandline(
+        name='bwa_samse_kmers',
+        axes=('bykmer',),
+        args=(
+            'bwa',
+            'samse',
+            mgd.InputFile(config['genome_fasta']),
+            mgd.TempInputFile('sai', 'bykmer'),
+            mgd.TempInputFile('kmers', 'bykmer'),
+            '>',
+            mgd.TempOutputFile('alignments', 'bykmer'),
+        ),
+    )
 
-    pyp.sch.transform('create_bedgraph', ('bykmer',), ctx,
-        mappability_bwa.create_bedgraph,
-        None,
-        mgd.TempInputFile('alignments', 'bykmer'),
-        mgd.TempOutputFile('bedgraph', 'bykmer'))
+    workflow.transform(
+        name='create_bedgraph',
+        axes=('bykmer',),
+        func=mappability_bwa.create_bedgraph,
+        args=(
+            mgd.TempInputFile('alignments', 'bykmer'),
+            mgd.TempOutputFile('bedgraph', 'bykmer'),
+        ),
+    )
 
-    pyp.sch.transform('merge_bedgraph', (), ctx,
-        mappability_bwa.merge_files_by_line,
-        None,
-        mgd.TempInputFile('bedgraph', 'bykmer'),
-        mgd.OutputFile(config['mappability_filename']))
+    workflow.transform(
+        name='merge_bedgraph',
+        func=mappability_bwa.merge_files_by_line,
+        args=(
+            mgd.TempInputFile('bedgraph', 'bykmer'),
+            mgd.OutputFile(config['mappability_filename']),
+        ),
+    )
 
-    pyp.run()
+    pyp.run(workflow)
     
+
 def create_kmers(genome_fasta, k, kmers_filename):
     with open(kmers_filename, 'w') as kmers_file:
         genome_sequences = dict(remixt.utils.read_sequences(genome_fasta))
@@ -108,6 +126,7 @@ def create_kmers(genome_fasta, k, kmers_filename):
                 if 'N' in kmer:
                     continue
                 kmers_file.write('>{0}:{1}\n{2}\n'.format(chromosome, start, kmer))
+
 
 def split_file_byline(in_filename, lines_per_file, out_filename_callback):
     with open(in_filename, 'r') as in_file:
@@ -128,23 +147,51 @@ def split_file_byline(in_filename, lines_per_file, out_filename_callback):
             if out_file is not None:
                 out_file.close()
 
+
 def create_bedgraph(alignment_filename, bedgraph_filename):
-    mappable = defaultdict(list)
+    mqual_table = list()
     with open(alignment_filename, 'r') as alignment_file:
         for row in csv.reader(alignment_file, delimiter='\t'):
             if row[0][0] == '@':
                 continue
-            if int(row[4]) != 0:
-                chromosome, position = row[0].split(':')
-                position = int(position)
-                mappable[chromosome].append(position)
-    with open(bedgraph_filename, 'w') as bedgraph_file:
-        for chromosome, positions in mappable.iteritems():
-            positions = sorted(positions)
-            for idx, adjacent_positions in itertools.groupby(positions, lambda n, c=itertools.count(positions[0]): n-next(c)):
-                adjacent_positions = list(adjacent_positions)
-                bedgraph_file.write('{0}\t{1}\t{2}\t{3}\n'.format(chromosome, min(adjacent_positions), max(adjacent_positions) + 1, 1))
+            origin_chromosome = row[0].split(':')[0]
+            origin_position = int(row[0].split(':')[1])
+            mapping_chromosome = row[2]
+            mapping_position = int(row[3]) - 1   # 0-based positions
+            mapping_quality = int(row[4])
+            if origin_chromosome != mapping_chromosome:
+                continue
+            if origin_position != mapping_position:
+                continue
+            mqual_table.append((origin_chromosome, origin_position, mapping_quality))
+        mqual_table = pd.DataFrame(mqual_table, columns=['chromosome', 'position', 'quality'])
+        mqual_table['chromosome_index'] = np.searchsorted(np.unique(mqual_table['chromosome']), mqual_table['chromosome'])
+        mqual_table.sort(['chromosome_index', 'position'], inplace=True)
+        mqual_table['chromosome_diff'] = mqual_table['chromosome_index'].diff()
+        mqual_table['position_diff'] = mqual_table['position'].diff() - 1
+        mqual_table['quality_diff'] = mqual_table['quality'].diff()
+        mqual_table['is_diff'] = (mqual_table[['chromosome_diff', 'position_diff', 'quality_diff']].sum(axis=1) != 0)
+        mqual_table['group'] = mqual_table['is_diff'].cumsum()
+        def agg_positions(data):
+            return pd.Series({
+                    'chromosome': data['chromosome'].iloc[0],
+                    'start': data['position'].min(),
+                    'end': data['position'].max() + 1,
+                    'quality': data['quality'].iloc[0],
+            })
+        mqual_table = mqual_table.groupby('group').apply(agg_positions)
+        mqual_table.to_csv(
+            bedgraph_filename, sep='\t', index=False, header=False,
+            columns=['chromosome', 'start', 'end', 'quality'])
                 
+
 def merge_files_by_line(in_filenames, out_filename):
-    pypeliner.commandline.execute(*(['cat'] + in_filenames.values() + ['>', out_filename]))
+    with pd.HDFStore(out_filename, 'w') as store:
+        for in_filename in in_filenames.itervalues():
+            data = pd.read_csv(
+                in_filename, sep='\t', header=None,
+                names=['chromosome', 'start', 'end', 'quality'],
+                converters={'chromosome':str})
+            for chromosome, chrom_data in data.groupby('chromosome'):
+                store.append('chromosome_'+chromosome, chrom_data[['start', 'end', 'quality']], data_columns=True)
 

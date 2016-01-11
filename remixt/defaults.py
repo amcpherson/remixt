@@ -41,7 +41,7 @@ map_qual_threshold                          = 1
 filter_duplicates                           = False
 
 # Locally installed mappability filename produced by mappability setup script
-mappability_template                        = '{ref_data_directory}/{ucsc_genome_version}.{mappability_length}.bwa.mappability'
+mappability_template                        = '{ref_data_directory}/{ucsc_genome_version}.{mappability_length}.bwa.mappability.h5'
 
 # Thousand genomes dataset
 thousand_genomes_impute_url                 = 'http://mathgen.stats.ox.ac.uk/impute/ALL_1000G_phase1integrated_v3_impute.tgz'
