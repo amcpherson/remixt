@@ -1,23 +1,10 @@
-import os
-import sys
-import itertools
 import argparse
-import pickle
-import collections
-import pandas as pd
-import numpy as np
 
 import pypeliner
-import pypeliner.workflow
 import pypeliner.managed as mgd
 
 import remixt
-import remixt.analysis.pipeline
-
-
-remixt_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
-data_directory = os.path.join(remixt_directory, 'data')
-default_cn_proportions_filename = os.path.join(data_directory, 'cn_proportions.tsv')
+import remixt.workflow
 
 
 if __name__ == '__main__':
@@ -38,12 +25,11 @@ if __name__ == '__main__':
     argparser.add_argument('--num_clones', type=int,
         help='Number of clones')
 
-    argparser.add_argument('--fit_method', default='graph',
+    argparser.add_argument('--fit_method',
         help='Method for learning copy number')
 
     argparser.add_argument('--cn_proportions',
-        default=default_cn_proportions_filename,
-        help='Number of clones')
+        help='Copy number state proportions table for prior')
 
     argparser.add_argument('--experiment',
         help='Debug output experiment pickle')
@@ -52,55 +38,37 @@ if __name__ == '__main__':
 
     pyp = pypeliner.app.Pypeline([remixt], args)
 
-    workflow = pypeliner.workflow.Workflow(default_ctx={'mem':8})
-
     if args['experiment'] is None:
         experiment_file = mgd.TempFile('experiment.pickle')
     else:
         experiment_file = mgd.File(args['experiment'])
 
+    workflow = pypeliner.workflow.Workflow()
+
     workflow.transform(
-        name='init',
-        func=remixt.analysis.pipeline.init,
+        name='create_experiment',
+        ctx={'mem': 8},
+        func=remixt.analysis.experiment.create_experiment,
         args=(
-            experiment_file.as_output(),
-            mgd.TempOutputFile('h_init', 'byh'),
-            mgd.TempOutputFile('init_results'),
             mgd.InputFile(args['counts']),
             mgd.InputFile(args['breakpoints']),
+            experiment_file.as_output(),
+        ),
+    )
+
+    workflow.subworkflow(
+        name='run_remixt',
+        func=remixt.workflow.create_remixt_workflow,
+        args=(
+            experiment_file.as_input(),
+            mgd.OutputFile(args['results']),
         ),
         kwargs={
-            'num_clones':args['num_clones'],
-        }
-    )
-
-    workflow.transform(
-        name='fit',
-        axes=('byh',),
-        func=remixt.analysis.pipeline.fit,
-        args=(
-            mgd.TempOutputFile('fit_results', 'byh'),
-            experiment_file.as_input(),
-            mgd.TempInputFile('h_init', 'byh'),
-            args['cn_proportions'],
-            args['fit_method'],
-        ),
-    )
-
-    workflow.transform(
-        name='collate',
-        func=remixt.analysis.pipeline.collate,
-        args=(
-            mgd.OutputFile(args['results']),
-            mgd.InputFile(args['breakpoints']),
-            experiment_file.as_input(),
-            mgd.TempInputFile('init_results'),
-            mgd.TempInputFile('fit_results', 'byh'),
-        ),
+            'fit_method': args['fit_method'],
+            'cn_proportions_filename': args['cn_proportions'],
+            'num_clones': args['num_clones'],
+        },
     )
 
     pyp.run(workflow)
-
-
-
 

@@ -1,5 +1,4 @@
 import os
-import sys
 import pandas as pd
 import numpy as np
 import scipy
@@ -7,6 +6,7 @@ import scipy.stats
 import pypeliner
 
 import remixt.seqdataio
+import remixt.config
 
 
 def infer_snp_genotype(data, base_call_error=0.005, call_threshold=0.9):
@@ -62,6 +62,10 @@ def read_snp_counts(seqdata_filename, chromosome, num_rows=1000000):
     snp_counts = list()
     for alleles_chunk in remixt.seqdataio.read_allele_data(seqdata_filename, chromosome=chromosome, num_rows=num_rows):
 
+        if len(alleles_chunk.index) == 0:
+            snp_counts.append(pd.DataFrame(columns=['position', 'ref_count', 'alt_count'], dtype=int))
+            continue
+
         snp_counts_chunk = (
             alleles_chunk
             .groupby(['position', 'is_alt'])
@@ -75,7 +79,14 @@ def read_snp_counts(seqdata_filename, chromosome, num_rows=1000000):
 
         snp_counts.append(snp_counts_chunk)
 
-    snp_counts = pd.concat(snp_counts, ignore_index=True).groupby('position').sum().reset_index()
+    snp_counts = pd.concat(snp_counts, ignore_index=True)
+
+    if len(snp_counts.index) == 0:
+        return pd.DataFrame(columns=['position', 'ref_count', 'alt_count'], dtype=int)
+
+    # Consolodate positions split by chunking
+    snp_counts = snp_counts.groupby('position').sum().reset_index()
+
     snp_counts.sort('position', inplace=True)
 
     return snp_counts
@@ -120,10 +131,10 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
     # Impute 2 files for thousand genomes data by chromosome
     phased_chromosome = chromosome
     if chromosome == 'X':
-        phased_chromosome = config['phased_chromosome_x']
-    genetic_map_filename = config['genetic_map_template'].format(phased_chromosome)
-    hap_filename = config['haplotypes_template'].format(phased_chromosome)
-    legend_filename = config['legend_template'].format(phased_chromosome)
+        phased_chromosome = remixt.config.get_param(config, 'phased_chromosome_x')
+    genetic_map_filename = remixt.config.get_filename(config, 'genetic_map', chromosome=phased_chromosome)
+    hap_filename = remixt.config.get_filename(config, 'haplotypes', chromosome=phased_chromosome)
+    legend_filename = remixt.config.get_filename(config, 'legend', chromosome=phased_chromosome)
 
     # Call snps based on reference and alternate read counts from normal
     snp_counts_df = read_snp_counts(seqdata_filename, chromosome)
@@ -132,7 +143,10 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
         write_null()
         return
 
-    infer_snp_genotype(snp_counts_df, config['sequencing_base_call_error'], config['het_snp_call_threshold'])
+    sequencing_base_call_error = remixt.config.get_param(config, 'sequencing_base_call_error')
+    het_snp_call_threshold = remixt.config.get_param(config, 'het_snp_call_threshold')
+
+    infer_snp_genotype(snp_counts_df, sequencing_base_call_error, het_snp_call_threshold)
 
     # Remove ambiguous positions
     snp_counts_df = snp_counts_df[(snp_counts_df['AA'] == 1) | (snp_counts_df['AB'] == 1) | (snp_counts_df['BB'] == 1)]
@@ -164,14 +178,16 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
     chr_x_flag = ''
     if chromosome == 'X':
         chr_x_flag = '--chrX'
-    pypeliner.commandline.execute('shapeit', '-M', genetic_map_filename, '-R', hap_filename, legend_filename, config['sample_filename'],
+    sample_filename = remixt.config.get_filename(config, 'sample')
+    pypeliner.commandline.execute('shapeit', '-M', genetic_map_filename, '-R', hap_filename, legend_filename, sample_filename,
                                   '-G', temp_gen_filename, temp_sample_filename, '--output-graph', hgraph_filename, chr_x_flag,
                                   '--no-mcmc', '-L', hgraph_logs_prefix)
 
     # Run shapeit to sample from phased haplotype graph
     sample_template = os.path.join(temp_directory, 'sampled.{0}')
     averaged_changepoints = None
-    for s in range(int(config['shapeit_num_samples'])):
+    shapeit_num_samples = remixt.config.get_param(config, 'shapeit_num_samples')
+    for s in range(shapeit_num_samples):
         sample_prefix = sample_template.format(s)
         sample_log_filename = sample_prefix + '.log'
         sample_haps_filename = sample_prefix + '.haps'
@@ -193,7 +209,7 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
         os.remove(sample_log_filename)
         os.remove(sample_haps_filename)
         os.remove(sample_sample_filename)
-    averaged_changepoints /= float(config['shapeit_num_samples'])
+    averaged_changepoints /= float(shapeit_num_samples)
     last_sample_haps = sample_haps
 
     # Identify changepoints recurrent across samples
@@ -202,8 +218,9 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
     # Create a list of labels for haplotypes between recurrent changepoints
     current_hap_label = 0
     hap_label = list()
+    shapeit_confidence_threshold = remixt.config.get_param(config, 'shapeit_confidence_threshold')
     for x in changepoint_confidence:
-        if x < float(config['shapeit_confidence_threshold']):
+        if x < float(shapeit_confidence_threshold):
             current_hap_label += 1
         hap_label.append(current_hap_label)
 
@@ -303,6 +320,10 @@ def count_allele_reads(seqdata_filename, haps, chromosome, segments):
 
     # Merge segment start end, key for each segment (for given chromosome)
     alleles = alleles.merge(segments[['start', 'end']], left_on='segment_idx', right_index=True)
+
+    # Workaround for groupy/size for pandas
+    if len(alleles.index) == 0:
+        return pd.DataFrame(columns=['chromosome', 'start', 'end', 'hap_label', 'allele_id'])
 
     # Count reads for each allele
     allele_counts = (

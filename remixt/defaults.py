@@ -19,14 +19,14 @@ ensembl_assemblies                          = ['chromosome.1', 'chromosome.2', '
 chromosomes                                 = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', 'X']
 
 # Ensemble reference genome chromosome assemblies
-ensembl_assembly_url = 'ftp://ftp.ensembl.org/pub/release-'+ensembl_version+'/fasta/homo_sapiens/dna/Homo_sapiens.'+ensembl_genome_version+'.'+ensembl_version+'.dna.{0}.fa.gz'
+ensembl_assembly_url_template               = 'ftp://ftp.ensembl.org/pub/release-{ensembl_version}/fasta/homo_sapiens/dna/Homo_sapiens.{ensembl_genome_version}.{ensembl_version}.dna.{0}.fa.gz'
 
 # Ucsc genome version (must match ensembl version!)
 ucsc_genome_version                         = 'hg19'
 
 # Locally installed reference genome
-genome_fasta                                = ref_data_directory+'/Homo_sapiens.'+ensembl_genome_version+'.'+ensembl_version+'.dna.chromosomes.fa'
-genome_fai                                  = genome_fasta+'.fai'
+genome_fasta_template                       = '{ref_data_directory}/Homo_sapiens.{ensembl_genome_version}.{ensembl_version}.dna.chromosomes.fa'
+genome_fai_template                         = '{ref_data_directory}/Homo_sapiens.{ensembl_genome_version}.{ensembl_version}.dna.chromosomes.fa.fai'
 
 # Segment length for automatically generated segments
 segment_length                              = int(3e6)
@@ -35,19 +35,19 @@ segment_length                              = int(3e6)
 mappability_length                          = 100
 
 # Locally installed mappability filename produced by mappability setup script
-mappability_filename                        = ref_data_directory+'/'+ucsc_genome_version+'.'+str(mappability_length)+'.bwa.mappability'
+mappability_template                        = '{ref_data_directory}/{ucsc_genome_version}.{mappability_length}.bwa.mappability'
 
 # Thousand genomes dataset
 thousand_genomes_impute_url                 = 'http://mathgen.stats.ox.ac.uk/impute/ALL_1000G_phase1integrated_v3_impute.tgz'
-thousand_genomes_directory                  = ref_data_directory+'/ALL_1000G_phase1integrated_v3_impute'
-sample_filename                             = thousand_genomes_directory+'/ALL_1000G_phase1integrated_v3.sample'
-legend_template                             = thousand_genomes_directory+'/ALL_1000G_phase1integrated_v3_chr{0}_impute.legend.gz'
-haplotypes_template                         = thousand_genomes_directory+'/ALL_1000G_phase1integrated_v3_chr{0}_impute.hap.gz'
-genetic_map_template                        = thousand_genomes_directory+'/genetic_map_chr{0}_combined_b37.txt'
+thousand_genomes_directory                  = '{ref_data_directory}/ALL_1000G_phase1integrated_v3_impute'
+sample_template                             = thousand_genomes_directory+'/ALL_1000G_phase1integrated_v3.sample'
+legend_template                             = thousand_genomes_directory+'/ALL_1000G_phase1integrated_v3_chr{chromosome}_impute.legend.gz'
+haplotypes_template                         = thousand_genomes_directory+'/ALL_1000G_phase1integrated_v3_chr{chromosome}_impute.hap.gz'
+genetic_map_template                        = thousand_genomes_directory+'/genetic_map_chr{chromosome}_combined_b37.txt'
 phased_chromosome_x                         = 'X_nonPAR'
 
 # Locally installed snps from thousand genomes
-snp_positions                               = ref_data_directory+'/thousand_genomes_snps.tsv'
+snp_positions_template                      = '{ref_data_directory}/thousand_genomes_snps.tsv'
 
 ###
 # Algorithm parameters

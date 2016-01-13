@@ -8,7 +8,6 @@
 #include <string>
 #include <map>
 #include <set>
-#include <tclap/CmdLine.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/unordered_map.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
@@ -50,11 +49,12 @@ inline bool IsReadPairDiscordant(const BamAlignment& alignment, double maxFragme
 			 abs(alignment.InsertSize) <= maxFragmentLength);
 }
 
-inline bool IsReadValidConcordant(const BamAlignment& alignment, double maxSoftClipped)
+inline bool IsReadValidConcordant(const BamAlignment& alignment, double maxSoftClipped, bool removeDuplicates, int mapQualThreshold)
 {
 	return (GetNumSoftClipped(alignment) <= maxSoftClipped &&
 			!alignment.IsFailedQC() &&
-			alignment.MapQuality > 0);
+			alignment.MapQuality >= mapQualThreshold &&
+			(!removeDuplicates || !alignment.IsDuplicate()));
 }
 
 struct SNPInfo
@@ -71,13 +71,16 @@ struct SNPInfo
 
 struct AlleleReader : PileupVisitor, DiscardAlignmentVisitor
 {
-	AlleleReader(BamReader& bamReader, const string& chromosome, ostream& readsFile, ostream& allelesFile, int maxFragmentLength, int maxSoftClipped)
+	AlleleReader(BamReader& bamReader, const string& chromosome, ostream& readsFile, ostream& allelesFile,
+	             int maxFragmentLength, int maxSoftClipped, bool removeDuplicates, int mapQualThreshold)
 		: mBamReader(bamReader),
 		  mChromosome(chromosome),
 		  mReadsFile(readsFile),
 		  mAllelesFile(allelesFile),
 		  mMaxFragmentLength(maxFragmentLength),
 		  mMaxSoftClipped(maxSoftClipped),
+		  mRemoveDuplicates(removeDuplicates),
+		  mMapQualThreshold(mapQualThreshold),
 		  mRefID(-1),
 		  mNextReadID(0)
 	{
@@ -100,8 +103,7 @@ struct AlleleReader : PileupVisitor, DiscardAlignmentVisitor
 
 			if (mRefID < 0)
 			{
-				cerr << "Error: Unable to find chromosome " << mChromosome << " or " << mAlternateChromosome << endl;
-				exit(1);
+				throw out_of_range("Unable to find chromosome " + mChromosome + " or " + mAlternateChromosome);
 			}
 		}
 
@@ -123,8 +125,7 @@ struct AlleleReader : PileupVisitor, DiscardAlignmentVisitor
 		{
 			if (fields.size() < 4)
 			{
-				cerr << "Error: expected chr,pos,ref,alt in file " << snpFilename << endl;
-				exit(1);
+				throw out_of_range("Expected chr,pos,ref,alt in file " + snpFilename);
 			}
 			
 			const string& chromosome = fields[0];
@@ -169,7 +170,7 @@ struct AlleleReader : PileupVisitor, DiscardAlignmentVisitor
 			}
 			
 			// Classify remaining reads as valid concordant reads
-			bool valid = IsReadValidConcordant(alignment, mMaxSoftClipped);
+			bool valid = IsReadValidConcordant(alignment, mMaxSoftClipped, mRemoveDuplicates, mMapQualThreshold);
 			
 			// Add valid concordant alignments to the queue
 			if (valid)
@@ -185,7 +186,7 @@ struct AlleleReader : PileupVisitor, DiscardAlignmentVisitor
 				BamAlignment& alignment2 = otherEndIter->second;
 				
 				bool valid1 = valid;
-				bool valid2 = IsReadValidConcordant(alignment2, mMaxSoftClipped);
+				bool valid2 = IsReadValidConcordant(alignment2, mMaxSoftClipped, mRemoveDuplicates, mMapQualThreshold);
 				bool validPair = valid1 && valid2;
 				
 				if (validPair)
@@ -358,67 +359,41 @@ struct AlleleReader : PileupVisitor, DiscardAlignmentVisitor
 	
 	int mMaxFragmentLength;
 	int mMaxSoftClipped;
+	bool mRemoveDuplicates;
+	int mMapQualThreshold;
 	
 	deque<BamAlignment> mReadQueue;
 	unordered_map<string,BamAlignment> mReadBuffer[2];
 	unordered_map<string,bool> mReadStatus[2];
 	unordered_map<string,int> mReadID[2];
 	
-	uint32_t mNextReadID;
 	int mRefID;
+	uint32_t mNextReadID;
 	
 	vector<SNPInfo> mSNPs;
 	vector<SNPInfo>::const_iterator mSNPIter;
 };
 
-
-int main(int argc, char* argv[])
+void ExtractReads(
+	const string& bamFilename,
+	const string& snpFilename,
+	int maxFragmentLength,
+	int maxSoftClipped,
+	const string& chromosome,
+	const string& readsFilename,
+	const string& allelesFilename,
+	bool removeDuplicates,
+	int mapQualThreshold)
 {
-	string bamFilename;
-	string snpFilename;
-	int maxFragmentLength;
-	int maxSoftClipped;
-	string chromosome;
-	string readsFilename;
-	string allelesFilename;
-	
-	try
-	{
-		TCLAP::CmdLine cmd("Bam Concordant Read Extractor");
-		TCLAP::ValueArg<string> bamFilenameArg("b","bam","Bam Filename",true,"","string",cmd);
-		TCLAP::ValueArg<string> snpFilenameArg("s","snp","SNP Filename",false,"","string",cmd);
-		TCLAP::ValueArg<int> maxFragmentLengthArg("","flen","Maximum Fragment Length",false,1000,"integer",cmd);
-		TCLAP::ValueArg<int> maxSoftClippedArg("","clipmax","Maximum Allowable Soft Clipped",false,8,"integer",cmd);
-		TCLAP::ValueArg<string> chromosomeArg("c","chr","Restrict to Specific Chromosome",true,"","string",cmd);
-		TCLAP::ValueArg<string> readsFilenameArg("r","reads","Read Alignments Filename",true,"","string",cmd);
-		TCLAP::ValueArg<string> allelesFilenameArg("a","alleles","Read Alleles Filename",true,"","string",cmd);
-		cmd.parse(argc,argv);
-		
-		bamFilename = bamFilenameArg.getValue();
-		snpFilename = snpFilenameArg.getValue();
-		maxFragmentLength = maxFragmentLengthArg.getValue();
-		maxSoftClipped = maxSoftClippedArg.getValue();
-		chromosome = chromosomeArg.getValue();
-		readsFilename = readsFilenameArg.getValue();
-		allelesFilename = allelesFilenameArg.getValue();
-	}
-	catch (TCLAP::ArgException &e)
-	{
-		cerr << "error: " << e.error() << " for arg " << e.argId() << endl;
-		exit(1);
-	}
-	
 	BamReader bamReader;
 	if (!bamReader.Open(bamFilename))
 	{
-		cerr << "Error: Unable to open bam file " << bamFilename << endl;
-		exit(1);
+		throw invalid_argument("Unable to open bam file " + bamFilename);
 	}
 	
 	if (!bamReader.LocateIndex())
 	{
-		cerr << "Error: Unable to find index for bam file " << bamFilename << endl;
-		exit(1);
+		throw invalid_argument("Unable to find index for bam file " + bamFilename);
 	}
 	
 	ofstream readsFile(readsFilename.c_str(), ios_base::binary);
@@ -438,7 +413,9 @@ int main(int argc, char* argv[])
 	readsFilter.component<iostreams::gzip_compressor>(0)->write(readsFile, &dummy, 0);
 	allelesFilter.component<iostreams::gzip_compressor>(0)->write(allelesFile, &dummy, 0);
 	
-	AlleleReader alleleReader(bamReader, chromosome, readsFilter, allelesFilter, maxFragmentLength, maxSoftClipped);
+	AlleleReader alleleReader(bamReader, chromosome, readsFilter, allelesFilter,
+	                          maxFragmentLength, maxSoftClipped, removeDuplicates,
+	                          mapQualThreshold);
 
 	if (!snpFilename.empty())
 	{
@@ -447,5 +424,4 @@ int main(int argc, char* argv[])
 	
 	alleleReader.ProcessBam();
 }
-
 

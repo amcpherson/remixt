@@ -1,5 +1,6 @@
 import collections
 import itertools
+import pickle
 import numpy as np
 import pandas as pd
 
@@ -16,6 +17,7 @@ Experiment = collections.namedtuple('Experiment', [
     'adjacencies',
     'breakpoints',
     'breakpoint_table',
+    'breakpoint_data',
 ])
 
 
@@ -135,7 +137,7 @@ def find_closest_segment_end(segment_data, breakpoint_data):
     return break_segment_table
 
 
-def create_experiment(count_filename, breakpoint_filename, min_brk_dist=2000, min_length=None):
+def create_experiment(count_filename, breakpoint_filename, experiment_filename, min_brk_dist=2000, min_length=None):
 
     count_data = pd.read_csv(count_filename, sep='\t',
         converters={'chromosome':str})
@@ -219,9 +221,11 @@ def create_experiment(count_filename, breakpoint_filename, min_brk_dist=2000, mi
         adjacencies,
         breakpoints,
         breakpoint_table,
+        breakpoint_data,
     )
 
-    return experiment
+    with open(experiment_filename, 'w') as f:
+        pickle.dump(experiment, f)
 
 
 def create_cn_table(experiment, likelihood, cn, h):

@@ -98,10 +98,23 @@ def merge_files(output_filename, *input_filenames):
                 shutil.copyfileobj(input_file, output_file)
 
 
+def read_table_raw(filename):
+    peek = pd.read_csv(filename, sep='\t', nrows=1)
+    columns = peek.columns
+    dtypes = dict(zip(columns, itertools.repeat(str, len(columns))))
+    return pd.read_csv(filename, sep='\t', dtype=dtypes)
+
+
+def split_table(output_filenames, input_filename, num_rows):
+    input_data = read_table_raw(input_filename)
+    for idx, start_row in enumerate(xrange(0, len(input_data.index), num_rows)):
+        input_data.iloc[start_row:start_row+num_rows,].to_csv(output_filenames[idx], sep='\t', index=False)
+
+
 def merge_tables(output_filename, *input_filenames):
     if len(input_filenames) == 1 and isinstance(input_filenames[0], dict):
         input_filenames = input_filenames[0].values()
-    input_data = [pd.read_csv(fname, sep='\t', dtype=str) for fname in input_filenames]
+    input_data = [read_table_raw(fname) for fname in input_filenames]
     pd.concat(input_data).to_csv(output_filename, sep='\t', index=False)
 
 

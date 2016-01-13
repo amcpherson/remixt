@@ -3,17 +3,20 @@ import pandas as pd
 import statsmodels.api as sm
 import scipy.stats
 
+import remixt.config
+import remixt.segalg
+import remixt.seqdataio
 import remixt.utils
 
 
 def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
 
-    chromosomes = config['chromosomes']
-    num_samples = config['sample_gc_num_positions']
-    position_offset = config['gc_position_offset']
-    genome_fai = config['genome_fai']
-    genome_fasta = config['genome_fasta']
-    mappability_filename = config['mappability_filename']
+    chromosomes = remixt.config.get_param(config, 'chromosomes')
+    num_samples = remixt.config.get_param(config, 'sample_gc_num_positions')
+    position_offset = remixt.config.get_param(config, 'gc_position_offset')
+    genome_fai = remixt.config.get_filename(config, 'genome_fai')
+    genome_fasta = remixt.config.get_filename(config, 'genome_fasta')
+    mappability_filename = remixt.config.get_filename(config, 'mappability')
 
     fragment_length = int(fragment_length)
     gc_window = fragment_length - 2 * position_offset
@@ -160,15 +163,16 @@ def gc_lowess(gc_samples_filename, gc_dist_filename, gc_table_filename, gc_resol
     gc_binned[['smoothed']].to_csv(gc_dist_filename, sep='\t', index=False, header=False)
 
 
-def read_mappability_indicator(mappability_filename, chromosome, chromosome_length):
+def read_mappability_indicator(mappability_filename, chromosome, max_chromosome_length):
     """ Read a mappability wig file into a mappability vector
     """
     mappability_table = pd.read_csv(mappability_filename, sep='\t', header=None,
         converters={'chromosome':str}, names=['chromosome', 'start', 'end', 'score'])
 
-    mappability = np.zeros(chromosome_length, dtype=np.uint8)
+    mappability = np.zeros(max_chromosome_length, dtype=np.uint8)
 
     for start, end, value in mappability_table.loc[mappability_table['chromosome'] == chromosome, ['start', 'end', 'score']].values:
+        end = min(end, max_chromosome_length)
         mappability[start:end] = value
 
     return mappability
@@ -211,23 +215,23 @@ class GCCurve(object):
         return np.array([self.predict(float(x)/float(l)) for x in xrange(0, l + 1)])
 
 
-def gc_map_bias(segment_filename, fragment_mean, fragment_stddev, read_length, gc_dist_filename, bias_filename, config):
+def gc_map_bias(segment_filename, fragment_mean, fragment_stddev, gc_dist_filename, bias_filename, config, do_gc=True, do_map=True):
     """ Calculate per segment GC and mappability biases
     """
     segments = pd.read_csv(segment_filename, sep='\t', converters={'chromosome':str})
 
-    biases = calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, read_length, gc_dist_filename, config)
+    biases = calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_filename, config, do_gc=do_gc, do_map=do_map)
 
     biases.to_csv(bias_filename, sep='\t', index=False)
 
 
-def calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, read_length, gc_dist_filename, config, do_gc=True, do_map=True):
+def calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_filename, config, do_gc=True, do_map=True):
     """ Calculate per segment GC and mappability biases
     """
-    position_offset = config['gc_position_offset']
-    genome_fai = config['genome_fai']
-    genome_fasta = config['genome_fasta']
-    mappability_filename = config['mappability_filename']
+    position_offset = remixt.config.get_param(config, 'gc_position_offset')
+    genome_fasta = remixt.config.get_filename(config, 'genome_fasta')
+    mappability_filename = remixt.config.get_filename(config, 'mappability')
+    read_length = remixt.config.get_param(config, 'mappability_length')
 
     gc_dist = GCCurve()
     gc_dist.read(gc_dist_filename)
@@ -237,13 +241,12 @@ def calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, read_length,
     fragment_min = int(fragment_dist.ppf(0.01) - 1.)
     fragment_max = int(fragment_dist.ppf(0.99) + 1.)
 
-    for chromosome, chrom_seg in segments.groupby('chromosome'):
-
-        chromosome_length = chrom_seg['end'].max()
-        mappability = read_mappability_indicator(mappability_filename, chromosome, chromosome_length)
+    for chromosome, chrom_seg in segments.groupby('chromosome', sort=False):
         gc_cumsum = read_gc_cumsum(genome_fasta, chromosome)
+        chromosome_length = gc_cumsum.shape[0]
+        mappability = read_mappability_indicator(mappability_filename, chromosome, chromosome_length)
 
-        for idx, (start, end) in segments[['start', 'end']].iterrows():
+        for idx, (start, end) in chrom_seg[['start', 'end']].iterrows():
             segments.loc[idx, 'bias'] = calculate_segment_gc_map_bias(gc_cumsum[start:end], mappability[start:end],
                 gc_dist, fragment_dist, fragment_min, fragment_max, position_offset, read_length,
                 do_gc=do_gc, do_map=do_map)
@@ -258,6 +261,8 @@ def calculate_segment_gc_map_bias(gc_cumsum, mappability, gc_dist, fragment_dist
     bias = 0.
 
     for fragment_length in xrange(fragment_min, fragment_max+1):
+        if fragment_length < read_length:
+            continue
 
         # Calculate total GC
         gc_sum = gc_cumsum[fragment_length-position_offset:-position_offset] - gc_cumsum[position_offset:-fragment_length+position_offset]
@@ -286,5 +291,29 @@ def calculate_segment_gc_map_bias(gc_cumsum, mappability, gc_dist, fragment_dist
         bias += prob.sum()
 
     return bias
+
+
+def calculate_biased_length(segments):
+    """ Calculate biased segment length.
+    """
+    # Normalize biases
+    segments['bias'] /= segments['bias'].sum()
+
+    # Scale to average 1.0
+    segments['bias'] *= len(segments.index)
+
+    # Calculate bias length
+    segments['length'] = segments['bias'] * (segments['end'] - segments['start']).astype(float)
+
+    return segments
+
+
+def biased_length(length_filename, bias_filename):
+    """ Calculate biased segment length task.
+    """
+    segments = pd.read_csv(bias_filename, sep='\t', converters={'chromosome':str})
+    segments = calculate_biased_length(segments)
+    segments.to_csv(length_filename, sep='\t', index=False)
+
 
 

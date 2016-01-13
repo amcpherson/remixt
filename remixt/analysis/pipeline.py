@@ -1,5 +1,5 @@
-import collections
 import pickle
+import pkg_resources
 import numpy as np
 import pandas as pd
 
@@ -10,17 +10,22 @@ import remixt.genome_graph
 import remixt.analysis.experiment
 import remixt.analysis.readdepth
 
+default_cn_proportions_filename = pkg_resources.resource_filename('remixt', 'data/cn_proportions.tsv')
 
-def create_cn_prior_matrix(cn_proportions_filename):
+
+def create_cn_prior_matrix(cn_proportions_filename=None):
     """ Create a matrix of prior probabilities for copy number states.
 
-    Args:
+    KwArgs:
         cn_proportions_filename (str): tsv table of proportions of each state
 
     Returns:
         numpy.array: copy number prior matrix
 
     """
+
+    if cn_proportions_filename is None:
+        cn_proportions_filename = default_cn_proportions_filename
 
     cn_proportions = pd.read_csv(cn_proportions_filename, sep='\t',
         converters={'major':int, 'minor':int})
@@ -45,22 +50,14 @@ def create_cn_prior_matrix(cn_proportions_filename):
 
 
 def init(
+    candidate_h_filenames,
+    read_depth_filename,
     experiment_filename,
-    candidate_h_filename_callback,
-    results_filename,
-    segment_allele_count_filename,
-    breakpoint_filename,
     num_clones=None,
 ):
 
-    # Prepare experiment file
-    experiment = remixt.analysis.experiment.create_experiment(
-        segment_allele_count_filename,
-        breakpoint_filename,
-    )
-
-    with open(experiment_filename, 'w') as f:
-        pickle.dump(experiment, f)
+    with open(experiment_filename, 'r') as f:
+        experiment = pickle.load(f)
 
     read_depth = remixt.analysis.readdepth.calculate_depth(experiment)
     minor_modes = remixt.analysis.readdepth.calculate_minor_modes(read_depth)
@@ -68,10 +65,10 @@ def init(
     candidate_h = remixt.analysis.readdepth.filter_high_ploidy(candidate_h, experiment, max_ploidy=5.0)
 
     for idx, h in enumerate(candidate_h):
-        with open(candidate_h_filename_callback(idx), 'w') as f:
+        with open(candidate_h_filenames[idx], 'w') as f:
             pickle.dump(h, f)
 
-    with pd.HDFStore(results_filename, 'w') as store:
+    with pd.HDFStore(read_depth_filename, 'w') as store:
         store['read_depth'] = read_depth
         store['minor_modes'] = pd.Series(minor_modes, index=xrange(len(minor_modes)))
 
@@ -200,6 +197,13 @@ def fit_graph(experiment, emission, prior, h_init):
     return results
 
 
+fit_methods = [
+    'hmm_viterbi',
+    'hmm_graph',
+    'graph',
+]
+
+
 def fit(
     results_filename,
     experiment_filename,
@@ -284,7 +288,7 @@ def fit(
         store['brk_cn'] = brk_cn_table
 
 
-def collate(collate_filename, breakpoints_filename, experiment_filename, init_results_filename, fit_results_filenames):
+def collate(collate_filename, experiment_filename, init_results_filename, fit_results_filenames):
 
     with pd.HDFStore(collate_filename, 'w') as collated:
 
@@ -313,12 +317,10 @@ def collate(collate_filename, breakpoints_filename, experiment_filename, init_re
 
         collated['stats'] = stats_table
 
-        breakpoints = pd.read_csv(breakpoints_filename, sep='\t')
-        collated['breakpoints'] = breakpoints
-        
         with open(experiment_filename, 'r') as f:
             experiment = pickle.load(f)
 
+        collated['breakpoints'] = experiment.breakpoint_data
         collated['reference_adjacencies'] = pd.DataFrame(list(experiment.adjacencies), columns=['n_1', 'n_2'])
         collated['breakpoint_adjacencies'] = experiment.breakpoint_table
 
