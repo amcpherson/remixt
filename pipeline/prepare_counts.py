@@ -80,6 +80,7 @@ if __name__ == '__main__':
             mgd.TempOutputFile('segment_counts.tsv', 'bytumour'),
             mgd.InputFile(args['segment_file']),
             mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_fnames),
+            config,
         ),
     )
 
@@ -93,6 +94,7 @@ if __name__ == '__main__':
             mgd.InputFile(args['segment_file']),
             mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_fnames),
             mgd.TempInputFile('haps.tsv'),
+            config,
         ),
     )
 

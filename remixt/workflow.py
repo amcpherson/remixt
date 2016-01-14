@@ -6,7 +6,6 @@ import remixt.analysis.gcbias
 import remixt.analysis.pipeline
 import remixt.analysis.stats
 import remixt.seqdataio
-import remixt.bamreader
 import remixt.utils
 
 
@@ -20,39 +19,33 @@ def create_extract_seqdata_workflow(
 
     bam_max_fragment_length = remixt.config.get_param(config, 'bam_max_fragment_length')
     bam_max_soft_clipped = remixt.config.get_param(config, 'bam_max_soft_clipped')
-    remove_duplicates = remixt.config.get_param(config, 'remove_duplicates')
-    map_qual_threshold = remixt.config.get_param(config, 'map_qual_threshold')
 
     workflow = pypeliner.workflow.Workflow()
 
     workflow.setobj(obj=mgd.OutputChunks('chromosome'), value=chromosomes)
 
     workflow.transform(
-        name='read_concordant',
+        name='create_chromosome_seqdata',
         axes=('chromosome',),
         ctx={'mem': 16},
-        func=remixt.bamreader.extract_reads,
+        func=remixt.seqdataio.create_chromosome_seqdata,
         args=(
+            mgd.TempOutputFile('seqdata', 'chromosome'),
             mgd.InputFile(bam_filename),
             mgd.InputFile(snp_positions_filename),
+            mgd.InputInstance('chromosome'),
             bam_max_fragment_length,
             bam_max_soft_clipped,
-            mgd.InputInstance('chromosome'),
-            mgd.TempOutputFile('reads', 'chromosome'),
-            mgd.TempOutputFile('alleles', 'chromosome'),
-            remove_duplicates,
-            map_qual_threshold,
         ),
     )
 
     workflow.transform(
-        name='create_seqdata',
+        name='merge_seqdata',
         ctx={'mem': 4},
-        func=remixt.seqdataio.create_seqdata,
+        func=remixt.seqdataio.merge_seqdata,
         args=(
             mgd.OutputFile(seqdata_filename),
-            mgd.TempInputFile('reads', 'chromosome'),
-            mgd.TempInputFile('alleles', 'chromosome'),
+            mgd.TempInputFile('seqdata', 'chromosome'),
         ),
     )
 

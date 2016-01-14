@@ -11,8 +11,6 @@ FragmentStats = collections.namedtuple('FragmentStats', [
 
 def calculate_fragment_stats(seqdata_filename):
 
-    segment_counts = list()
-    
     sum_x = 0.
     sum_x2 = 0.
     n = 0.
@@ -21,7 +19,7 @@ def calculate_fragment_stats(seqdata_filename):
 
     for chrom in chromosomes:
 
-        chrom_reads = next(remixt.seqdataio.read_read_data(seqdata_filename, chromosome=chrom))
+        chrom_reads = remixt.seqdataio.read_fragment_data(seqdata_filename, chrom)
 
         length = chrom_reads['end'].values - chrom_reads['start'].values
 
@@ -30,7 +28,7 @@ def calculate_fragment_stats(seqdata_filename):
         n += length.shape[0]
 
     mean = sum_x / n
-    stdev = np.sqrt((sum_x2 / n) - (mean * mean)) 
+    stdev = np.sqrt((sum_x2 / n) - (mean * mean))
 
     return FragmentStats(mean, stdev)
 

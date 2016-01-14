@@ -60,7 +60,7 @@ def read_snp_counts(seqdata_filename, chromosome, num_rows=1000000):
     """
 
     snp_counts = list()
-    for alleles_chunk in remixt.seqdataio.read_allele_data(seqdata_filename, chromosome=chromosome, num_rows=num_rows):
+    for alleles_chunk in remixt.seqdataio.read_allele_data(seqdata_filename, chromosome, chunksize=num_rows):
 
         if len(alleles_chunk.index) == 0:
             snp_counts.append(pd.DataFrame(columns=['position', 'ref_count', 'alt_count'], dtype=int))
@@ -71,6 +71,7 @@ def read_snp_counts(seqdata_filename, chromosome, num_rows=1000000):
             .groupby(['position', 'is_alt'])
             .size()
             .unstack()
+            .reindex(columns=[0, 1])
             .fillna(0)
             .astype(int)
             .rename(columns=lambda a: {0:'ref_count', 1:'alt_count'}[a])
@@ -247,7 +248,7 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
     haps.to_csv(haps_filename, sep='\t', index=False)
 
 
-def count_allele_reads(seqdata_filename, haps, chromosome, segments):
+def count_allele_reads(seqdata_filename, haps, chromosome, segments, filter_duplicates=False, map_qual_threshold=1):
     """ Count reads for each allele of haplotype blocks for a given chromosome
 
     Args:
@@ -255,6 +256,10 @@ def count_allele_reads(seqdata_filename, haps, chromosome, segments):
         haps (pandas.DataFrame): input haplotype data
         chromosome (str): id of chromosome for which counts will be calculated
         segments (pandas.DataFrame): input genomic segments
+
+    KwArgs:
+        filter_duplicates (bool): filter reads marked as duplicate
+        map_qual_threshold (int): filter reads with less than this mapping quality
 
     Input haps should have the following columns:
 
@@ -282,14 +287,21 @@ def count_allele_reads(seqdata_filename, haps, chromosome, segments):
 
     # Merge haplotype information into read alleles table
     alleles = list()
-    for alleles_chunk in remixt.seqdataio.read_allele_data(seqdata_filename, chromosome=chromosome, num_rows=1000000):
+    for alleles_chunk in remixt.seqdataio.read_allele_data(seqdata_filename, chromosome, chunksize=1000000):
         alleles_chunk = alleles_chunk.merge(haps, left_on=['position', 'is_alt'], right_on=['position', 'allele'], how='inner')
         alleles.append(alleles_chunk)
     alleles = pd.concat(alleles, ignore_index=True)
 
+    # Read fragment data with filtering
+    reads = remixt.seqdataio.read_filtered_fragment_data(
+        seqdata_filename, chromosome,
+        filter_duplicates=filter_duplicates,
+        map_qual_threshold=map_qual_threshold,
+    )
+
     # Merge read start and end into read alleles table
-    reads = next(remixt.seqdataio.read_read_data(seqdata_filename, chromosome=chromosome))
-    alleles = alleles.merge(reads, left_on='fragment_id', right_index=True)
+    # Note this merge will also remove filtered reads from the allele table
+    alleles = alleles.merge(reads, on='fragment_id')
 
     # Arbitrarily assign a haplotype/allele label to each read
     alleles.drop_duplicates('fragment_id', inplace=True)
@@ -323,7 +335,7 @@ def count_allele_reads(seqdata_filename, haps, chromosome, segments):
 
     # Workaround for groupy/size for pandas
     if len(alleles.index) == 0:
-        return pd.DataFrame(columns=['chromosome', 'start', 'end', 'hap_label', 'allele_id'])
+        return pd.DataFrame(columns=['chromosome', 'start', 'end', 'hap_label', 'allele_id', 'readcount'])
 
     # Count reads for each allele
     allele_counts = (
@@ -341,13 +353,17 @@ def count_allele_reads(seqdata_filename, haps, chromosome, segments):
     return allele_counts
 
 
-def create_allele_counts(segments, seqdata_filename, haps_filename):
+def create_allele_counts(segments, seqdata_filename, haps_filename, filter_duplicates=False, map_qual_threshold=1):
     """ Create a table of read counts for alleles
 
     Args:
         segments (pandas.DataFrame): input segment data
         seqdata_filename (str): input sequence data file
         haps_filename (str): input haplotype data file
+
+    KwArgs:
+        filter_duplicates (bool): filter reads marked as duplicate
+        map_qual_threshold (int): filter reads with less than this mapping quality
 
     Input segments should have columns 'chromosome', 'start', 'end'.
 
@@ -369,7 +385,12 @@ def create_allele_counts(segments, seqdata_filename, haps_filename):
     gp = segments.groupby('chromosome')
 
     # Table of allele counts, calculated for each group
-    counts = [count_allele_reads(seqdata_filename, haps, chrom, segs.copy()) for chrom, segs in gp]
+    counts = list()
+    for chrom, segs in gp:
+        counts.append(count_allele_reads(
+            seqdata_filename, haps, chrom, segs.copy(),
+            filter_duplicates=filter_duplicates,
+            map_qual_threshold=map_qual_threshold))
     counts = pd.concat(counts, ignore_index=True)
 
     return counts

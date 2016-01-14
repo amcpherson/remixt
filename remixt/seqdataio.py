@@ -7,11 +7,78 @@ import subprocess
 import numpy as np
 import pandas as pd
 
+import remixt.bamreader
+
+
+empty_data = {
+    'fragments': remixt.bamreader.create_fragment_table(0),
+    'alleles': remixt.bamreader.create_allele_table(0),
+}
+
 
 read_data_dtype = np.dtype([('start', np.uint32), ('length', np.uint16)])
 
 
 allele_data_dtype = np.dtype([('fragment_id', np.uint32), ('position', np.uint32), ('is_alt', np.uint8)])
+
+
+def _get_key(record_type, chromosome):
+    return '/{}/chromosome_{}'.format(record_type, chromosome)
+
+
+def _unique_index_append(store, key, data):
+    try:
+        nrows = store.get_storer(key).nrows
+    except AttributeError:
+        nrows = 0
+    data.index = pd.Series(data.index) + nrows
+    if nrows == 0:
+        store.put(key, data, format='table')
+    else:
+        store.append(key, data)
+
+
+def create_chromosome_seqdata(seqdata_filename, bam_filename, snp_filename, chromosome, max_fragment_length, max_soft_clipped):
+    """ Create seqdata from bam for one chromosome.
+
+    Args:
+        seqdata_filename(str): seqdata hdf store to write to
+        bam_filename(str): bam from which to extract read information
+        snp_filename(str): TSV chromosome, position file listing SNPs
+        chromosome(str): chromosome to extract
+        max_fragment_length(int): maximum length of fragments generating paired reads
+        max_soft_clipped(int): maximum soft clipping for considering a read concordant
+
+    """
+
+    reader = remixt.bamreader.AlleleReader(
+        bam_filename,
+        snp_filename,
+        chromosome,
+        max_fragment_length,
+        max_soft_clipped,
+    )
+
+    with pd.HDFStore(seqdata_filename, 'w') as store:
+        while reader.ReadAlignments(10000000):
+            _unique_index_append(store, _get_key('fragments', 'chromosome'), reader.GetFragmentTable())
+            _unique_index_append(store, _get_key('alleles', 'chromosome'), reader.GetAlleleTable())
+
+
+def merge_seqdata(out_filename, in_filenames):
+    """ Merge seqdata files for non-overlapping sets of chromosomes
+
+    Args:
+        out_filename(str): seqdata hdf store to write to
+        out_filename(dict): seqdata hdf store to read from
+
+    """
+
+    with pd.HDFStore(out_filename, 'w') as out_store:
+        for in_filename in in_filenames.itervalues():
+            with pd.HDFStore(in_filename, 'r') as in_store:
+                for key in in_store.keys():
+                    out_store.put(key, in_store[key], format='table')
 
 
 def write_read_data(reads_file, read_data):
@@ -153,149 +220,83 @@ class Writer(object):
         create_seqdata(self.seqdata_filename, self.reads_filenames, self.alleles_filenames)
 
 
-def read_raw_read_data(reads_file, num_rows=None):
-    """ Read raw read data and reformat
+def _read_seq_data_full(seqdata_filename, record_type, chromosome):
+    key = _get_key(record_type, chromosome)
+    try:
+        return pd.read_hdf(seqdata_filename, key)
+    except KeyError:
+        return empty_data[record_type]
+
+
+def _get_seq_data_nrows(seqdata_filename, key):
+    with pd.HDFStore(seqdata_filename, 'r') as store:
+        try:
+            return store.get_storer(key).nrows
+        except AttributeError:
+            return 0
+
+
+def _read_seq_data_chunks(seqdata_filename, record_type, chromosome, chunksize):
+    key = _get_key(record_type, chromosome)
+    nrows = _get_seq_data_nrows(seqdata_filename, key)
+    if nrows == 0:
+        yield empty_data[record_type]
+    else:
+        for i in xrange(nrows//chunksize + 1):
+            yield pd.read_hdf(seqdata_filename, key, start=i*chunksize, stop=(i+1)*chunksize)
+
+
+def read_seq_data(seqdata_filename, record_type, chromosome, chunksize=None):
+    """ Read sequence data from a HDF seqdata file.
 
     Args:
-        reads_file (file): file like object, must support read()
-
-    KwArgs:
-        num_rows (int): number of rows to stream at a time, None for the entire file
-
-    Yields:
-        pandas.DataFrame
-
-    Returned dataframe has columns 'start', 'end'
-
-    """
-
-    while True:
-
-        if num_rows is not None and num_rows > 0:
-            raw_data = reads_file.read(num_rows * read_data_dtype.itemsize)
-        else:
-            raw_data = reads_file.read()
-
-        if raw_data == '':
-            yield pd.DataFrame({
-                'start':np.array([], dtype=np.uint32),
-                'end':np.array([], dtype=np.uint32),
-            })
-            break
-
-        data = np.fromstring(raw_data, dtype=read_data_dtype)
-
-        df = pd.DataFrame(data)
-        df['end'] = df['start'] + df['length']
-        df.drop('length', axis=1, inplace=True)
-
-        yield df
-
-
-def read_raw_allele_data(alleles_file, num_rows=None):
-    """ Read raw allele data and reformat
-
-    Args:
-        alleles_file (file): file like object, must support read()
-
-    KwArgs:
-        num_rows (int): number of rows to stream at a time, None for the entire file
-
-    Yields:
-        pandas.DataFrame
-
-    Returned dataframe has columns 'position', 'is_alt', 'fragment_id'
-
-    """
-
-    while True:
-
-        if num_rows is not None and num_rows > 0:
-            raw_data = alleles_file.read(num_rows * allele_data_dtype.itemsize)
-        else:
-            raw_data = alleles_file.read()
-
-        if raw_data == '':
-            yield pd.DataFrame({
-                'fragment_id':np.array([], dtype=np.uint32),
-                'position':np.array([], dtype=np.uint32),
-                'is_alt':np.array([], dtype=np.uint8),
-            })
-            break
-
-        data = np.fromstring(raw_data, dtype=allele_data_dtype)
-
-        df = pd.DataFrame(data)
-
-        yield df
-
-
-def read_seq_data(seqdata_filename, record_type, chromosome=None, num_rows=None):
-    """ Read sequence data from a tar archive
-
-    Args:
-        seqdata_filename (str): name of seqdata tar file
+        seqdata_filename (str): name of seqdata file
         record_type (str): record type, can be 'alleles' or 'reads'
+        chromosome (str): select specific chromosome
 
     KwArgs:
-        chromosome (str): select specific chromosome, None for all chromosomes
-        num_rows (int): number of rows to stream at a time, None for the entire file
+        chunksize (int): number of rows to stream at a time, None for the entire file
 
     Yields:
         pandas.DataFrame
 
     """
 
-    with tarfile.open(seqdata_filename, 'r') as tar:
-        
-        for tarinfo in tar:
-
-            rectype, chrom = tarinfo.name.split('.')
-
-            if chromosome is not None and chromosome != chrom:
-                continue
-
-            if record_type != rectype:
-                continue
-
-            if rectype == 'reads':
-                for data in read_raw_read_data(gzip.GzipFile(fileobj=tar.extractfile(tarinfo)), num_rows=num_rows):
-                    yield data
-
-            elif rectype == 'alleles':
-                for data in read_raw_allele_data(gzip.GzipFile(fileobj=tar.extractfile(tarinfo)), num_rows=num_rows):
-                    yield data
+    if chunksize is None:
+        return _read_seq_data_full(seqdata_filename, record_type, chromosome)
+    else:
+        return _read_seq_data_chunks(seqdata_filename, record_type, chromosome, chunksize)
 
 
-def read_read_data(seqdata_filename, chromosome=None, num_rows=None):
-    """ Read read data from a tar of gzipped chromosome files
+def read_fragment_data(seqdata_filename, chromosome, chunksize=None):
+    """ Read fragment data from a HDF seqdata file.
 
     Args:
-        seqdata_filename (str): name of seqdata tar file
+        seqdata_filename (str): name of seqdata file
+        chromosome (str): select specific chromosome, None for all chromosomes
 
     KwArgs:
-        chromosome (str): select specific chromosome, None for all chromosomes
-        num_rows (int): number of rows to stream at a time, None for the entire file
+        chunksize (int): number of rows to stream at a time, None for the entire file
 
     Yields:
         pandas.DataFrame
 
-    Returned dataframe has columns 'start', 'end'
+    Returned dataframe has columns 'fragment_id', 'start', 'end'
 
     """
 
-    return read_seq_data(seqdata_filename, 'reads', chromosome=chromosome, num_rows=num_rows)
+    return read_seq_data(seqdata_filename, 'fragments', chromosome, chunksize=chunksize)
 
 
-def read_allele_data(seqdata_filename, chromosome=None, num_rows=None):
-    """ Read allele data from a tar of gzipped chromosome files
+def read_allele_data(seqdata_filename, chromosome, chunksize=None):
+    """ Read allele data from a HDF seqdata file.
 
     Args:
-        seqdata_filename (str): name of seqdata tar file
+        seqdata_filename (str): name of seqdata file
+        chromosome (str): select specific chromosome, None for all chromosomes
 
     KwArgs:
-        chromosome (str): select specific chromosome, None for all chromosomes
-        num_rows (int): number of rows to stream at a time, None for the entire file
+        chunksize (int): number of rows to stream at a time, None for the entire file
 
     Yields:
         pandas.DataFrame
@@ -304,49 +305,58 @@ def read_allele_data(seqdata_filename, chromosome=None, num_rows=None):
 
     """
 
-    return read_seq_data(seqdata_filename, 'alleles', chromosome=chromosome, num_rows=num_rows)
+    return read_seq_data(seqdata_filename, 'alleles', chromosome, chunksize=chunksize)
 
 
 def read_chromosomes(seqdata_filename):
-    """ Read chromosomes in sequence data tar
+    """ Read chromosomes from a HDF seqdata file.
 
     Args:
-        seqdata_filename (str): name of seqdata tar file
+        seqdata_filename (str): name of seqdata file
 
     Returns:
         list of chromsomes
 
     """
 
-    with tarfile.open(seqdata_filename, 'r') as tar:
-
+    with pd.HDFStore(seqdata_filename, 'r') as store:
         chromosomes = set()
-        for tarinfo in tar:
-            chromosomes.add(tarinfo.name.split('.')[1])
+        for key in store.keys():
+            if 'chromosome_' in key:
+                chromosomes.add(key[key.index('chromosome_') + len('chromosome_'):])
 
         return chromosomes
 
 
-def create_seqdata(seqdata_filename, reads_filenames, alleles_filenames):
-    """ Create a seqdata tar object
+def read_filtered_fragment_data(seqdata_filename, chromosome, filter_duplicates=False, map_qual_threshold=1):
+    """ Read filtered fragment data from a HDF seqdata file.
 
     Args:
-        seqdata_filename (str): path to output seqdata tar file
-        reads_filenames (dict): individual seqdata read tables keyed by chromosome name
-        alleles_filenames (dict): individual seqdata allele tables keyed by chromosome name
+        seqdata_filename (str): name of seqdata file
+        chromosome (str): select specific chromosome, None for all chromosomes
+
+    KwArgs:
+        filter_duplicates (bool): filter reads marked as duplicate
+        map_qual_threshold (int): filter reads with less than this mapping quality
+
+    Yields:
+        pandas.DataFrame
+
+    Returned dataframe has columns 'fragment_id', 'start', 'end'
 
     """
 
-    with tarfile.open(seqdata_filename, 'w') as tar:
+    reads = remixt.seqdataio.read_fragment_data(seqdata_filename, chromosome)
 
-        prefixes = ('reads.', 'alleles.')
-        filenames = (reads_filenames, alleles_filenames)
+    # Filter duplicates if necessary
+    if filter_duplicates:
+        reads = reads[reads['is_duplicate'] == 1]
 
-        for prefix, chrom_filenames in zip(prefixes, filenames):
+    # Filter poor quality reads
+    reads = reads[reads['mapping_quality'] >= map_qual_threshold]
 
-            for chromosome, filename in chrom_filenames.iteritems():
+    reads.drop(['is_duplicate', 'mapping_quality'], axis=1, inplace=True)
 
-                name = prefix+chromosome
-                tar.add(filename, arcname=name)
+    return reads
 
 

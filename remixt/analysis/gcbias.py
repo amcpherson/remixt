@@ -98,7 +98,7 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
         if chrom_id not in chromosomes:
             continue
 
-        for chrom_reads in remixt.seqdataio.read_read_data(seqdata_filename, chromosome=chrom_id, num_rows=1000000):
+        for chrom_reads in remixt.seqdataio.read_fragment_data(seqdata_filename, chrom_id, chunksize=1000000):
 
             # Calculate read start in concatenated genome
             chrom_reads['start'] += chrom_info.loc[chrom_id, 'chrom_start']

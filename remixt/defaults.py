@@ -34,6 +34,12 @@ segment_length                              = int(3e6)
 # Length of simulated reads used to calculate mappability
 mappability_length                          = 100
 
+# Mapping quality threshold for filtering mappable reads
+map_qual_threshold                          = 1
+
+# Filter reads marked as duplicate
+filter_duplicates                           = False
+
 # Locally installed mappability filename produced by mappability setup script
 mappability_template                        = '{ref_data_directory}/{ucsc_genome_version}.{mappability_length}.bwa.mappability'
 

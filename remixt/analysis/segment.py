@@ -66,13 +66,17 @@ def create_segments(segment_filename, config, breakpoint_filename=None):
     segments.to_csv(segment_filename, sep='\t', index=False, columns=['chromosome', 'start', 'end'])
 
 
-def count_segment_reads(seqdata_filename, chromosome, segments):
+def count_segment_reads(seqdata_filename, chromosome, segments, filter_duplicates=False, map_qual_threshold=1):
     """ Count reads falling entirely within segments on a specific chromosome
 
     Args:
         seqdata_filename (str): input sequence data file
         chromosome (str): chromosome for which to count reads
         segments (str): segments for which to count reads
+
+    KwArgs:
+        filter_duplicates (bool): filter reads marked as duplicate
+        map_qual_threshold (int): filter reads with less than this mapping quality
 
     Returns:
         pandas.DataFrame: output segment data
@@ -84,14 +88,18 @@ def count_segment_reads(seqdata_filename, chromosome, segments):
 
     """
 
-    # Read read data for selected chromosome
-    reads = next(remixt.seqdataio.read_read_data(seqdata_filename, chromosome=chromosome))
-        
+    # Read fragment data with filtering
+    reads = remixt.seqdataio.read_filtered_fragment_data(
+        seqdata_filename, chromosome,
+        filter_duplicates=filter_duplicates,
+        map_qual_threshold=map_qual_threshold,
+    )
+
     # Sort in preparation for search
     reads.sort('start', inplace=True)
     segments.sort('start', inplace=True)
     
-     # Count segment reads
+    # Count segment reads
     segments['readcount'] = remixt.segalg.contained_counts(
         segments[['start', 'end']].values,
         reads[['start', 'end']].values
@@ -103,12 +111,16 @@ def count_segment_reads(seqdata_filename, chromosome, segments):
     return segments
 
 
-def create_segment_counts(segments, seqdata_filename):
+def create_segment_counts(segments, seqdata_filename, filter_duplicates=False, map_qual_threshold=1):
     """ Create a table of read counts for segments
 
     Args:
         segments (pandas.DataFrame): input segment data
         seqdata_filename (str): input sequence data file
+
+    KwArgs:
+        filter_duplicates (bool): filter reads marked as duplicate
+        map_qual_threshold (int): filter reads with less than this mapping quality
 
     Returns:
         pandas.DataFrame: output segment data
@@ -124,7 +136,12 @@ def create_segment_counts(segments, seqdata_filename):
     gp = segments.groupby('chromosome')
 
     # Table of read counts, calculated for each group
-    counts = [count_segment_reads(seqdata_filename, chrom, segs.copy()) for chrom, segs in gp]
+    counts = list()
+    for chrom, segs in gp:
+        counts.append(count_segment_reads(
+            seqdata_filename, chrom, segs.copy(),
+            filter_duplicates=filter_duplicates,
+            map_qual_threshold=map_qual_threshold))
     counts = pd.concat(counts)
 
     # Sort on index to return dataframe in original order
