@@ -274,7 +274,7 @@ def fit(
     # Create a table of relevant statistics
     stats_table = fit_results['stats'].copy()
     stats_table['negbin_r'] = emission.r,
-    stats_table['betabin_r'] = emission.M,
+    stats_table['betabin_M'] = emission.M,
     stats_table['num_clones'] = len(h),
     stats_table['num_segments'] = len(experiment.x),
     stats_table = pd.DataFrame(stats_table, index=[0])
