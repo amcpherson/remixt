@@ -25,7 +25,7 @@ if __name__ == '__main__':
     argparser.add_argument('--num_clones', type=int,
         help='Number of clones')
 
-    argparser.add_argument('--fit_method',
+    argparser.add_argument('--fit_method', default='hmm_graph',
         help='Method for learning copy number')
 
     argparser.add_argument('--cn_proportions',

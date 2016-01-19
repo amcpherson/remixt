@@ -51,7 +51,7 @@ def create_cn_prior_matrix(cn_proportions_filename=None):
 
 def init(
     candidate_h_filenames,
-    read_depth_filename,
+    init_results_filename,
     experiment_filename,
     num_clones=None,
 ):
@@ -68,7 +68,7 @@ def init(
         with open(candidate_h_filenames[idx], 'w') as f:
             pickle.dump(h, f)
 
-    with pd.HDFStore(read_depth_filename, 'w') as store:
+    with pd.HDFStore(init_results_filename, 'w') as store:
         store['read_depth'] = read_depth
         store['minor_modes'] = pd.Series(minor_modes, index=xrange(len(minor_modes)))
 

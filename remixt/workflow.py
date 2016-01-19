@@ -189,7 +189,7 @@ def create_remixt_workflow(
         func=remixt.analysis.pipeline.init,
         args=(
             mgd.TempOutputFile('h_init', 'byh'),
-            mgd.TempOutputFile('read_depth.h5'),
+            mgd.TempOutputFile('init_results'),
             mgd.InputFile(experiment_filename),
         ),
         kwargs={
