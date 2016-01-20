@@ -10,6 +10,7 @@
 #include <sstream>
 #include <limits>
 #include <stdexcept>
+#include <algorithm>
 
 using namespace std;
 
