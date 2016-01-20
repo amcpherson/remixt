@@ -28,8 +28,8 @@ if __name__ == '__main__':
     argparser.add_argument('segment_file',
         help='Input segments file')
 
-    argparser.add_argument('normal_file',
-        help='Input normal sequence data filename')
+    argparser.add_argument('haplotypes_file',
+        help='Input haplotypes file')
 
     argparser.add_argument('--tumour_files', nargs='+', required=True,
         help='Input tumour sequence data filenames')
@@ -61,16 +61,6 @@ if __name__ == '__main__':
 
     workflow.setobj(obj=mgd.OutputChunks('bytumour'), value=tumour_fnames.keys())
 
-    workflow.subworkflow(
-        name='infer_haps',
-        func=remixt.workflow.create_infer_haps_workflow,
-        args=(
-            mgd.InputFile(args['normal_file']),
-            mgd.TempOutputFile('haps.tsv'),
-            config,
-        ),
-    )
-
     workflow.transform(
         name='segment_readcount',
         axes=('bytumour',),
@@ -93,7 +83,7 @@ if __name__ == '__main__':
             mgd.TempOutputFile('allele_counts.tsv', 'bytumour'),
             mgd.InputFile(args['segment_file']),
             mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_fnames),
-            mgd.TempInputFile('haps.tsv'),
+            mgd.InputFile(args['haplotypes_file']),
             config,
         ),
     )

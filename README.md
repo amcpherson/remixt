@@ -6,7 +6,7 @@ ReMixT is a tool for joint inference of clone specific segment and breakpoint co
 
 ### Python
 
-ReMixT requires python and the numpy/scipy stack.  The recommended way to install python (also the easiest), is to download and install the latest (Anaconda Python](https://store.continuum.io/cshop/anaconda/) from the Continuum website.
+ReMixT requires python and the numpy/scipy stack.  The recommended way to install python (also the easiest), is to download and install the latest [Anaconda Python](https://store.continuum.io/cshop/anaconda/) from the Continuum website.
 
 #### Python libraries
 
@@ -15,15 +15,7 @@ If you do no use anaconda, you will be required to install the following python 
 * [numpy/scipy](http://www.numpy.org)
 * [pandas](http://pandas.pydata.org)
 * [matplotlib](http://matplotlib.org)
-
-### Scons
-
-Building the source requires scons, verson 2.3.4 can be installed as follows:
-
-    wget http://prdownloads.sourceforge.net/scons/scons-2.3.4.tar.gz
-    tar -xzvf scons-2.3.4.tar.gz
-    cd scons-2.3.4
-    python setup.py install
+* [cython](http://docs.cython.org)
 
 ### Samtools
 
@@ -48,13 +40,6 @@ To install the code, first clone from bitbucket.  A recursive clone is preferred
 The following steps will assume you are in the `remixt` directory.
 
     cd remixt
-
-### Build Executables
-
-ReMixT requires compilation of a number of executables using scons.
-
-    cd src
-    scons install
 
 ### Install Python Libraries
 
@@ -141,6 +126,13 @@ The following table may assist in understanding the strand of a break-end.  Note
 | Inversion (Breakpoint A) |              +               |              +                |
 | Inversion (Breakpoint B) |              -               |              -                |
 
+The script `tools/create_segments.py` can be used to generate a regular segmentation of the genome, augmented with additional segment boundaries at break ends of rearrangement breakpoints.
+
+Generate segment file `$segments` from breakpoint file `$breakpoints` using a default segment length (see `remixt.defaults`) as follows:
+
+    python tools/create_segments.py $ref_data_dif \
+        $breakpoints $segments
+
 ### Step 1 - Importing the Data
 
 The first step in the process is to import the relevant concordant read data from each bam file into a ReMixT specific format.  This is accomplished using the `pipeline/extract_seqdata.py` script, which should be applied independently to each input file.  
@@ -159,20 +151,24 @@ where `$tmp_seq_1` and `$tmp_seq_2` are unique temporary directories.  If you ne
 
 For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
 
-### Step 2 - Preparing Segment Read Counts
+### Step 2 - Infer haplotype blocks
 
-The second step in the process is to prepare major, minor and total read counts per segment.  An input segmentation is required for this step.  The segmentation boundaries should ideally include ends of breakpoints of interest, though this is not required.  If you are using [destruct](https://bitbucket.org/dranew/destruct) to predict breakpoints, you can use the script `tools/create_segments.py` to create a segmentation file.
+The second step is to phase blocks of heterozygous SNPs using a 1000 genomes reference panel.  The `pipeline/infer_haps.py` script can be used for this step:
 
-Given breakpoint predictions file `$breakpoints`, create `$segments` as follows:
+    python pipeline/infer_haps.py $ref_data_dir \
+        $normal_seqdata $haplotypes \
+        --tmpdir $tmp_haps
 
-    python tools/create_segments.py $ref_data_dir $breakpoints $segments
+where `$tmp_haps` is a unique temporary directory.
 
-Read counts are prepared jointly for multiple tumour samples using the `pipeline/prepare_counts.py` script.  Suppose we have two tumour data files `$tumour_1_seqdata` and `$tumour_2_seqdata` produced from the previous step.  The `pipeline/prepare_counts.py` can analyze them jointly, to output one read count file for each tumour dataset, which we will call `$tumour_1_counts` and `$tumour_2_counts`.  This will provide more accurate allele specific read counts.
+### Step 3 - Preparing Segment Read Counts
+
+The third step in the process is to prepare major, minor and total read counts per segment.  Read counts are prepared jointly for multiple tumour samples using the `pipeline/prepare_counts.py` script.  Suppose we have two tumour data files `$tumour_1_seqdata` and `$tumour_2_seqdata` produced from the previous step.  The `pipeline/prepare_counts.py` can analyze them jointly, to output one read count file for each tumour dataset, which we will call `$tumour_1_counts` and `$tumour_2_counts`.  This will provide more accurate allele specific read counts.
 
 To create read counts for segments given in segment file `$segments` for normal data `$normal_seqdata` and tumour data `$tumour_1_seqdata` and `$tumour_2_seqdata`:
 
     python pipeline/prepare_counts.py $ref_data_dir \
-        $segment_data $normal_data \
+        $segment_data $haplotypes \
         --tumour_files $tumour_1_seqdata $tumour_2_seqdata
         --count_files $tumour_1_counts $tumour_2_counts
         --tmpdir $tmp_counts
@@ -181,7 +177,7 @@ where `$tmp_counts` is a unique temporary directory.  If you need to stop and re
 
 For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
 
-### Step 3 - Running ReMixT
+### Step 4 - Running ReMixT
 
 ReMixT is run on each sample individually, and takes as input the sample specific segment read counts and breakpoints.  The output is an HDF5 store (`$results` below) containing pandas dataframes.
 

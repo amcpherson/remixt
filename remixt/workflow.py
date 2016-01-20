@@ -3,6 +3,7 @@ import pypeliner.managed as mgd
 
 import remixt.config
 import remixt.analysis.gcbias
+import remixt.analysis.haplotype
 import remixt.analysis.pipeline
 import remixt.analysis.stats
 import remixt.seqdataio
