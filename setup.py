@@ -2,11 +2,23 @@ import fnmatch
 import os
 import sys
 import numpy
+import subprocess
 from setuptools import setup, find_packages, Extension
 from Cython.Build import cythonize
 
 
 external_dir = os.path.abspath('src/external')
+
+blossom5_url = 'http://pub.ist.ac.at/~vnk/software/blossom5-v2.04.src.tar.gz'
+blossom5_tar_gz = os.path.join(external_dir, 'blossom5-v2.04.src.tar.gz')
+blossom5_dir = os.path.join(external_dir, 'blossom5-v2.04.src')
+blossom5_bin = os.path.join(blossom5_dir, 'blossom5')
+
+if not os.path.exists(blossom5_tar_gz):
+    subprocess.check_call(['wget', '-N', '-P', external_dir, blossom5_url])
+
+if not os.path.exists(blossom5_dir):
+    subprocess.check_call(['tar', '-C', external_dir, '-xzvf', blossom5_tar_gz])
 
 bamtools_dir = os.path.join(external_dir, 'bamtools', 'src')
 bamtools_api_dir = os.path.join(bamtools_dir, 'api')
