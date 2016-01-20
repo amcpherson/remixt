@@ -19,7 +19,7 @@ ensembl_assemblies                          = ['chromosome.1', 'chromosome.2', '
 chromosomes                                 = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', 'X']
 
 # Ensemble reference genome chromosome assemblies
-ensembl_assembly_url_template               = 'ftp://ftp.ensembl.org/pub/release-{ensembl_version}/fasta/homo_sapiens/dna/Homo_sapiens.{ensembl_genome_version}.{ensembl_version}.dna.{0}.fa.gz'
+ensembl_assembly_url_template               = 'ftp://ftp.ensembl.org/pub/release-{ensembl_version}/fasta/homo_sapiens/dna/Homo_sapiens.{ensembl_genome_version}.{ensembl_version}.dna.{ensembl_assembly}.fa.gz'
 
 # Ucsc genome version (must match ensembl version!)
 ucsc_genome_version                         = 'hg19'

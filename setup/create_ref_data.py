@@ -1,21 +1,10 @@
-import csv
-import sys
-import logging
 import os
-import re
-import itertools
-import subprocess
 import argparse
-import string
 import gzip
-from collections import *
 
 import pypeliner
 
-
-remixt_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
-
-default_config_filename = os.path.join(remixt_directory, 'defaultconfig.py')
+import remixt.config
 
 
 def wget_gunzip(url, filename):
@@ -24,20 +13,23 @@ def wget_gunzip(url, filename):
     pypeliner.commandline.execute('gunzip', temp_filename + '.gz')
     os.rename(temp_filename, filename)
 
+
 def wget(url, filename):
     temp_filename = filename + '.tmp'
     pypeliner.commandline.execute('wget', url, '-c', '-O', temp_filename)
     os.rename(temp_filename, filename)
 
+
 class AutoSentinal(object):
     def __init__(self, sentinal_prefix):
         self.sentinal_prefix = sentinal_prefix
+
     def run(self, func):
         sentinal_filename = self.sentinal_prefix + func.__name__
         if os.path.exists(sentinal_filename):
             return
         func()
-        with open(sentinal_filename, 'w') as sentinal_file:
+        with open(sentinal_filename, 'w'):
             pass
 
 if __name__ == '__main__':
@@ -54,8 +46,7 @@ if __name__ == '__main__':
 
     args = vars(argparser.parse_args())
 
-    config = {'ref_data_directory':args['ref_data_dir']}
-    execfile(default_config_filename, {}, config)
+    config = {'ref_data_directory': args['ref_data_dir']}
 
     if args['config'] is not None:
         execfile(args['config'], {}, config)
@@ -77,9 +68,9 @@ if __name__ == '__main__':
         pass
 
     def wget_genome_fasta():
-        with open(config['genome_fasta'], 'w') as genome_file:
-            for assembly in config['ensembl_assemblies']:
-                assembly_url = config['ensembl_assembly_url'].format(assembly)
+        with open(remixt.config.get_filename(config, 'genome_fasta'), 'w') as genome_file:
+            for assembly in remixt.config.get_param(config, 'ensembl_assemblies'):
+                assembly_url = remixt.config.get_filename(config, 'ensembl_assembly_url', ensembl_assembly=assembly)
                 assembly_fasta = os.path.join(temp_directory, 'dna.assembly.{0}.fa'.format(assembly))
                 if not os.path.exists(assembly_fasta):
                     wget_gunzip(assembly_url, assembly_fasta)
@@ -91,27 +82,27 @@ if __name__ == '__main__':
     auto_sentinal.run(wget_genome_fasta)
 
     def bwa_index():
-        pypeliner.commandline.execute('bwa', 'index', config['genome_fasta'])
+        pypeliner.commandline.execute('bwa', 'index', remixt.config.get_filename(config, 'genome_fasta'))
     auto_sentinal.run(bwa_index)
 
     def samtools_faidx():
-        pypeliner.commandline.execute('samtools', 'faidx', config['genome_fasta'])
+        pypeliner.commandline.execute('samtools', 'faidx', remixt.config.get_filename(config, 'genome_fasta'))
     auto_sentinal.run(samtools_faidx)
 
     def wget_thousand_genomes():
         tar_filename = os.path.join(temp_directory, 'thousand_genomes_download.tar.gz')
-        wget(config['thousand_genomes_impute_url'], tar_filename)
+        wget(remixt.config.get_param(config, 'thousand_genomes_impute_url'), tar_filename)
         pypeliner.commandline.execute('tar', '-C', args['ref_data_dir'], '-xzvf', tar_filename)
         os.remove(tar_filename)
     auto_sentinal.run(wget_thousand_genomes)
 
     def create_snp_positions():
-        with open(config['snp_positions'], 'w') as snp_positions_file:
-            for chromosome in config['chromosomes']:
+        with open(remixt.config.get_filename(config, 'snp_positions'), 'w') as snp_positions_file:
+            for chromosome in remixt.config.get_param(config, 'chromosomes'):
                 phased_chromosome = chromosome
                 if chromosome == 'X':
-                    phased_chromosome = config['phased_chromosome_x']
-                legend_filename = config['legend_template'].format(phased_chromosome)
+                    phased_chromosome = remixt.config.get_param(config, 'phased_chromosome_x')
+                legend_filename = remixt.config.get_filename(config, 'legend', chromosome=phased_chromosome)
                 with gzip.open(legend_filename, 'r') as legend_file:
                     for line in legend_file:
                         if line.startswith('id'):
