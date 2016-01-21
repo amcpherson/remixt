@@ -287,8 +287,8 @@ def calculate_biased_length(segments):
     # Normalize biases
     segments['bias'] /= segments['bias'].sum()
 
-    # Scale to average proportion of genome length
-    segments['bias'] *= float((segments['end'] - segments['start']).sum())
+    # Calculate length as bias scaled by genome length
+    segments['length'] = segments['bias'] * float((segments['end'] - segments['start']).sum())
 
     return segments
 
