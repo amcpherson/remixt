@@ -309,7 +309,8 @@ def plot_breakpoints_genome(ax, breakpoint, chromosome_info, scale_height=1.0):
         ax.add_patch(patch)
 
 
-def experiment_plot(experiment, likelihood, cn, h):
+def experiment_plot(experiment, likelihood, cn, h,
+                    chromosome=None, start=None, end=None):
     """ Plot a sequencing experiment
 
     Args:
@@ -317,6 +318,11 @@ def experiment_plot(experiment, likelihood, cn, h):
         likelihood (ReadCountLikelihood): likelihood model
         cn (numpy.array): segment copy number
         h (numpy.array): haploid depths
+
+    KwArgs:
+        chromosome (str): name of chromosome to plot, None for all chromosomes
+        start (int): start of region in chromosome, None for beginning
+        end (int): end of region in chromosome, None for end of chromosome
 
     Returns:
         matplotlib.Figure: figure object of plots
@@ -339,7 +345,8 @@ def experiment_plot(experiment, likelihood, cn, h):
     ax = plt.subplot(num_plots, 1, plot_idx)
     plot_idx += 1
 
-    plot_cnv_genome(ax, data, maxcopies=4, major_col='major_raw', minor_col='minor_raw')
+    plot_cnv_genome(ax, data, maxcopies=4, major_col='major_raw', minor_col='minor_raw',
+                    chromosome=chromosome, start=start, end=end)
 
     ax.set_xlabel('')
     ax.set_ylabel('raw')
@@ -347,7 +354,8 @@ def experiment_plot(experiment, likelihood, cn, h):
     ax = plt.subplot(num_plots, 1, plot_idx)
     plot_idx += 1
 
-    plot_cnv_genome(ax, data, maxcopies=4, major_col='major_raw_e', minor_col='minor_raw_e')
+    plot_cnv_genome(ax, data, maxcopies=4, major_col='major_raw_e', minor_col='minor_raw_e',
+                    chromosome=chromosome, start=start, end=end)
 
     ax.set_xlabel('')
     ax.set_ylabel('expected')
@@ -355,7 +363,8 @@ def experiment_plot(experiment, likelihood, cn, h):
     ax = plt.subplot(num_plots, 1, plot_idx)
     plot_idx += 1
 
-    plot_cnv_genome(ax, data, maxcopies=4, major_col='major_1', minor_col='minor_1')
+    plot_cnv_genome(ax, data, maxcopies=4, major_col='major_1', minor_col='minor_1',
+                    chromosome=chromosome, start=start, end=end)
 
     ax.set_xlabel('')
     ax.set_ylabel('clone 1')
@@ -365,7 +374,8 @@ def experiment_plot(experiment, likelihood, cn, h):
         ax = plt.subplot(num_plots, 1, plot_idx)
         plot_idx += 1
 
-        plot_cnv_genome(ax, data, maxcopies=4, major_col='major_2', minor_col='minor_2')
+        plot_cnv_genome(ax, data, maxcopies=4, major_col='major_2', minor_col='minor_2',
+                        chromosome=chromosome, start=start, end=end)
 
         ax.set_xlabel('')
         ax.set_ylabel('clone 2')
@@ -373,7 +383,8 @@ def experiment_plot(experiment, likelihood, cn, h):
         ax = plt.subplot(num_plots, 1, plot_idx)
         plot_idx += 1
 
-        plot_cnv_genome(ax, data, maxcopies=2, major_col='major_diff', minor_col='minor_diff')
+        plot_cnv_genome(ax, data, maxcopies=2, major_col='major_diff', minor_col='minor_diff',
+                        chromosome=chromosome, start=start, end=end)
 
         ax.set_xlabel('chromosome')
         ax.set_ylabel('clone diff')
