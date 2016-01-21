@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 import pypeliner
+import pypeliner.workflow
 import pypeliner.managed as mgd
 
 import remixt
