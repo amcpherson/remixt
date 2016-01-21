@@ -473,29 +473,26 @@ def gc_plot(gc_table_filename, plot_filename):
     fig.savefig(plot_filename, format='pdf', bbox_inches='tight')
 
 
-def plot_depth(ax, x, l, p, annotated=()):
+def plot_depth(ax, read_depth, annotated=()):
     """ Plot read depth of major minor and total as a density
 
     Args:
         ax (matplotlib.axis): optional axis for plotting major/minor/total read depth
-        x (numpy.array): observed major, minor, and total read counts
-        l (numpy.array): observed lengths of segments
-        p (numpy.array): proportion genotypable reads
+        read_depth (pandas.DataFrame): observed major, minor, and total read depth and lengths
 
     KwArgs:
         annotated (list): depths to annotate with verticle lines
 
     """
 
-    rd = ((x.T / p.T) / l.T)
-    rd.sort(axis=0)
+    total_depth_samples = remixt.utils.weighted_resample(read_depth['total'].values, read_depth['length'].values)
 
-    depth_max = np.percentile(rd[2], 95)
+    depth_max = np.percentile(total_depth_samples, 95)
     cov = 0.0000001
 
-    remixt.utils.filled_density_weighted(ax, rd[0], l, 'blue', 0.5, 0.0, depth_max, cov)
-    remixt.utils.filled_density_weighted(ax, rd[1], l, 'red', 0.5, 0.0, depth_max, cov)
-    remixt.utils.filled_density_weighted(ax, rd[2], l, 'grey', 0.5, 0.0, depth_max, cov)
+    remixt.utils.filled_density_weighted(ax, read_depth['minor'].values, read_depth['length'].values, 'blue', 0.5, 0.0, depth_max, cov)
+    remixt.utils.filled_density_weighted(ax, read_depth['major'].values, read_depth['length'].values, 'red', 0.5, 0.0, depth_max, cov)
+    remixt.utils.filled_density_weighted(ax, read_depth['total'].values, read_depth['length'].values, 'grey', 0.5, 0.0, depth_max, cov)
 
     ylim = ax.get_ylim()
     for depth in annotated:
