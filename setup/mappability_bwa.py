@@ -1,7 +1,5 @@
 import csv
 import argparse
-import os
-import itertools
 import numpy as np
 import pandas as pd
 
@@ -9,12 +7,8 @@ import pypeliner
 import pypeliner.managed as mgd
 
 import remixt
+import remixt.config
 import remixt.utils
-
-
-remixt_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
-
-default_config_filename = os.path.join(remixt_directory, 'defaultconfig.py')
 
 
 if __name__ == '__main__':
@@ -34,7 +28,6 @@ if __name__ == '__main__':
     args = vars(argparser.parse_args())
 
     config = {'ref_data_directory': args['ref_data_dir']}
-    execfile(default_config_filename, {}, config)
 
     if args['config'] is not None:
         execfile(args['config'], {}, config)
@@ -44,13 +37,17 @@ if __name__ == '__main__':
     pyp = pypeliner.app.Pypeline([mappability_bwa], config)
 
     workflow = pypeliner.workflow.Workflow(default_ctx={'mem': 6})
-    
+
+    mappability_length = remixt.config.get_param(config, 'mappability_length')
+    genome_fasta = remixt.config.get_filename(config, 'genome_fasta')
+    mappability_filename = remixt.config.get_filename(config, 'mappability')
+
     workflow.transform(
         name='create_kmers',
         func=mappability_bwa.create_kmers,
         args=(
-            mgd.InputFile(config['genome_fasta']),
-            int(config['mappability_length']),
+            mgd.InputFile(genome_fasta),
+            mappability_length,
             mgd.TempOutputFile('kmers'),
         ),
     )
@@ -71,7 +68,7 @@ if __name__ == '__main__':
         args=(
             'bwa',
             'aln',
-            mgd.InputFile(config['genome_fasta']),
+            mgd.InputFile(genome_fasta),
             mgd.TempInputFile('kmers', 'bykmer'),
             '>',
             mgd.TempOutputFile('sai', 'bykmer'),
@@ -84,7 +81,7 @@ if __name__ == '__main__':
         args=(
             'bwa',
             'samse',
-            mgd.InputFile(config['genome_fasta']),
+            mgd.InputFile(genome_fasta),
             mgd.TempInputFile('sai', 'bykmer'),
             mgd.TempInputFile('kmers', 'bykmer'),
             '>',
@@ -107,7 +104,7 @@ if __name__ == '__main__':
         func=mappability_bwa.merge_files_by_line,
         args=(
             mgd.TempInputFile('bedgraph', 'bykmer'),
-            mgd.OutputFile(config['mappability_filename']),
+            mgd.OutputFile(mappability_filename),
         ),
     )
 
