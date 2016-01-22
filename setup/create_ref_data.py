@@ -81,6 +81,10 @@ if __name__ == '__main__':
                         genome_file.write(line)
     auto_sentinal.run(wget_genome_fasta)
 
+    def wget_gap_table():
+        wget(remixt.config.get_filename(config, 'gap_url'), remixt.config.get_filename(config, 'gap_table'))
+    auto_sentinal.run(wget_gap_table)
+
     def bwa_index():
         pypeliner.commandline.execute('bwa', 'index', remixt.config.get_filename(config, 'genome_fasta'))
     auto_sentinal.run(bwa_index)

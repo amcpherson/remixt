@@ -22,8 +22,26 @@ def create_segments(segment_filename, config, breakpoint_filename=None):
     segment_length = remixt.config.get_param(config, 'segment_length')
     chromosomes = remixt.config.get_param(config, 'chromosomes')
     genome_fai_filename = remixt.config.get_filename(config, 'genome_fai')
+    gap_table_filename = remixt.config.get_filename(config, 'gap_table')
 
     chromosome_lengths = remixt.utils.read_chromosome_lengths(genome_fai_filename)
+
+    gap_table_columns = [
+        'bin',
+        'chromosome',
+        'start',
+        'end',
+        'ix',
+        'n',
+        'size',
+        'type',
+        'bridge',
+    ]
+
+    gap_table = pd.read_csv(
+        gap_table_filename, sep='\t', compression='gzip', header=None,
+        names=gap_table_columns, converters={'chromosome': str})
+    gap_table['chromosome'] = gap_table['chromosome'].apply(lambda a: a[3:])
 
     changepoints = list()
 
@@ -33,6 +51,11 @@ def create_segments(segment_filename, config, breakpoint_filename=None):
         for position in np.arange(0, length, segment_length, dtype=int):
             changepoints.append((chromosome, position))
         changepoints.append((chromosome, length))
+
+    # Add gap boundaries to changepoints
+    for idx in gap_table.index:
+        changepoints.append((gap_table.loc[idx, 'chromosome'], gap_table.loc[idx, 'start']))
+        changepoints.append((gap_table.loc[idx, 'chromosome'], gap_table.loc[idx, 'end']))
 
     # Add breakends to segmentation if provided
     if breakpoint_filename is not None:
@@ -58,6 +81,23 @@ def create_segments(segment_filename, config, breakpoint_filename=None):
         chrom_segments['chromosome'] = chromosome
         segments.append(chrom_segments)
     segments = pd.concat(segments, ignore_index=True)
+
+    # Remove gap segments
+    segments['gap'] = False
+    for idx in gap_table.index:
+        gap_chromosome = gap_table.loc[idx, 'chromosome']
+        gap_start = gap_table.loc[idx, 'start']
+        gap_end = gap_table.loc[idx, 'end']
+        segments.loc[
+            (segments['chromosome'] == gap_chromosome) &
+            (segments['start'] >= gap_start) &
+            (segments['start'] < gap_end),
+            'gap'
+        ] = True
+    segments = segments[~segments['gap']]
+
+    # Remove 0 lengthed segments
+    segments = segments[segments['start'] < segments['end']]
 
     # Sort segments by placement in chromosome list, and position
     segments = segments.merge(pd.DataFrame(list(enumerate(chromosomes)), columns=['chromosome_idx', 'chromosome']))

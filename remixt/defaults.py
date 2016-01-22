@@ -28,6 +28,12 @@ ucsc_genome_version                         = 'hg19'
 genome_fasta_template                       = '{ref_data_directory}/Homo_sapiens.{ensembl_genome_version}.{ensembl_version}.dna.chromosomes.fa'
 genome_fai_template                         = '{ref_data_directory}/Homo_sapiens.{ensembl_genome_version}.{ensembl_version}.dna.chromosomes.fa.fai'
 
+# Ucsc gap file
+gap_url_template                            = 'http://hgdownload.soe.ucsc.edu/goldenPath/{ucsc_genome_version}/database/gap.txt.gz'
+
+# Locally installed gap file
+gap_table_template                          = '{ref_data_directory}/{ucsc_genome_version}_gap.txt.gz'
+
 # Segment length for automatically generated segments
 segment_length                              = int(3e6)
 
