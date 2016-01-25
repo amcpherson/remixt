@@ -245,7 +245,7 @@ def fit(
     brk_cn = fit_results['brk_cn']
 
     # Create copy number table
-    cn_table = remixt.analysis.experiment.create_cn_table(experiment, emission, cn, h)
+    cn_table = experiment.create_cn_table(emission, cn, h)
     cn_table['log_likelihood'] = emission.log_likelihood(experiment.x, experiment.l, cn)
     cn_table['log_prior'] = prior.log_prior(cn)
     cn_table['major_expected'] = emission.expected_read_count(experiment.l, cn)[:,0]
@@ -267,8 +267,8 @@ def fit(
         'ell_2':'ell_1',
         'side_2':'side_1', 
     }
-    brk_cn_table_1 = brk_cn.merge(experiment.breakpoint_table)
-    brk_cn_table_2 = brk_cn.merge(experiment.breakpoint_table.rename(columns=column_swap))
+    brk_cn_table_1 = brk_cn.merge(experiment.breakpoint_segment_data)
+    brk_cn_table_2 = brk_cn.merge(experiment.breakpoint_segment_data.rename(columns=column_swap))
     brk_cn_table = pd.concat([brk_cn_table_1, brk_cn_table_2], ignore_index=True)
 
     # Create a table of relevant statistics
@@ -322,6 +322,6 @@ def collate(collate_filename, experiment_filename, init_results_filename, fit_re
 
         collated['breakpoints'] = experiment.breakpoint_data
         collated['reference_adjacencies'] = pd.DataFrame(list(experiment.adjacencies), columns=['n_1', 'n_2'])
-        collated['breakpoint_adjacencies'] = experiment.breakpoint_table
+        collated['breakpoint_adjacencies'] = experiment.breakpoint_segment_data
 
 

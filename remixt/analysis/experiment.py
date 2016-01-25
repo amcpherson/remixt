@@ -4,22 +4,6 @@ import pickle
 import numpy as np
 import pandas as pd
 
-import remixt.likelihood
-
-
-Experiment = collections.namedtuple('Experiment', [
-    'segment_chromosome_id',
-    'segment_start',
-    'segment_end',
-    'segment_major_is_allele_a',
-    'x',
-    'l',
-    'adjacencies',
-    'breakpoints',
-    'breakpoint_table',
-    'breakpoint_data',
-])
-
 
 def find_closest(a, v):
     """ Find closest value in a to values in v
@@ -137,49 +121,70 @@ def find_closest_segment_end(segment_data, breakpoint_data):
     return break_segment_table
 
 
-def create_experiment(count_filename, breakpoint_filename, experiment_filename, min_brk_dist=2000, min_length=None):
+def get_wild_type_adjacencies(segment_data):
+    """ Calculate adjacencies in segment data.
 
-    count_data = pd.read_csv(count_filename, sep='\t',
-        converters={'chromosome':str})
+    Args:
+        segment_data (pandas.DataFrame): segmentation of the genome
 
-    breakpoint_data = pd.read_csv(breakpoint_filename, sep='\t',
-        converters={'chromosome_1':str, 'chromosome_2':str})
+    Returns:
+        set of tuple: pairs of segment indices adjacent in the reference genome
 
-    if min_length is not None:
-        count_data = count_data[count_data['length'] > min_length]
-
-    chromosomes = count_data['chromosome'].unique()
-
-    # Filter breakpoints between chromosomes with no count data
-    breakpoint_data = breakpoint_data[(
-        (breakpoint_data['chromosome_1'].isin(chromosomes)) &
-        (breakpoint_data['chromosome_2'].isin(chromosomes))
-    )]
-
-    # Ensure the data frame is indexed 0..n-1 and add the index as a column called 'index'
-    count_data = count_data.reset_index(drop=True).reset_index()
+    """
 
     # Adjacent segments in the same chromosome
     adjacencies = set()
-    for idx in xrange(len(count_data.index) - 1):
-        if count_data.iloc[idx]['chromosome'] == count_data.iloc[idx+1]['chromosome']:
+    for idx in xrange(len(segment_data.index) - 1):
+        if segment_data.iloc[idx]['chromosome'] == segment_data.iloc[idx+1]['chromosome']:
             adjacencies.add((idx, idx+1))
+    return adjacencies
+
+
+def create_breakpoint_segment_table(segment_data, breakpoint_data, min_brk_dist=2000):
+    """ Create a table mapping breakpoints to pairs of segment extremeties.
+
+    Args:
+        segment_data (pandas.DataFrame): segmentation of the genome
+        breakpoint_data (pandas.DataFrame): genomic breakpoints
+
+    KwArgs:
+        min_brk_dist (int): minimum distance to segment extremety
+
+    Returns:
+        pandas.DataFrame: mapping between side of breakpoint and side of segment
+
+    Input segmentation dataframe has columns: 'chromosome', 'start', 'end'
+
+    Input genomic breakpoints dataframe as columns: 'prediction_id',
+    'chromosome_1', 'strand_1', 'position_1', 'chromosome_2', 'strand_2', 'position_2'
+
+    Returned dataframe has columns:
+
+        'prediction_id': id into breakpoint table
+        'n_1': segment index for breakend 1
+        'side_1': side of segment, 0 or 1, for breakend 1
+        'n_2': segment index for breakend 2
+        'side_2': side of segment, 0 or 1, for breakend 2
+
+    """
 
     # Table of segments closest to breakpoints
-    break_segment_table = find_closest_segment_end(count_data, breakpoint_data)
+    closest_segments = find_closest_segment_end(segment_data, breakpoint_data)
 
     # Should have a pair of breakends per breakpoint
-    break_segment_table = (
-        break_segment_table.set_index(['prediction_id', 'prediction_side'])
+    closest_segments = (
+        closest_segments.set_index(['prediction_id', 'prediction_side'])
         .unstack()
         .dropna()
         .reset_index()
     )
 
+    # Get adjacencies, for filtering
+    adjacencies = get_wild_type_adjacencies(segment_data)
+
     # Breakpoints as segment index, segment side (0/1)
-    breakpoints = set()
-    breakpoint_table = list()
-    for idx, row in break_segment_table.iterrows():
+    breakpoint_segment = list()
+    for idx, row in closest_segments.iterrows():
 
         if row['dist'].sum() > min_brk_dist:
             continue
@@ -202,83 +207,137 @@ def create_experiment(count_filename, breakpoint_filename, experiment_filename, 
         if (n_1, side_1) == (n_2, side_2):
             continue
 
-        breakpoints.add(frozenset([(n_1, side_1), (n_2, side_2)]))
-        breakpoint_table.append((prediction_id, n_1, side_1, n_2, side_2))
+        breakpoint_segment.append((prediction_id, n_1, side_1, n_2, side_2))
 
-    breakpoint_table = pd.DataFrame(breakpoint_table, 
+    breakpoint_segment = pd.DataFrame(breakpoint_segment,
         columns=['prediction_id', 'n_1', 'side_1', 'n_2', 'side_2'])
 
-    x = count_data[['major_readcount', 'minor_readcount', 'readcount']].values
-    l = count_data['length'].values
+    return breakpoint_segment
 
-    experiment = Experiment(
-        count_data['chromosome'].values,
-        count_data['start'].values,
-        count_data['end'].values,
-        count_data['major_is_allele_a'].values,
-        x,
-        l,
-        adjacencies,
-        breakpoints,
-        breakpoint_table,
-        breakpoint_data,
-    )
+
+def create_experiment(count_filename, breakpoint_filename, experiment_filename, min_brk_dist=2000, min_length=None):
+    count_data = pd.read_csv(count_filename, sep='\t',
+        converters={'chromosome': str})
+
+    if min_length is not None:
+        count_data = count_data[count_data['length'] > min_length]
+
+    breakpoint_data = pd.read_csv(breakpoint_filename, sep='\t',
+        converters={'chromosome_1': str, 'chromosome_2': str})
+
+    experiment = Experiment(count_data, breakpoint_data, min_brk_dist=min_brk_dist)
 
     with open(experiment_filename, 'w') as f:
         pickle.dump(experiment, f)
 
 
-def create_cn_table(experiment, likelihood, cn, h):
-    """ Create a table of relevant copy number data
+class Experiment(object):
 
-    Args:
-        experiment (Experiment): experiment object containing simulation information
-        likelihood (ReadCountLikelihood): likelihood model
-        cn (numpy.array): segment copy number
-        h (numpy.array): haploid depths
+    def __init__(self, count_data, breakpoint_data, min_brk_dist=2000):
 
-    Returns:
-        pandas.DataFrame: table of copy number information
+        self.count_data = count_data
+        self.breakpoint_data = breakpoint_data
 
-    """
+        chromosomes = self.count_data['chromosome'].unique()
 
-    data = pd.DataFrame({
-            'chromosome':experiment.segment_chromosome_id,
-            'start':experiment.segment_start,
-            'end':experiment.segment_end,
-            'major_is_allele_a':experiment.segment_major_is_allele_a,
-            'length':experiment.l,
-            'major_readcount':experiment.x[:,0],
-            'minor_readcount':experiment.x[:,1],
-            'readcount':experiment.x[:,2],
-        })
+        # Filter breakpoints between chromosomes with no count data
+        self.breakpoint_data = self.breakpoint_data[(
+            (self.breakpoint_data['chromosome_1'].isin(chromosomes)) &
+            (self.breakpoint_data['chromosome_2'].isin(chromosomes))
+        )]
 
-    data['major_cov'] = data['major_readcount'] / (likelihood.phi * data['length'])
-    data['minor_cov'] = data['minor_readcount'] / (likelihood.phi * data['length'])
+        # Ensure the data frame is indexed 0..n-1 and add the index as a column called 'index'
+        self.count_data = self.count_data.reset_index(drop=True).reset_index()
 
-    data['major_raw'] = (data['major_cov'] - h[0]) / h[1:].sum()
-    data['minor_raw'] = (data['minor_cov'] - h[0]) / h[1:].sum()
+        # Create mapping between breakpoints and segment extremeties
+        self.breakpoint_segment_data = create_breakpoint_segment_table(self.count_data, self.breakpoint_data, min_brk_dist=min_brk_dist)
+
+    @property
+    def segment_chromosome_id(self):
+        return self.count_data['chromosome'].values
+
+    @property
+    def segment_start(self):
+        return self.count_data['start'].values
+
+    @property
+    def segment_end(self):
+        return self.count_data['end'].values
+
+    @property
+    def segment_major_is_allele_a(self):
+        return self.count_data['major_is_allele_a'].values
     
-    data['ratio_raw'] = experiment.x[:,1].astype(float) / experiment.x[:,:2].sum(axis=1).astype(float)
+    @property
+    def x(self):
+        return self.count_data[['major_readcount', 'minor_readcount', 'readcount']].values
 
-    x_e = likelihood.expected_read_count(experiment.l, cn)
+    @property
+    def l(self):
+        return self.count_data['length'].values
+    
+    @property
+    def adjacencies(self):
+        return get_wild_type_adjacencies(self.count_data)
 
-    major_cov_e = x_e[:,0] / (likelihood.phi * experiment.l)
-    minor_cov_e = x_e[:,1] / (likelihood.phi * experiment.l)
+    @property
+    def breakpoints(self):
+        breakpoints = set()
+        for n_1, side_1, n_2, side_2 in self.breakpoint_segment_data[['n_1', 'side_1', 'n_2', 'side_2']].values:
+            breakpoints.add(frozenset([(n_1, side_1), (n_2, side_2)]))
+        return breakpoints
 
-    major_raw_e = (major_cov_e - h[0]) / h[1:].sum()
-    minor_raw_e = (minor_cov_e - h[0]) / h[1:].sum()
+    def create_cn_table(self, likelihood, cn, h):
+        """ Create a table of relevant copy number data
 
-    data['major_raw_e'] = major_raw_e
-    data['minor_raw_e'] = minor_raw_e
+        Args:
+            experiment (Experiment): experiment object containing simulation information
+            likelihood (ReadCountLikelihood): likelihood model
+            cn (numpy.array): segment copy number
+            h (numpy.array): haploid depths
 
-    for m in xrange(1, cn.shape[1]):
-        data['major_{0}'.format(m)] = cn[:,m,0]
-        data['minor_{0}'.format(m)] = cn[:,m,1]
+        Returns:
+            pandas.DataFrame: table of copy number information
 
-    if 'major_2' in data:
-        data['major_diff'] = np.absolute(data['major_1'] - data['major_2'])
-        data['minor_diff'] = np.absolute(data['minor_1'] - data['minor_2'])
+        """
 
-    return data
+        data = pd.DataFrame({
+                'chromosome': self.segment_chromosome_id,
+                'start': self.segment_start,
+                'end': self.segment_end,
+                'major_is_allele_a': self.segment_major_is_allele_a,
+                'length': self.l,
+                'major_readcount': self.x[:, 0],
+                'minor_readcount': self.x[:, 1],
+                'readcount': self.x[:, 2],
+            })
+
+        data['major_cov'] = data['major_readcount'] / (likelihood.phi * data['length'])
+        data['minor_cov'] = data['minor_readcount'] / (likelihood.phi * data['length'])
+
+        data['major_raw'] = (data['major_cov'] - h[0]) / h[1:].sum()
+        data['minor_raw'] = (data['minor_cov'] - h[0]) / h[1:].sum()
+        
+        data['ratio_raw'] = self.x[:, 1].astype(float) / self.x[:, :2].sum(axis=1).astype(float)
+
+        x_e = likelihood.expected_read_count(self.l, cn)
+
+        major_cov_e = x_e[:, 0] / (likelihood.phi * self.l)
+        minor_cov_e = x_e[:, 1] / (likelihood.phi * self.l)
+
+        major_raw_e = (major_cov_e - h[0]) / h[1:].sum()
+        minor_raw_e = (minor_cov_e - h[0]) / h[1:].sum()
+
+        data['major_raw_e'] = major_raw_e
+        data['minor_raw_e'] = minor_raw_e
+
+        for m in xrange(1, cn.shape[1]):
+            data['major_{0}'.format(m)] = cn[:, m, 0]
+            data['minor_{0}'.format(m)] = cn[:, m, 1]
+
+        if 'major_2' in data:
+            data['major_diff'] = np.absolute(data['major_1'] - data['major_2'])
+            data['minor_diff'] = np.absolute(data['minor_1'] - data['minor_2'])
+
+        return data
 

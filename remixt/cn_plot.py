@@ -329,7 +329,7 @@ def experiment_plot(experiment, likelihood, cn, h,
 
     """
 
-    data = remixt.analysis.experiment.create_cn_table(experiment, likelihood, cn, h)
+    data = experiment.create_cn_table(likelihood, cn, h)
 
     num_plots = 3
     width = 20
