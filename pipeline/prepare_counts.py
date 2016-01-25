@@ -1,19 +1,9 @@
 import argparse
 
 import pypeliner
-import pypeliner.workflow
-import pypeliner.managed as mgd
 
 import remixt
-import remixt.seqdataio
-import remixt.segalg
-import remixt.utils
 import remixt.workflow
-import remixt.analysis.haplotype
-import remixt.analysis.segment
-import remixt.analysis.gcbias
-import remixt.analysis.stats
-import remixt.analysis.readcount
 
 
 if __name__ == '__main__':
@@ -54,72 +44,15 @@ if __name__ == '__main__':
 
     pyp = pypeliner.app.Pypeline([remixt], config)
 
-    workflow = pypeliner.workflow.Workflow()
-
     tumour_fnames = dict(enumerate(args['tumour_files']))
     count_fnames = dict(enumerate(args['count_files']))
 
-    workflow.setobj(obj=mgd.OutputChunks('bytumour'), value=tumour_fnames.keys())
-
-    workflow.transform(
-        name='segment_readcount',
-        axes=('bytumour',),
-        ctx={'mem': 16},
-        func=remixt.analysis.readcount.segment_readcount,
-        args=(
-            mgd.TempOutputFile('segment_counts.tsv', 'bytumour'),
-            mgd.InputFile(args['segment_file']),
-            mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_fnames),
-            config,
-        ),
-    )
-
-    workflow.transform(
-        name='haplotype_allele_readcount',
-        axes=('bytumour',),
-        ctx={'mem': 16},
-        func=remixt.analysis.readcount.haplotype_allele_readcount,
-        args=(
-            mgd.TempOutputFile('allele_counts.tsv', 'bytumour'),
-            mgd.InputFile(args['segment_file']),
-            mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_fnames),
-            mgd.InputFile(args['haplotypes_file']),
-            config,
-        ),
-    )
-
-    workflow.transform(
-        name='phase_segments',
-        ctx={'mem': 16},
-        func=remixt.analysis.readcount.phase_segments,
-        args=(
-            mgd.TempInputFile('allele_counts.tsv', 'bytumour'),
-            mgd.TempOutputFile('phased_allele_counts.tsv', 'bytumour', axes_origin=[]),
-        ),
-    )
-
-    workflow.subworkflow(
-        name='calc_bias',
-        axes=('bytumour',),
-        func=remixt.workflow.create_calc_bias_workflow,
-        args=(
-            mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_fnames),
-            mgd.TempInputFile('segment_counts.tsv', 'bytumour'),
-            mgd.TempOutputFile('segment_counts_lengths.tsv', 'bytumour'),
-            config,
-        ),
-    )
-
-    workflow.transform(
-        name='prepare_readcount_table',
-        axes=('bytumour',),
-        ctx={'mem': 16},
-        func=remixt.analysis.readcount.prepare_readcount_table,
-        args=(
-            mgd.TempInputFile('segment_counts_lengths.tsv', 'bytumour'),
-            mgd.TempInputFile('phased_allele_counts.tsv', 'bytumour'),
-            mgd.OutputFile('count_file', 'bytumour', fnames=count_fnames),
-        ),
+    workflow = remixt.workflow.create_prepare_counts_workflow(
+        args['segment_file'],
+        args['haplotypes_file'],
+        tumour_fnames,
+        count_fnames,
+        config,
     )
 
     pyp.run(workflow)

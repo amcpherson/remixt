@@ -5,6 +5,7 @@ import remixt.config
 import remixt.analysis.gcbias
 import remixt.analysis.haplotype
 import remixt.analysis.pipeline
+import remixt.analysis.readcount
 import remixt.analysis.stats
 import remixt.seqdataio
 import remixt.utils
@@ -170,6 +171,84 @@ def create_calc_bias_workflow(
         args=(
             mgd.OutputFile(segment_length_filename),
             mgd.TempInputFile('biases.tsv'),
+        ),
+    )
+
+    return workflow
+
+
+def create_prepare_counts_workflow(
+    segment_filename,
+    haplotypes_filename,
+    tumour_filenames,
+    count_filenames,
+    config,
+):
+    if set(tumour_filenames.keys()) != set(count_filenames.keys()):
+        raise ValueError('require matching count and tumour files')
+
+    workflow = pypeliner.workflow.Workflow()
+
+    workflow.setobj(obj=mgd.OutputChunks('bytumour'), value=tumour_filenames.keys())
+
+    workflow.transform(
+        name='segment_readcount',
+        axes=('bytumour',),
+        ctx={'mem': 16},
+        func=remixt.analysis.readcount.segment_readcount,
+        args=(
+            mgd.TempOutputFile('segment_counts.tsv', 'bytumour'),
+            mgd.InputFile(segment_filename),
+            mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_filenames),
+            config,
+        ),
+    )
+
+    workflow.transform(
+        name='haplotype_allele_readcount',
+        axes=('bytumour',),
+        ctx={'mem': 16},
+        func=remixt.analysis.readcount.haplotype_allele_readcount,
+        args=(
+            mgd.TempOutputFile('allele_counts.tsv', 'bytumour'),
+            mgd.InputFile(segment_filename),
+            mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_filenames),
+            mgd.InputFile(haplotypes_filename),
+            config,
+        ),
+    )
+
+    workflow.transform(
+        name='phase_segments',
+        ctx={'mem': 16},
+        func=remixt.analysis.readcount.phase_segments,
+        args=(
+            mgd.TempInputFile('allele_counts.tsv', 'bytumour'),
+            mgd.TempOutputFile('phased_allele_counts.tsv', 'bytumour', axes_origin=[]),
+        ),
+    )
+
+    workflow.subworkflow(
+        name='calc_bias',
+        axes=('bytumour',),
+        func=remixt.workflow.create_calc_bias_workflow,
+        args=(
+            mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_filenames),
+            mgd.TempInputFile('segment_counts.tsv', 'bytumour'),
+            mgd.TempOutputFile('segment_counts_lengths.tsv', 'bytumour'),
+            config,
+        ),
+    )
+
+    workflow.transform(
+        name='prepare_readcount_table',
+        axes=('bytumour',),
+        ctx={'mem': 16},
+        func=remixt.analysis.readcount.prepare_readcount_table,
+        args=(
+            mgd.TempInputFile('segment_counts_lengths.tsv', 'bytumour'),
+            mgd.TempInputFile('phased_allele_counts.tsv', 'bytumour'),
+            mgd.OutputFile('count_file', 'bytumour', fnames=count_filenames),
         ),
     )
 
