@@ -121,11 +121,12 @@ def find_closest_segment_end(segment_data, breakpoint_data):
     return break_segment_table
 
 
-def get_wild_type_adjacencies(segment_data):
+def get_wild_type_adjacencies(segment_data, max_seg_gap):
     """ Calculate adjacencies in segment data.
 
     Args:
         segment_data (pandas.DataFrame): segmentation of the genome
+        max_seg_gap (int): maximum gap between adjacent segments
 
     Returns:
         set of tuple: pairs of segment indices adjacent in the reference genome
@@ -135,20 +136,23 @@ def get_wild_type_adjacencies(segment_data):
     # Adjacent segments in the same chromosome
     adjacencies = set()
     for idx in xrange(len(segment_data.index) - 1):
-        if segment_data.iloc[idx]['chromosome'] == segment_data.iloc[idx+1]['chromosome']:
+        same_chrom = segment_data.iloc[idx]['chromosome'] == segment_data.iloc[idx+1]['chromosome']
+        gap_length = segment_data.iloc[idx+1]['start'] - segment_data.iloc[idx]['end']
+        if same_chrom and gap_length <= max_seg_gap:
             adjacencies.add((idx, idx+1))
     return adjacencies
 
 
-def create_breakpoint_segment_table(segment_data, breakpoint_data, min_brk_dist=2000):
+def create_breakpoint_segment_table(segment_data, breakpoint_data, adjacencies, max_brk_dist=2000):
     """ Create a table mapping breakpoints to pairs of segment extremeties.
 
     Args:
         segment_data (pandas.DataFrame): segmentation of the genome
         breakpoint_data (pandas.DataFrame): genomic breakpoints
+        adjacencies (set of tuple): pairs of segment indices adjacent in the reference genome
 
     KwArgs:
-        min_brk_dist (int): minimum distance to segment extremety
+        max_brk_dist (int): minimum distance to segment extremety
 
     Returns:
         pandas.DataFrame: mapping between side of breakpoint and side of segment
@@ -179,14 +183,11 @@ def create_breakpoint_segment_table(segment_data, breakpoint_data, min_brk_dist=
         .reset_index()
     )
 
-    # Get adjacencies, for filtering
-    adjacencies = get_wild_type_adjacencies(segment_data)
-
     # Breakpoints as segment index, segment side (0/1)
     breakpoint_segment = list()
     for idx, row in closest_segments.iterrows():
 
-        if row['dist'].sum() > min_brk_dist:
+        if row['dist'].sum() > max_brk_dist:
             continue
 
         prediction_id = row['prediction_id'].iloc[0]
@@ -215,7 +216,7 @@ def create_breakpoint_segment_table(segment_data, breakpoint_data, min_brk_dist=
     return breakpoint_segment
 
 
-def create_experiment(count_filename, breakpoint_filename, experiment_filename, min_brk_dist=2000, min_length=None):
+def create_experiment(count_filename, breakpoint_filename, experiment_filename, max_brk_dist=2000, min_length=None):
     count_data = pd.read_csv(count_filename, sep='\t',
         converters={'chromosome': str})
 
@@ -225,7 +226,7 @@ def create_experiment(count_filename, breakpoint_filename, experiment_filename, 
     breakpoint_data = pd.read_csv(breakpoint_filename, sep='\t',
         converters={'chromosome_1': str, 'chromosome_2': str})
 
-    experiment = Experiment(count_data, breakpoint_data, min_brk_dist=min_brk_dist)
+    experiment = Experiment(count_data, breakpoint_data, max_brk_dist=max_brk_dist)
 
     with open(experiment_filename, 'w') as f:
         pickle.dump(experiment, f)
@@ -233,7 +234,7 @@ def create_experiment(count_filename, breakpoint_filename, experiment_filename, 
 
 class Experiment(object):
 
-    def __init__(self, count_data, breakpoint_data, min_brk_dist=2000):
+    def __init__(self, count_data, breakpoint_data, max_brk_dist=2000, max_seg_gap=int(3e6)):
 
         self.count_data = count_data
         self.breakpoint_data = breakpoint_data
@@ -249,8 +250,11 @@ class Experiment(object):
         # Ensure the data frame is indexed 0..n-1 and add the index as a column called 'index'
         self.count_data = self.count_data.reset_index(drop=True).reset_index()
 
+        # Get a list of segments considered contiguous in the reference genome
+        self.adjacencies = get_wild_type_adjacencies(self.count_data, max_seg_gap)
+
         # Create mapping between breakpoints and segment extremeties
-        self.breakpoint_segment_data = create_breakpoint_segment_table(self.count_data, self.breakpoint_data, min_brk_dist=min_brk_dist)
+        self.breakpoint_segment_data = create_breakpoint_segment_table(self.count_data, self.breakpoint_data, self.adjacencies, max_brk_dist=max_brk_dist)
 
     @property
     def segment_chromosome_id(self):
@@ -275,10 +279,6 @@ class Experiment(object):
     @property
     def l(self):
         return self.count_data['length'].values
-    
-    @property
-    def adjacencies(self):
-        return get_wild_type_adjacencies(self.count_data)
 
     @property
     def breakpoints(self):
@@ -289,11 +289,10 @@ class Experiment(object):
 
     @property
     def chains(self):
-        adjacencies = self.adjacencies
         chain_start = [0]
         chain_end = [len(self.count_data.index)]
         for idx in xrange(len(self.count_data.index) - 1):
-            if (idx, idx+1) not in adjacencies:
+            if (idx, idx+1) not in self.adjacencies:
                 chain_end.append(idx)
                 chain_start.append(idx+1)
         return zip(sorted(chain_start), sorted(chain_end))
