@@ -228,25 +228,13 @@ def create_prepare_counts_workflow(
         ),
     )
 
-    workflow.subworkflow(
-        name='calc_bias',
-        axes=('bytumour',),
-        func=remixt.workflow.create_calc_bias_workflow,
-        args=(
-            mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_filenames),
-            mgd.TempInputFile('segment_counts.tsv', 'bytumour'),
-            mgd.TempOutputFile('segment_counts_lengths.tsv', 'bytumour'),
-            config,
-        ),
-    )
-
     workflow.transform(
         name='prepare_readcount_table',
         axes=('bytumour',),
         ctx={'mem': 16},
         func=remixt.analysis.readcount.prepare_readcount_table,
         args=(
-            mgd.TempInputFile('segment_counts_lengths.tsv', 'bytumour'),
+            mgd.TempInputFile('segment_counts.tsv', 'bytumour'),
             mgd.TempInputFile('phased_allele_counts.tsv', 'bytumour'),
             mgd.OutputFile('count_file', 'bytumour', fnames=count_filenames),
         ),
