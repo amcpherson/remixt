@@ -287,6 +287,17 @@ class Experiment(object):
             breakpoints.add(frozenset([(n_1, side_1), (n_2, side_2)]))
         return breakpoints
 
+    @property
+    def chains(self):
+        adjacencies = self.adjacencies
+        chain_start = [0]
+        chain_end = [len(self.count_data.index)]
+        for idx in xrange(len(self.count_data.index) - 1):
+            if (idx, idx+1) not in adjacencies:
+                chain_end.append(idx)
+                chain_start.append(idx+1)
+        return zip(sorted(chain_start), sorted(chain_end))
+    
     def create_cn_table(self, likelihood, cn, h):
         """ Create a table of relevant copy number data
 

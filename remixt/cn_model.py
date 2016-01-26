@@ -131,14 +131,15 @@ class CopyNumberPrior(object):
 
 class HiddenMarkovModel(object):
 
-    def __init__(self, N, M, emission, prior):
+    def __init__(self, N, M, emission, prior, chains):
         """Create a copy number model.
 
         Args:
             N (int): number of segments
             M (int): number of clones including normal
             emission (ReadCountLikelihood): read count likelihood
-            prior (CopyNumberPrior): copy number prior 
+            prior (CopyNumberPrior): copy number prior
+            chains (list of tuple): start end indices of chromosome chains
 
         """
 
@@ -147,6 +148,8 @@ class HiddenMarkovModel(object):
         
         self.emission = emission
         self.prior = prior
+
+        self.chains = chains
 
         self.cn_max = prior.cn_max
 
@@ -293,25 +296,7 @@ class HiddenMarkovModel(object):
         return cn_states, probs
 
 
-    def posterior_marginals(self):
-        """ Calculate the forward backward posterior marginals.
-        
-        Returns:
-            float: log posterior
-            numpy.array: posterior marginals
-
-        Posterior marginals matrix has shape (S,N) for N variables with S states
-
-        """
-
-        cn_states, probs = self.emission_probabilities()
-
-        log_start_prob = np.zeros((cn_states.shape[0],))
-        log_start_prob -= scipy.misc.logsumexp(log_start_prob)
-
-        log_trans_mat = self.build_log_trans_mat()
-
-        frame_log_prob = probs.T
+    def _forward_backward(self, log_start_prob, log_trans_mat, frame_log_prob):
 
         n_observations, n_components = frame_log_prob.shape
         fwd_lattice = np.zeros((n_observations, n_components))
@@ -336,7 +321,45 @@ class HiddenMarkovModel(object):
         posteriors /= np.sum(posteriors, axis=1).reshape((-1, 1))
         posteriors = posteriors.T
 
+        return log_prob, posteriors
+
+
+    def posterior_marginals(self):
+        """ Calculate the forward backward posterior marginals.
+        
+        Returns:
+            float: log posterior
+            numpy.array: posterior marginals
+
+        Posterior marginals matrix has shape (S,N) for N variables with S states
+
+        """
+
+        cn_states, probs = self.emission_probabilities()
+
+        log_start_prob = np.zeros((cn_states.shape[0],))
+        log_start_prob -= scipy.misc.logsumexp(log_start_prob)
+
+        log_trans_mat = self.build_log_trans_mat()
+
+        frame_log_prob = probs.T
+
+        posteriors = np.zeros(probs.shape)
+
+        log_prob = 0
+        for n_1, n_2 in self.chains:
+            chain_log_prob, posteriors[:, n_1:n_2] = self._forward_backward(log_start_prob, log_trans_mat, frame_log_prob[n_1:n_2, :])
+            log_prob += chain_log_prob
+
         return log_prob, cn_states, posteriors
+
+
+    def _viterbi(self, log_start_prob, log_trans_mat, frame_log_prob):
+
+        n_observations, n_components = frame_log_prob.shape
+        state_sequence, log_prob = hmm_viterbi(n_observations, n_components, log_start_prob, log_trans_mat, frame_log_prob)
+
+        return log_prob, state_sequence
 
 
     def optimal_state(self):
@@ -359,10 +382,14 @@ class HiddenMarkovModel(object):
 
         frame_log_prob = probs.T
 
-        state_sequence, log_prob = hmm_viterbi(frame_log_prob.shape[0], frame_log_prob.shape[1],
-            log_start_prob, log_trans_mat, frame_log_prob)
+        state_sequence = np.zeros((frame_log_prob.shape[0],), dtype=int)
 
-        cn_state = cn_states[state_sequence,xrange(len(state_sequence))]
+        log_prob = 0
+        for n_1, n_2 in self.chains:
+            chain_log_prob, state_sequence[n_1:n_2] = self._viterbi(log_start_prob, log_trans_mat, frame_log_prob[n_1:n_2, :])
+            log_prob += chain_log_prob
+
+        cn_state = cn_states[state_sequence, xrange(len(state_sequence))]
 
         return log_prob, cn_state
 

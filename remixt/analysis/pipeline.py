@@ -83,7 +83,7 @@ def fit_hmm_viterbi(experiment, emission, prior, h_init):
     # Initialize haploid depths
     emission.h = h_init
 
-    model = remixt.cn_model.HiddenMarkovModel(N, M, emission, prior)
+    model = remixt.cn_model.HiddenMarkovModel(N, M, emission, prior, experiment.chains)
     model.set_observed_data(experiment.x, experiment.l)
 
     # Estimate haploid depths
@@ -119,7 +119,7 @@ def fit_hmm_graph(experiment, emission, prior, h_init):
     # Initialize haploid depths
     emission.h = h_init
 
-    model = remixt.cn_model.HiddenMarkovModel(N, M, emission, prior)
+    model = remixt.cn_model.HiddenMarkovModel(N, M, emission, prior, experiment.chains)
     model.set_observed_data(experiment.x, experiment.l)
 
     # Estimate haploid depths
@@ -166,7 +166,7 @@ def fit_graph(experiment, emission, prior, h_init):
     h_init_single[0] = h_init[0]
     h_init_single[1] = h_init[1:].sum()
     emission.h = h_init_single
-    model = remixt.cn_model.HiddenMarkovModel(N, 2, emission, prior)
+    model = remixt.cn_model.HiddenMarkovModel(N, 2, emission, prior, experiment.chains)
     model.set_observed_data(experiment.x, experiment.l)
     _, cn = model.optimal_state()
     cn_init = np.ones((N, M, 2))
