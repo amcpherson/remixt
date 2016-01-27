@@ -324,8 +324,10 @@ def count_allele_reads(seqdata_filename, haps, chromosome, segments, filter_dupl
     # Remove rows outside of the given segments
     alleles.dropna(subset=['segment_idx', 'end_segment_idx'], inplace=True)
 
-    # Remove reads not contained within the same segment
-    alleles = alleles[alleles['segment_idx'] == alleles['end_segment_idx']]
+    # Remove reads not contained within the same segment, or any segment
+    alleles = alleles[
+        (alleles['segment_idx'] >= 0) &
+        (alleles['segment_idx'] == alleles['end_segment_idx'])]
 
     # Drop unecessary columns
     alleles.drop(['start', 'end', 'end_segment_idx'], axis=1, inplace=True)

@@ -97,9 +97,11 @@ def find_contained_unopt(X, Y):
     X is assumed to be ordered by start position.
     Y is assumed sorted.
 
+    For positions not contained within any segment, value in returned array will be -1
+
     """
 
-    M = [None]*Y.shape[0]
+    M = [-1]*Y.shape[0]
     y_idx = 0
     for x_idx, x in enumerate(X):
         while y_idx < Y.shape[0] and Y[y_idx] <= x[1]:
@@ -122,19 +124,22 @@ def find_contained(X, Y):
     X is assumed to be ordered by start position.
     Y is assumed sorted.
 
+    For positions not contained within any segment, value in returned array will be -1
+
     """
 
     # Positions less than segment end point
-    idx = np.searchsorted(X[:,1], Y)
+    idx = np.searchsorted(X[:, 1], Y)
 
     # Mask positions outside greatest endpoint
     mask = idx < X.shape[0]
-    idx[~mask] = 0
+    idx[~mask] = -1
 
     # Mask positions that are not fully contained within a segment
-    mask = mask & (Y >= X[idx,0]) & (Y <= X[idx,1])
+    mask = mask & (Y >= X[idx, 0]) & (Y <= X[idx, 1])
+    idx[~mask] = -1
 
-    return np.ma.array(idx, mask=~mask, fill_value=None)
+    return idx
 
 
 def vrange(starts, lengths):
