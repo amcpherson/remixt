@@ -293,7 +293,7 @@ class Experiment(object):
         chain_end = [len(self.count_data.index)]
         for idx in xrange(len(self.count_data.index) - 1):
             if (idx, idx+1) not in self.adjacencies:
-                chain_end.append(idx)
+                chain_end.append(idx+1)  # Half-open interval indexing [start, end)
                 chain_start.append(idx+1)
         return zip(sorted(chain_start), sorted(chain_end))
     
