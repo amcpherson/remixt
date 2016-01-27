@@ -59,13 +59,24 @@ class segalg_unittest(unittest.TestCase):
         self.assertTrue(np.all(unopt_result == opt_result))
 
 
-    def test_find_contained_opt(self):
+    def test_find_contained_positions_opt(self):
 
         X = self.random_non_overlapping()
         Y = self.random_positions()
 
-        unopt_result = segalg.find_contained_unopt(X, Y)
-        opt_result = segalg.find_contained(X, Y)
+        unopt_result = segalg.find_contained_positions_unopt(X, Y)
+        opt_result = segalg.find_contained_positions(X, Y)
+
+        self.assertTrue(np.all(unopt_result == opt_result))
+
+
+    def test_find_contained_segments_opt(self):
+
+        X = self.random_non_overlapping()
+        Y = self.random_overlapping()
+
+        unopt_result = segalg.find_contained_segments_unopt(X, Y)
+        opt_result = segalg.find_contained_segments(X, Y)
 
         self.assertTrue(np.all(unopt_result == opt_result))
 

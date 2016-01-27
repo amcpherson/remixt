@@ -310,27 +310,16 @@ def count_allele_reads(seqdata_filename, haps, chromosome, segments, filter_dupl
     segments = segments.sort('start').reset_index(drop=True)
 
     # Annotate segment for start and end of each read
-    alleles.sort('start', inplace=True)
-    alleles['segment_idx'] = remixt.segalg.find_contained(
+    alleles['segment_idx'] = remixt.segalg.find_contained_segments(
         segments[['start', 'end']].values,
-        alleles['start'].values
-    )
-    alleles.sort('end', inplace=True)
-    alleles['end_segment_idx'] = remixt.segalg.find_contained(
-        segments[['start', 'end']].values,
-        alleles['end'].values
+        alleles[['start', 'end']].values,
     )
 
-    # Remove rows outside of the given segments
-    alleles.dropna(subset=['segment_idx', 'end_segment_idx'], inplace=True)
-
-    # Remove reads not contained within the same segment, or any segment
-    alleles = alleles[
-        (alleles['segment_idx'] >= 0) &
-        (alleles['segment_idx'] == alleles['end_segment_idx'])]
+    # Remove reads not contained within any segment
+    alleles = alleles[alleles['segment_idx'] >= 0]
 
     # Drop unecessary columns
-    alleles.drop(['start', 'end', 'end_segment_idx'], axis=1, inplace=True)
+    alleles.drop(['start', 'end'], axis=1, inplace=True)
 
     # Merge segment start end, key for each segment (for given chromosome)
     alleles = alleles.merge(segments[['start', 'end']], left_on='segment_idx', right_index=True)
