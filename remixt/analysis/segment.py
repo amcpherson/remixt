@@ -211,9 +211,15 @@ def create_segment_allele_counts(segment_data, allele_data):
     """
 
     # Calculate allele a/b readcounts
-    allele_data = allele_data.set_index(['chromosome', 'start', 'end', 'hap_label', 'is_allele_a'])['readcount'].unstack().fillna(0.0)
-    allele_data = allele_data.astype(int)
-    allele_data = allele_data.rename(columns={0:'allele_b_readcount', 1:'allele_a_readcount'})
+    allele_data = (
+        allele_data
+        .set_index(['chromosome', 'start', 'end', 'hap_label', 'is_allele_a'])['readcount']
+        .unstack()
+        .reindex(columns=[0, 1])
+        .fillna(0.0)
+        .astype(int)
+        .rename(columns={0: 'allele_b_readcount', 1: 'allele_a_readcount'})
+    )
 
     # Merge haplotype blocks contained within the same segment
     allele_data = allele_data.groupby(level=[0, 1, 2])[['allele_a_readcount', 'allele_b_readcount']].sum()
