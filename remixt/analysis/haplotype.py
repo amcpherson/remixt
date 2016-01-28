@@ -458,6 +458,11 @@ def phase_segments(*allele_counts_tables):
     phased_allele_counts = list()
     for allele_data in allele_counts_tables:
 
+        # Workaround for empty dataframe
+        if len(allele_data.index) == 0:
+            phased_allele_counts.append(pd.DataFrame(columns=['chromosome', 'start', 'end', 'hap_label', 'allele_id', 'readcount', 'is_allele_a']))
+            continue
+
         # Add a boolean column denoting which allele is allele 'a'
         allele_data = allele_data.merge(allele_phases, left_on=['chromosome', 'start', 'end', 'hap_label'], right_on=['chromosome', 'start', 'end', 'hap_label'])
         allele_data['is_allele_a'] = (allele_data['allele_id'] == allele_data['allele_a_id']) * 1
