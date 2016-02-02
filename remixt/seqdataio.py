@@ -59,7 +59,7 @@ def create_chromosome_seqdata(seqdata_filename, bam_filename, snp_filename, chro
         max_soft_clipped,
     )
 
-    with pd.HDFStore(seqdata_filename, 'w') as store:
+    with pd.HDFStore(seqdata_filename, 'w', complevel=9, complib='zlib') as store:
         while reader.ReadAlignments(10000000):
             _unique_index_append(store, _get_key('fragments', chromosome), reader.GetFragmentTable())
             _unique_index_append(store, _get_key('alleles', chromosome), reader.GetAlleleTable())
@@ -74,7 +74,7 @@ def merge_seqdata(out_filename, in_filenames):
 
     """
 
-    with pd.HDFStore(out_filename, 'w') as out_store:
+    with pd.HDFStore(out_filename, 'w', complevel=9, complib='zlib') as out_store:
         for in_filename in in_filenames.itervalues():
             with pd.HDFStore(in_filename, 'r') as in_store:
                 for key in in_store.keys():
