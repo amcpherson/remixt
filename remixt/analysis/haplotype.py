@@ -417,7 +417,7 @@ def phase_segments(*allele_counts_tables):
         # Create major allele call
         allele_phase = allele_data.apply(np.argmax, axis=1)
         allele_phase.name = 'major_allele_id'
-        allele_phase = allele_phase.reset_index()
+        allele_phase = allele_phase.reset_index().reindex(columns=['chromosome', 'start', 'end', 'hap_label', 'major_allele_id'])
         allele_phase['library_idx'] = idx
         allele_phases.append(allele_phase)
 
@@ -447,7 +447,7 @@ def phase_segments(*allele_counts_tables):
     # For each segment, select the library with the largest difference between major and minor
     segment_library = allele_diffs.set_index(['chromosome', 'start', 'end']).groupby(level=[0, 1, 2]).apply(select_largest_diff)
     segment_library.name = 'library_idx'
-    segment_library = segment_library.reset_index()
+    segment_library = segment_library.reset_index().reindex(columns=['chromosome', 'start', 'end', 'library_idx'])
 
     # For each haplotype block in each segment, take the major allele call of the library
     # with the largest major minor difference and call it allele 'a'
