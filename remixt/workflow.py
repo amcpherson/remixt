@@ -1,3 +1,4 @@
+import os
 import pypeliner
 import pypeliner.managed as mgd
 
@@ -184,8 +185,7 @@ def create_prepare_counts_workflow(
     count_filenames,
     config,
 ):
-    if set(tumour_filenames.keys()) != set(count_filenames.keys()):
-        raise ValueError('require matching count and tumour files')
+    count_filenames = dict([(tumour_id, count_filenames[tumour_id]) for tumour_id in tumour_filenames.keys()])
 
     workflow = pypeliner.workflow.Workflow()
 
@@ -285,3 +285,104 @@ def create_fit_model_workflow(
     )
 
     return workflow
+
+
+def create_remixt_pipeline(
+    segment_filename,
+    breakpoint_filename,
+    normal_bam_filename,
+    tumour_bam_filenames,
+    results_filenames,
+    raw_data_directory,
+    config,
+):
+    tumour_seq_data_template = os.path.join(raw_data_directory, 'seqdata', 'sample_{tumour_id}.h5')
+    normal_seq_data_filename = os.path.join(raw_data_directory, 'seqdata', 'normal.h5')
+    haplotypes_filename = os.path.join(raw_data_directory, 'haplotypes.tsv')
+    counts_table_template = os.path.join(raw_data_directory, 'counts', 'sample_{tumour_id}.tsv')
+    experiment_template = os.path.join(raw_data_directory, 'experiment', 'sample_{tumour_id}.pickle')
+
+    workflow = pypeliner.workflow.Workflow()
+
+    workflow.setobj(obj=mgd.OutputChunks('tumour_id'), value=tumour_bam_filenames.keys())
+
+    workflow.subworkflow(
+        name='extract_seqdata_workflow_normal',
+        func=remixt.workflow.create_extract_seqdata_workflow,
+        args=(
+            mgd.InputFile(normal_bam_filename),
+            mgd.OutputFile(normal_seq_data_filename),
+            config,
+        ),
+    )
+
+    workflow.subworkflow(
+        name='extract_seqdata_workflow_tumour',
+        axes=('tumour_id',),
+        func=remixt.workflow.create_extract_seqdata_workflow,
+        args=(
+            mgd.InputFile('bam', 'tumour_id', fnames=tumour_bam_filenames),
+            mgd.OutputFile('seqdata', 'tumour_id', template=tumour_seq_data_template),
+            config,
+        ),
+    )
+
+    workflow.subworkflow(
+        name='infer_haps_workflow',
+        func=remixt.workflow.create_infer_haps_workflow,
+        args=(
+            mgd.InputFile(normal_seq_data_filename),
+            mgd.OutputFile(haplotypes_filename),
+            config,
+        ),
+    )
+
+    workflow.subworkflow(
+        name='prepare_counts_workflow',
+        func=remixt.workflow.create_prepare_counts_workflow,
+        args=(
+            mgd.InputFile(segment_filename),
+            mgd.InputFile(haplotypes_filename),
+            mgd.InputFile('seqdata', 'tumour_id', template=tumour_seq_data_template),
+            mgd.TempOutputFile('rawcounts', 'tumour_id', axes_origin=[]),
+            config,
+        ),
+    )
+
+    workflow.subworkflow(
+        name='calc_bias_workflow',
+        axes=('tumour_id',),
+        func=remixt.workflow.create_calc_bias_workflow,
+        args=(
+            mgd.InputFile('seqdata', 'tumour_id', template=tumour_seq_data_template),
+            mgd.TempInputFile('rawcounts', 'tumour_id'),
+            mgd.OutputFile('counts', 'tumour_id', template=counts_table_template),
+            config,
+        ),
+    )
+
+    workflow.transform(
+        name='create_experiment',
+        axes=('tumour_id',),
+        ctx={'mem': 8},
+        func=remixt.analysis.experiment.create_experiment,
+        args=(
+            mgd.InputFile('counts', 'tumour_id', template=counts_table_template),
+            mgd.InputFile(breakpoint_filename),
+            mgd.OutputFile('experiment', 'tumour_id', template=experiment_template),
+        ),
+    )
+
+    workflow.subworkflow(
+        name='fit_model',
+        axes=('tumour_id',),
+        func=remixt.workflow.create_fit_model_workflow,
+        args=(
+            mgd.InputFile('experiment', 'tumour_id', template=experiment_template),
+            mgd.OutputFile('results', 'tumour_id', fnames=results_filenames),
+            config,
+        ),
+    )
+
+    return workflow
+    
