@@ -58,7 +58,7 @@ if __name__ == '__main__':
 
     workflow.subworkflow(
         name='run_remixt',
-        func=remixt.workflow.create_remixt_workflow,
+        func=remixt.workflow.create_fit_model_workflow,
         args=(
             experiment_file.as_input(),
             mgd.OutputFile(args['results']),

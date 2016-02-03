@@ -177,13 +177,23 @@ where `$tmp_counts` is a unique temporary directory.  If you need to stop and re
 
 For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
 
-### Step 4 - Running ReMixT
+### Step 4 - Calculate segment specific biases
+
+For the fourth step, calculate tumour and segment specific read count biases.  Biases are added to the segment read count table as an additional bias adjusted segment length column.  The bias calculation step is run independently per tumour sample.
+
+For tumour sample 1, to calculate segment lengths file `$tumour_1_counts_lengths` for tumour sample 1 with segment counts `$tumour_1_counts`, run the `pipeline/calc_bias.py` script as follows: 
+
+    python pipeline/calc_bias.py $ref_data_dir \
+        $tumour_1_seqdata $tumour_1_counts $tumour_1_counts_lengths
+        --tmpdir $tmp_biases
+
+### Step 5 - Fitting the ReMixT model
 
 ReMixT is run on each sample individually, and takes as input the sample specific segment read counts and breakpoints.  The output is an HDF5 store (`$results` below) containing pandas dataframes.
 
 To run ReMixT for tumour sample 1 from above with counts file `$tumour_1_counts`, use the `pipeline/run_remixt.py` script as follows:
 
-    python pipeline/run_remixt.py $tumour_1_counts $breakpoints \
+    python pipeline/fit_model.py $tumour_1_counts $breakpoints \
         $results --tmpdir $tmp_remixt
 
 where `$tmp_remixt` is a unique temporary directory.  If you need to stop and restart the script, using the same temporary directory will allow the scripts to restart where it left off.

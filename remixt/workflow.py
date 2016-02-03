@@ -243,7 +243,7 @@ def create_prepare_counts_workflow(
     return workflow
 
 
-def create_remixt_workflow(
+def create_fit_model_workflow(
     experiment_filename,
     results_filename,
     fit_method='hmm_graph',
