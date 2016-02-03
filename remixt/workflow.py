@@ -246,9 +246,7 @@ def create_prepare_counts_workflow(
 def create_fit_model_workflow(
     experiment_filename,
     results_filename,
-    fit_method='hmm_graph',
-    cn_proportions_filename=None,
-    num_clones=None,
+    config,
 ):
     workflow = pypeliner.workflow.Workflow(default_ctx={'mem': 8})
 
@@ -259,10 +257,8 @@ def create_fit_model_workflow(
             mgd.TempOutputFile('h_init', 'byh'),
             mgd.TempOutputFile('init_results'),
             mgd.InputFile(experiment_filename),
+            config,
         ),
-        kwargs={
-            'num_clones': num_clones,
-        }
     )
 
     workflow.transform(
@@ -273,11 +269,8 @@ def create_fit_model_workflow(
             mgd.TempOutputFile('fit_results', 'byh'),
             mgd.InputFile(experiment_filename),
             mgd.TempInputFile('h_init', 'byh'),
+            config,
         ),
-        kwargs={
-            'fit_method': fit_method,
-            'cn_proportions_filename': cn_proportions_filename,
-        }
     )
 
     workflow.transform(

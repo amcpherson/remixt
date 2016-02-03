@@ -3,6 +3,7 @@ import pkg_resources
 import numpy as np
 import pandas as pd
 
+import remixt.config
 import remixt.likelihood
 import remixt.cn_model
 import remixt.em
@@ -53,8 +54,9 @@ def init(
     candidate_h_filenames,
     init_results_filename,
     experiment_filename,
-    num_clones=None,
+    config,
 ):
+    num_clones = remixt.config.get_param(config, 'num_clones')
 
     with open(experiment_filename, 'r') as f:
         experiment = pickle.load(f)
@@ -208,9 +210,10 @@ def fit(
     results_filename,
     experiment_filename,
     h_init_filename,
-    cn_proportions_filename,
-    fit_method,
+    config,
 ):
+    fit_method = remixt.config.get_param(config, 'fit_method')
+    cn_proportions_filename = remixt.config.get_filename(config, 'cn_proportions')
 
     with open(experiment_filename, 'r') as f:
         experiment = pickle.load(f)

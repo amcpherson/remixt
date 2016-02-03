@@ -22,21 +22,22 @@ if __name__ == '__main__':
     argparser.add_argument('results',
         help='Output results filename')
 
-    argparser.add_argument('--num_clones', type=int,
-        help='Number of clones')
-
-    argparser.add_argument('--fit_method', default='hmm_graph',
-        help='Method for learning copy number')
-
-    argparser.add_argument('--cn_proportions',
-        help='Copy number state proportions table for prior')
-
     argparser.add_argument('--experiment',
         help='Debug output experiment pickle')
 
+    argparser.add_argument('--config', required=False,
+        help='Configuration Filename')
+
     args = vars(argparser.parse_args())
 
-    pyp = pypeliner.app.Pypeline([remixt], args)
+    config = {'ref_data_dir': args['ref_data_dir']}
+
+    if args['config'] is not None:
+        execfile(args['config'], {}, config)
+
+    config.update(args)
+
+    pyp = pypeliner.app.Pypeline([remixt], config)
 
     if args['experiment'] is None:
         experiment_file = mgd.TempFile('experiment.pickle')
@@ -62,12 +63,8 @@ if __name__ == '__main__':
         args=(
             experiment_file.as_input(),
             mgd.OutputFile(args['results']),
+            config,
         ),
-        kwargs={
-            'fit_method': args['fit_method'],
-            'cn_proportions_filename': args['cn_proportions'],
-            'num_clones': args['num_clones'],
-        },
     )
 
     pyp.run(workflow)
