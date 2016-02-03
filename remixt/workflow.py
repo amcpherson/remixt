@@ -189,30 +189,30 @@ def create_prepare_counts_workflow(
 
     workflow = pypeliner.workflow.Workflow()
 
-    workflow.setobj(obj=mgd.OutputChunks('bytumour'), value=tumour_filenames.keys())
+    workflow.setobj(obj=mgd.OutputChunks('tumour_id'), value=tumour_filenames.keys())
 
     workflow.transform(
         name='segment_readcount',
-        axes=('bytumour',),
+        axes=('tumour_id',),
         ctx={'mem': 16},
         func=remixt.analysis.readcount.segment_readcount,
         args=(
-            mgd.TempOutputFile('segment_counts.tsv', 'bytumour'),
+            mgd.TempOutputFile('segment_counts.tsv', 'tumour_id'),
             mgd.InputFile(segment_filename),
-            mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_filenames),
+            mgd.InputFile('tumour_file', 'tumour_id', fnames=tumour_filenames),
             config,
         ),
     )
 
     workflow.transform(
         name='haplotype_allele_readcount',
-        axes=('bytumour',),
+        axes=('tumour_id',),
         ctx={'mem': 16},
         func=remixt.analysis.readcount.haplotype_allele_readcount,
         args=(
-            mgd.TempOutputFile('allele_counts.tsv', 'bytumour'),
+            mgd.TempOutputFile('allele_counts.tsv', 'tumour_id'),
             mgd.InputFile(segment_filename),
-            mgd.InputFile('tumour_file', 'bytumour', fnames=tumour_filenames),
+            mgd.InputFile('tumour_file', 'tumour_id', fnames=tumour_filenames),
             mgd.InputFile(haplotypes_filename),
             config,
         ),
@@ -223,20 +223,20 @@ def create_prepare_counts_workflow(
         ctx={'mem': 16},
         func=remixt.analysis.readcount.phase_segments,
         args=(
-            mgd.TempInputFile('allele_counts.tsv', 'bytumour'),
-            mgd.TempOutputFile('phased_allele_counts.tsv', 'bytumour', axes_origin=[]),
+            mgd.TempInputFile('allele_counts.tsv', 'tumour_id'),
+            mgd.TempOutputFile('phased_allele_counts.tsv', 'tumour_id', axes_origin=[]),
         ),
     )
 
     workflow.transform(
         name='prepare_readcount_table',
-        axes=('bytumour',),
+        axes=('tumour_id',),
         ctx={'mem': 16},
         func=remixt.analysis.readcount.prepare_readcount_table,
         args=(
-            mgd.TempInputFile('segment_counts.tsv', 'bytumour'),
-            mgd.TempInputFile('phased_allele_counts.tsv', 'bytumour'),
-            mgd.OutputFile('count_file', 'bytumour', fnames=count_filenames),
+            mgd.TempInputFile('segment_counts.tsv', 'tumour_id'),
+            mgd.TempInputFile('phased_allele_counts.tsv', 'tumour_id'),
+            mgd.OutputFile('count_file', 'tumour_id', fnames=count_filenames),
         ),
     )
 
