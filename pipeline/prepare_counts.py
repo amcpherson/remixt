@@ -35,7 +35,7 @@ if __name__ == '__main__':
     if len(args['tumour_files']) != len(args['count_files']):
         raise Exception('--count_files must correspond one to one with --tumour_files')
 
-    config = {'ref_data_directory': args['ref_data_dir']}
+    config = {'ref_data_dir': args['ref_data_dir']}
 
     if args['config'] is not None:
         execfile(args['config'], {}, config)
