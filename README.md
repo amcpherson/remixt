@@ -149,8 +149,6 @@ To extract data from `$normal_bam` and `$tumour_bam` to `$normal_seqdata` and `$
 
 where `$tmp_seq_1` and `$tmp_seq_2` are unique temporary directories.  If you need to stop and restart the script, using the same temporary directory will allow the scripts to restart where it left off.
 
-For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
-
 ### Step 2 - Infer haplotype blocks
 
 The second step is to phase blocks of heterozygous SNPs using a 1000 genomes reference panel.  The `pipeline/infer_haps.py` script can be used for this step:
@@ -168,14 +166,12 @@ The third step in the process is to prepare major, minor and total read counts p
 To create read counts for segments given in segment file `$segments` for normal data `$normal_seqdata` and tumour data `$tumour_1_seqdata` and `$tumour_2_seqdata`:
 
     python pipeline/prepare_counts.py $ref_data_dir \
-        $segment_data $haplotypes \
+        $segments $haplotypes \
         --tumour_files $tumour_1_seqdata $tumour_2_seqdata
         --count_files $tumour_1_counts $tumour_2_counts
         --tmpdir $tmp_counts
 
 where `$tmp_counts` is a unique temporary directory.  If you need to stop and restart the script, using the same temporary directory will allow the scripts to restart where it left off.
-
-For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
 
 ### Step 4 - Calculate segment specific biases
 
@@ -193,12 +189,23 @@ ReMixT is run on each sample individually, and takes as input the sample specifi
 
 To run ReMixT for tumour sample 1 from above with counts file `$tumour_1_counts`, use the `pipeline/run_remixt.py` script as follows:
 
-    python pipeline/fit_model.py $tumour_1_counts $breakpoints \
+    python pipeline/fit_model.py $ref_data_dir \
+        $tumour_1_counts $breakpoints \
         $results --tmpdir $tmp_remixt
 
 where `$tmp_remixt` is a unique temporary directory.  If you need to stop and restart the script, using the same temporary directory will allow the scripts to restart where it left off.
 
-For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
+### Running the full workflow
+
+It is now possible to run the full workflow in a single script with the `run_remixt.py` script.  Given input segments `$segments`, breakpoints `$breakpoints`, normal and tumour bams `$normal_bam`, `$tumour_1_bam` and `$tumour_2_bam`, the following command will run remixt, placing raw data in $raw_data_dir, and tumour specific results in `$tumour_1_results` and $tumour_2_results`.
+
+    python pipeline/run_remixt.py $ref_data_dir \
+        $raw_data_dir $segments $breakpoints $normal_bam \
+        --tumour_sample_ids 1 2 \
+        --tumour_bam_files $tumour_1_bam $tumour_2_bam \
+        --results_files $tumour_1_results $tumour_2_results
+
+The above scripts can leverage multi-core and multi-processing environments.  For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
 
 ### Intermediate File Formats
 
