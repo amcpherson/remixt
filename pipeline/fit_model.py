@@ -13,6 +13,9 @@ if __name__ == '__main__':
 
     pypeliner.app.add_arguments(argparser)
 
+    argparser.add_argument('ref_data_dir',
+        help='Reference dataset directory')
+
     argparser.add_argument('counts',
         help='Input segment counts filename')
 
