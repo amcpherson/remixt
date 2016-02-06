@@ -941,6 +941,16 @@ class Experiment(object):
     def adjacencies(self):
         return self.genome_mixture.adjacencies
 
+    @property
+    def chains(self):
+        chain_start = [0]
+        chain_end = [self.N]
+        for idx in xrange(self.N - 1):
+            if (idx, idx+1) not in self.adjacencies:
+                chain_end.append(idx+1)  # Half-open interval indexing [start, end)
+                chain_start.append(idx+1)
+        return zip(sorted(chain_start), sorted(chain_end))
+
 
 class ExperimentSampler(object):
     """ Sampler for sequencing experiments.
