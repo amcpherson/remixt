@@ -377,7 +377,67 @@ class likelihood_unittest(unittest.TestCase):
 
         p, n, k = self.generate_allele_data()
 
-        dist = likelihood.BetaBinUniformDistribution()
+        for wrapped_dist in (likelihood.BetaBinDistribution, likelihood.BetaBinDistribution):
+
+            dist = likelihood.BetaBinUniformDistribution(dist_type=wrapped_dist)
+
+            def evaluate_log_likelihood(M):
+                dist.M = M
+                return dist.log_likelihood(k, n, p)
+
+            def evaluate_log_likelihood_partial_M(M):
+                dist.M = M
+                return dist.log_likelihood_partial_M(k, n, p)[:,None]
+
+            M = np.array([50.])
+
+            assert_grad_correct(evaluate_log_likelihood,
+                evaluate_log_likelihood_partial_M, M)
+
+
+    def test_log_likelihood_cn_betabin_uniform_partial_z(self):
+
+        p, n, k = self.generate_allele_data()
+
+        for wrapped_dist in (likelihood.BetaBinDistribution, likelihood.BetaBinDistribution):
+
+            dist = likelihood.BetaBinUniformDistribution(dist_type=wrapped_dist)
+
+            def evaluate_log_likelihood(z):
+                dist.z = z
+                return dist.log_likelihood(k, n, p)
+
+            def evaluate_log_likelihood_partial_z(z):
+                dist.z = z
+                return dist.log_likelihood_partial_z(k, n, p)[:,None]
+
+            z = np.array([0.01])
+
+            assert_grad_correct(evaluate_log_likelihood,
+                evaluate_log_likelihood_partial_z, z)
+
+
+    def test_log_likelihood_cn_betabin_reflected_partial_p(self):
+
+        p, n, k = self.generate_allele_data()
+
+        dist = likelihood.BetaBinReflectedDistribution()
+
+        def evaluate_log_likelihood(p):
+            return dist.log_likelihood(k, n, p).sum()
+
+        def evaluate_log_likelihood_partial_p(p):
+            return dist.log_likelihood_partial_p(k, n, p)
+
+        assert_grad_correct(evaluate_log_likelihood,
+            evaluate_log_likelihood_partial_p, p)
+
+
+    def test_log_likelihood_cn_betabin_reflected_partial_M(self):
+
+        p, n, k = self.generate_allele_data()
+
+        dist = likelihood.BetaBinReflectedDistribution()
 
         def evaluate_log_likelihood(M):
             dist.M = M
@@ -391,26 +451,6 @@ class likelihood_unittest(unittest.TestCase):
 
         assert_grad_correct(evaluate_log_likelihood,
             evaluate_log_likelihood_partial_M, M)
-
-
-    def test_log_likelihood_cn_betabin_uniform_partial_z(self):
-
-        p, n, k = self.generate_allele_data()
-
-        dist = likelihood.BetaBinUniformDistribution()
-
-        def evaluate_log_likelihood(z):
-            dist.z = z
-            return dist.log_likelihood(k, n, p)
-
-        def evaluate_log_likelihood_partial_z(z):
-            dist.z = z
-            return dist.log_likelihood_partial_z(k, n, p)[:,None]
-
-        z = np.array([0.01])
-
-        assert_grad_correct(evaluate_log_likelihood,
-            evaluate_log_likelihood_partial_z, z)
 
 
     def test_learn_betabin_r_partial(self):

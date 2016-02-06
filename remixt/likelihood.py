@@ -874,6 +874,63 @@ class BetaBinDistribution(object):
         return partial_M
 
 
+class BetaBinReflectedDistribution(object):
+    def __init__(self, **kwargs):
+        """ Reflected beta binomial distribution for allele count data.
+
+        Attributes:
+            M (numpy.array): beta binomial allele counts over-dispersion
+
+        """
+
+        self.betabin = BetaBinDistribution()
+
+    @property
+    def M(self):
+        return self.betabin.M
+    @M.setter
+    def M(self, value):
+        self.betabin.M = value
+
+    def log_likelihood(self, k, n, p):
+        """ Calculate reflected beta binomial allele count log likelihood.
+        """
+
+        ll = np.array([
+            self.betabin.log_likelihood(k, n, p),
+            self.betabin.log_likelihood(n-k, n, p),
+        ])
+
+        ll = scipy.misc.logsumexp(ll, axis=0)
+
+        return ll
+
+    def log_likelihood_partial_p(self, k, n, p):
+        """ Calculate the partial derivative with respect to p of the reflected
+        beta binomial allele count log likelihood.
+
+        """
+        ll = self.log_likelihood(k, n, p)
+
+        partial_p = np.exp(-ll) * (
+            self.betabin.log_likelihood_partial_p(k, n, p) * np.exp(self.betabin.log_likelihood(k, n, p)) +
+            self.betabin.log_likelihood_partial_p(n-k, n, p) * np.exp(self.betabin.log_likelihood(n-k, n, p)))
+
+        return partial_p
+
+    def log_likelihood_partial_M(self, k, n, p):
+        """ Calculate the partial derivative with respect to p of the reflected
+        beta binomial allele count log likelihood.
+
+        """
+        ll = self.log_likelihood(k, n, p)
+
+        partial_M = np.exp(-ll) * (
+            self.betabin.log_likelihood_partial_M(k, n, p) * np.exp(self.betabin.log_likelihood(k, n, p)) +
+            self.betabin.log_likelihood_partial_M(n-k, n, p) * np.exp(self.betabin.log_likelihood(n-k, n, p)))
+
+        return partial_M
+
 
 class BetaBinUniformDistribution(object):
 
