@@ -875,6 +875,134 @@ class BetaBinDistribution(object):
 
 
 
+class BetaBinUniformDistribution(object):
+
+    def __init__(self, dist_type=BetaBinDistribution, **kwargs):
+        """ Beta binomial / uniform mixture distribution for allele count data.
+
+        Attributes:
+            M (numpy.array): beta binomial allele counts over-dispersion
+
+        """
+
+        self.betabin = dist_type()
+
+        self.z = 0.01
+
+
+    @property
+    def M(self):
+        return self.betabin.M
+    @M.setter
+    def M(self, value):
+        self.betabin.M = value
+
+
+    def log_likelihood(self, k, n, p):
+        """ Calculate beta binomial / uniform allele count log likelihood.
+        
+        Args:
+            k (numpy.array): observed minor allelic read counts
+            n (numpy.array): observed total allelic read counts
+            p (numpy.array): expected minor allele fraction
+        
+        Returns:
+            float: log likelihood per segment
+            
+        The pmf of the beta binomial / uniform mixture is:
+
+            (1 - z) * BB(k, n, p) + z * (1 / (n + 1))
+
+        """
+
+        ll = np.array([
+            np.log(1. - self.z) + self.betabin.log_likelihood(k, n, p),
+            np.log(self.z) - np.log(n + 1.)
+        ])
+
+        ll = scipy.misc.logsumexp(ll, axis=0)
+
+        return ll
+
+
+    def log_likelihood_partial_p(self, k, n, p):
+        """ Calculate the partial derivative of the beta binomial / uniform allele count
+        log likelihood with respect to p
+
+        Args:
+            k (numpy.array): observed minor allelic read counts
+            n (numpy.array): observed total allelic read counts
+            p (numpy.array): expected minor allele fraction
+        
+        Returns:
+            numpy.array: log likelihood derivative per segment per clone
+
+        The partial likelihood can be expressed as
+
+            exp(ll_betabin - ll) * ll_betabin_partial_p
+
+        """
+
+        ll_betabin = np.log(1 - self.z) + self.betabin.log_likelihood(k, n, p)
+        ll = self.log_likelihood(k, n, p)
+
+        partial_p = np.exp(ll_betabin - ll) * self.betabin.log_likelihood_partial_p(k, n, p)
+
+        return partial_p
+
+
+    def log_likelihood_partial_M(self, k, n, p):
+        """ Calculate the partial derivative of the beta binomial / uniform allele count
+        log likelihood with respect to p
+
+        Args:
+            k (numpy.array): observed minor allelic read counts
+            n (numpy.array): observed total allelic read counts
+            p (numpy.array): expected minor allele fraction
+        
+        Returns:
+            numpy.array: log likelihood derivative per segment per clone
+
+        The partial likelihood can be expressed as
+
+            exp(ll_betabin - ll) * ll_betabin_partial_M
+
+        """
+
+        ll_betabin = np.log(1 - self.z) + self.betabin.log_likelihood(k, n, p)
+        ll = self.log_likelihood(k, n, p)
+
+        partial_M = np.exp(ll_betabin - ll) * self.betabin.log_likelihood_partial_M(k, n, p)
+
+        return partial_M
+
+
+    def log_likelihood_partial_z(self, k, n, p):
+        """ Calculate the partial derivative of the beta binomial / uniform allele count
+        log likelihood with respect to z
+
+        Args:
+            k (numpy.array): observed minor allelic read counts
+            n (numpy.array): observed total allelic read counts
+            p (numpy.array): expected minor allele fraction
+        
+        Returns:
+            numpy.array: log likelihood derivative per segment per clone
+
+        The partial likelihood can be expressed as
+
+            - BB(k, n, p) + (1 / (n + 1))
+
+        """
+
+        ll = self.log_likelihood(k, n, p)
+
+        partial_z = (- np.exp(self.betabin.log_likelihood(k, n, p)) + (1. / (n + 1.))) / np.exp(ll)
+
+        return partial_z
+
+
+
 class NegBinBetaBinLikelihood(ReadCountLikelihood):
 
     def __init__(self, **kwargs):
