@@ -1085,7 +1085,10 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
         self.param_per_segment['M'] = False
 
         self.negbin = NegBinDistribution()
+        self.negbin_hdel = NegBinDistribution()
+
         self.betabin = BetaBinDistribution()
+        self.betabin_loh = BetaBinDistribution()
 
 
     @property
@@ -1131,15 +1134,26 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
             float: log likelihood per segment
 
         """
-        
-        N = x.shape[0]
-        K = x.shape[1]
 
         mu = self.expected_total_read_count(l, cn)
         p = self.expected_allele_ratio(cn)
 
-        ll = (self.negbin.log_likelihood(x[:,2], mu)
-            + self.betabin.log_likelihood(x[:,1], x[:,:2].sum(axis=1), p))
+        is_hdel = np.all(cn == 0, axis=(1, 2))
+        is_loh = np.all(np.any(cn == 0, axis=(2,)), axis=(1,))
+
+        negbin_ll = np.where(
+            is_hdel,
+            self.negbin_hdel.log_likelihood(x[:, 2], mu),
+            self.negbin.log_likelihood(x[:, 2], mu)
+        )
+
+        betabin_ll = np.where(
+            is_loh,
+            self.betabin_loh.log_likelihood(x[:, 1], x[:, :2].sum(axis=1), p),
+            self.betabin.log_likelihood(x[:, 1], x[:, :2].sum(axis=1), p)
+        )
+
+        ll = negbin_ll + betabin_ll
 
         return ll
 
@@ -1157,7 +1171,7 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
 
         """
 
-        return (l.T * cn.sum(axis=2).T).T
+        return l[:, np.newaxis] * cn.sum(axis=2)
 
 
     def _p_partial_h(self, cn):
@@ -1173,13 +1187,13 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
 
         h = self.h
 
-        total = (h * cn.sum(axis=2)).sum(axis=1)
+        total = (h * cn.sum(axis=2)).sum(axis=1)[:, np.newaxis]
         total_partial_h = cn.sum(axis=2)
 
-        minor = (h * cn[:,:,1]).sum(axis=1)
-        minor_partial_h = cn[:,:,1]
+        minor = (h * cn[:, :, 1]).sum(axis=1)[:, np.newaxis]
+        minor_partial_h = cn[:, :, 1]
 
-        p_partial_h = ((minor_partial_h.T * total - minor * total_partial_h.T) / np.square(total).T).T
+        p_partial_h = ((minor_partial_h * total - minor * total_partial_h) / np.square(total))
 
         return p_partial_h
 
@@ -1196,9 +1210,6 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
             numpy.array: log likelihood derivative per segment per clone
 
         """
-        
-        N = x.shape[0]
-        K = x.shape[1]
 
         mu = self.expected_total_read_count(l, cn)
         p = self.expected_allele_ratio(cn)
@@ -1206,8 +1217,25 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
         mu_partial_h = self._mu_partial_h(l, cn)
         p_partial_h = self._p_partial_h(cn)
 
-        partial_h = (self.negbin.log_likelihood_partial_mu(x[:,2], mu).T * mu_partial_h.T
-            + self.betabin.log_likelihood_partial_p(x[:,1], x[:,:2].sum(axis=1), p).T * p_partial_h.T).T
+        is_hdel = np.all(cn == 0, axis=(1, 2))
+        is_loh = np.all(np.any(cn == 0, axis=(2,)), axis=(1,))
+
+        negbin_partial_mu = np.where(
+            is_hdel,
+            self.negbin_hdel.log_likelihood_partial_mu(x[:, 2], mu),
+            self.negbin.log_likelihood_partial_mu(x[:, 2], mu),
+        )
+
+        betabin_partial_mu = np.where(
+            is_loh,
+            self.betabin_loh.log_likelihood_partial_p(x[:, 1], x[:, :2].sum(axis=1), p),
+            self.betabin.log_likelihood_partial_p(x[:, 1], x[:, :2].sum(axis=1), p),
+        )
+
+        partial_h = (
+            negbin_partial_mu[:, np.newaxis] * mu_partial_h +
+            betabin_partial_mu[:, np.newaxis] * p_partial_h
+        )
 
         for n, m in zip(*np.where(np.isnan(partial_h))):
             raise ProbabilityError('ll derivative is nan', n=n, h=self.h, x=x[n], l=l[n], cn=cn[n])
