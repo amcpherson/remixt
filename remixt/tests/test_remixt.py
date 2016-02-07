@@ -239,7 +239,7 @@ class remixt_unittest(unittest.TestCase):
         self.assertTrue(np.all(bond_cn.loc[0,1,1,2,1,0].values == np.array([1, 0])))
 
 
-    def test_learn_h(self):
+    def test_learn_h_graph(self):
 
         experiment = self.load_test_experiment()
 
@@ -266,6 +266,30 @@ class remixt_unittest(unittest.TestCase):
 
         estimator = em.HardAssignmentEstimator(num_em_iter=1)
         estimator.learn_param(graph, 'h', h_init)
+
+
+    def test_learn_h(self):
+
+        experiment = self.load_test_experiment()
+
+        emission = likelihood.NegBinLikelihood()
+        emission.h = experiment.h
+        emission.phi = experiment.phi
+        emission.r = experiment.negbin_r
+
+        N = experiment.l.shape[0]
+        M = experiment.h.shape[0]
+
+        prior = cn_model.CopyNumberPrior(self.perfect_cn_prior(experiment.cn))
+        prior.set_lengths(experiment.l)
+
+        model = cn_model.HiddenMarkovModel(N, M, emission, prior, experiment.chains)
+        model.set_observed_data(experiment.x, experiment.l)
+        
+        h_init = experiment.h * (1. + 0.1 * np.random.randn(*experiment.h.shape))
+
+        estimator = em.ExpectationMaximizationEstimator()
+        estimator.learn_param(model, 'h', h_init)
 
 
     def test_learn_r(self):
