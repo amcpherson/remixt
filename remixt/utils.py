@@ -148,7 +148,12 @@ class BreakpointDatabase(object):
         """
         self.positions = collections.defaultdict(list)
         self.prediction_ids = collections.defaultdict(set)
-        for idx, row in breakpoints.iterrows():
+        cols = [
+            'prediction_id',
+            'chromosome_1', 'strand_1', 'position_1',
+            'chromosome_2', 'strand_2', 'position_2'
+        ]
+        for idx, row in breakpoints[cols].drop_duplicates().iterrows():
             for side in ('1', '2'):
                 self.positions[(row['chromosome_'+side], row['strand_'+side])].append(row['position_'+side])
                 self.prediction_ids[(row['chromosome_'+side], row['strand_'+side], row['position_'+side])].add((row['prediction_id'], side))
