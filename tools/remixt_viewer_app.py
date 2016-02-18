@@ -9,18 +9,13 @@ import glob
 import math
 import numpy as np
 import pandas as pd
+import scipy.stats
 import matplotlib.pyplot
 import matplotlib.colors
 
-from bokeh.models import ColumnDataSource, Plot, FixedTicker, NumeralTickFormatter, BasicTicker
-from bokeh.plotting import figure, curdoc, gridplot
-from bokeh.charts import Scatter
-from bokeh.io import vplot, hplot
-from bokeh.properties import String, Instance, Dict, value
-from bokeh.server.app import bokeh_app
-from bokeh.server.utils.plugins import object_page
-from bokeh.models.widgets import HBox, VBox, VBoxForm, Paragraph, Select, DataTable, TableColumn, Tabs, Panel
 from bokeh.models import *
+from bokeh.plotting import Figure, curdoc
+from bokeh.core.properties import value
 
 
 chromosomes = [str(a) for a in range(1, 23)] + ['X']
@@ -34,15 +29,15 @@ for i in xrange(len(chromosomes)):
 chromosome_colors = pd.DataFrame({'chromosome':chromosomes, 'scatter_color':chromosome_colors})
 
 chromosome_indices = dict([(chromosome, idx) for idx, chromosome in enumerate(chromosomes)])
-
+del chromosome
 
 patient_samples = collections.defaultdict(list)
 sample_stores = dict()
 
 
 for data_filename in glob.glob('./patient_*/sample_*.h5'):
-    patient = data_filename.split('/')[1][len('patient_'):]
-    sample = data_filename.split('/')[2][len('sample_'):-len('.h5')]
+    patient = data_filename.split('/')[-2][len('patient_'):]
+    sample = data_filename.split('/')[-1][len('sample_'):-len('.h5')]
 
     patient_samples[patient].append(sample)
     sample_stores[(patient, sample)] = pd.HDFStore(data_filename, 'r')
@@ -51,7 +46,7 @@ for data_filename in glob.glob('./patient_*/sample_*.h5'):
 def major_minor_scatter_plot(source):
     """
     """
-    p = figure(
+    p = Figure(
         title='raw major vs minor',
         plot_width=1000, plot_height=500,
         tools='pan,wheel_zoom,box_select,reset,lasso_select',
@@ -92,7 +87,7 @@ def major_minor_segment_plot(source, major_column, minor_column, x_range, name, 
         hover,
     ]
 
-    p = figure(
+    p = Figure(
         title=name+' chromosome major/minor',
         plot_width=width, plot_height=200,
         tools=tools,
@@ -142,7 +137,7 @@ def breakpoints_plot(source, x_range, width=1000):
         hover,
     ]
 
-    p = figure(
+    p = Figure(
         title='break ends',
         plot_width=width, plot_height=150,
         tools=tools,
@@ -235,7 +230,7 @@ def retrieve_chromosome_plot_info(patient, sample, solution, chromosome=''):
     cnv = retrieve_cnv_data(patient, sample, solution, chromosome)
 
     cnv['chromosome_index'] = cnv['chromosome'].apply(lambda a: chromosome_indices[a])
-    cnv.sort(['chromosome_index', 'start'], inplace=True)
+    cnv.sort_values(['chromosome_index', 'start'], inplace=True)
 
     info = (
         cnv.groupby('chromosome', sort=False)['end']
@@ -252,7 +247,6 @@ def retrieve_chromosome_plot_info(patient, sample, solution, chromosome=''):
 def prepare_cnv_data(cnv, chromosome_plot_info, smooth_segments=False):
     """
     """
-
     # Group segments with same state
     if smooth_segments:
         cnv['chromosome_index'] = cnv['chromosome'].apply(lambda a: chromosome_indices[a])
@@ -300,6 +294,9 @@ def prepare_cnv_data(cnv, chromosome_plot_info, smooth_segments=False):
     cnv = cnv.merge(chromosome_plot_info[['chromosome', 'chromosome_plot_start']])
     cnv['plot_start'] = cnv['start'] + cnv['chromosome_plot_start']
     cnv['plot_end'] = cnv['end'] + cnv['chromosome_plot_start']
+
+    # Drop nan values
+    cnv = cnv.replace(np.inf, np.nan).fillna(0)
 
     return cnv
 
@@ -376,9 +373,57 @@ def retrieve_brk_data(patient, sample, solution, chromosome_plot_info):
     brk['clone_2_color'] = np.where(brk['cn_2'] > 0, '00', 'ff')
     brk['clonality_color'] = '#ff' + brk['clone_1_color'] + brk['clone_2_color']
 
-    brk.sort(['prediction_id', 'side'], inplace=True)
+    brk.sort_values(['prediction_id', 'side'], inplace=True)
 
     return brk
+
+
+class gaussian_kde_set_covariance(scipy.stats.gaussian_kde):
+    def __init__(self, dataset, covariance):
+        self.covariance = covariance
+        scipy.stats.gaussian_kde.__init__(self, dataset)
+    def _compute_covariance(self):
+        self.inv_cov = 1.0 / self.covariance
+        self._norm_factor = np.sqrt(2*np.pi*self.covariance) * self.n
+
+
+def weighted_density(xs, data, weights, cov):
+    weights = weights.astype(float)
+    resample_prob = weights / weights.sum()
+    samples = np.random.choice(data, size=10000, replace=True, p=resample_prob)
+    density = gaussian_kde_set_covariance(samples, cov)
+    ys = density(xs)
+    ys[0] = 0.0
+    ys[-1] = 0.0
+    return ys
+
+
+def prepare_read_depth_data(patient, sample, solution):
+    """
+    """
+    store = sample_stores[(patient, sample)]
+
+    # Create read depth plot
+    read_depth_df = store['read_depth']
+
+    cov = 0.0000001
+
+    read_depth_min = 0.0
+    read_depth_max = np.percentile(read_depth_df['total'], 95)
+    read_depths = [read_depth_min] + list(np.linspace(read_depth_min, read_depth_max, 2000)) + [read_depth_max]
+
+    minor_density = weighted_density(read_depths, read_depth_df['minor'], read_depth_df['length'], cov)
+    major_density = weighted_density(read_depths, read_depth_df['major'], read_depth_df['length'], cov)
+    total_density = weighted_density(read_depths, read_depth_df['total'], read_depth_df['length'], cov)
+
+    data = pd.DataFrame({
+        'read_depth': read_depths,
+        'minor_density': minor_density,
+        'major_density': major_density,
+        'total_density': total_density,
+    })
+
+    return data
 
 
 def build_genome_panel(cnv_source, brk_source, chromosome_plot_info, width=1000):
@@ -404,7 +449,7 @@ def build_genome_panel(cnv_source, brk_source, chromosome_plot_info, width=1000)
     data_table = DataTable(source=brk_source, columns=columns, width=1000, height=1000)
 
     panel = Panel(title='Genome View', closable=False)
-    panel.child = vplot(*[scatter_plot, line_plot1, line_plot2, line_plot3, line_plot4, line_plot5, brk_plot, data_table])
+    panel.child = VBox(scatter_plot, line_plot1, line_plot2, line_plot3, line_plot4, line_plot5, brk_plot, data_table)
 
     return panel
 
@@ -424,7 +469,7 @@ def build_split_plots(cnv_source, brk_source, chromosome_plot_info, brk_view, wi
     for p in [line_plot1, line_plot2, line_plot3, line_plot4]:
         setup_chromosome_plot_axes(p)
 
-    return vplot(*[line_plot1, line_plot2, line_plot3, line_plot4, brk_plot])
+    return VBox(line_plot1, line_plot2, line_plot3, line_plot4, brk_plot)
 
 
 def build_split_panel(cnv_source_left, cnv_source_right, brk_source, chromosome_plot_info):
@@ -443,40 +488,12 @@ def build_split_panel(cnv_source_left, cnv_source_right, brk_source, chromosome_
     data_table = DataTable(source=brk_source, columns=columns, width=1000, height=1000)
 
     panel = Panel(title='Split View', closable=False)
-    panel.child = vplot(*[plots, data_table])
+    panel.child = VBox(plots, data_table)
 
     return panel
 
 
-import scipy.stats
-class gaussian_kde_set_covariance(scipy.stats.gaussian_kde):
-    def __init__(self, dataset, covariance):
-        self.covariance = covariance
-        scipy.stats.gaussian_kde.__init__(self, dataset)
-    def _compute_covariance(self):
-        self.inv_cov = 1.0 / self.covariance
-        self._norm_factor = np.sqrt(2*np.pi*self.covariance) * self.n
-
-
-def filled_density(p, data, c, a, xmin, xmax, cov):
-    density = gaussian_kde_set_covariance(data, cov)
-    xs = [xmin] + list(np.linspace(xmin, xmax, 2000)) + [xmax]
-    ys = density(xs)
-    ys[0] = 0.0
-    ys[-1] = 0.0
-    p.patch(xs, ys, color=c, alpha=a)
-
-
-def filled_density_weighted(p, data, weights, c, a, xmim, xmax, cov):
-    weights = weights.astype(float)
-    resample_prob = weights / weights.sum()
-    samples = np.random.choice(data, size=10000, replace=True, p=resample_prob)
-    filled_density(p, samples, c, a, xmim, xmax, cov)
-
-
-def build_solutions_panel(patient, sample, solutions_source):
-    store = sample_stores[(patient, sample)]
-
+def build_solutions_panel(patient, sample, solutions_source, read_depth_source):
     # Create solutions table
     solutions_columns = ['decreased_log_posterior', 'graph_opt_iter', 'h_converged',
        'h_em_iter', 'log_posterior', 'log_posterior_graph', 'num_clones',
@@ -485,199 +502,137 @@ def build_solutions_panel(patient, sample, solutions_source):
     columns = [TableColumn(field=a, title=a) for a in solutions_columns]
     solutions_table = DataTable(source=solutions_source, columns=columns, width=1000, height=500)
 
-    # Create read depth plot
-    read_depth_df = store['read_depth']
-
-    depth_max = np.percentile(read_depth_df['total'], 95)
-    cov = 0.0000001
-
-    readdepth_plot = figure(
+    readdepth_plot = Figure(
         title='major/minor/total read depth',
         plot_width=1000, plot_height=300,
-        tools='xpan,xwheel_zoom,reset',
+        tools='pan,wheel_zoom,reset',
         logo=None,
         title_text_font_size=value('10pt'),
     )
 
-    filled_density_weighted(readdepth_plot, read_depth_df['minor'], read_depth_df['length'], 'blue', 0.5, 0.0, depth_max, cov)
-    filled_density_weighted(readdepth_plot, read_depth_df['major'], read_depth_df['length'], 'red', 0.5, 0.0, depth_max, cov)
-    filled_density_weighted(readdepth_plot, read_depth_df['total'], read_depth_df['length'], 'grey', 0.5, 0.0, depth_max, cov)
+    readdepth_plot.patch('read_depth', 'minor_density', color='blue', alpha=0.5, source=read_depth_source)
+    readdepth_plot.patch('read_depth', 'major_density', color='red', alpha=0.5, source=read_depth_source)
+    readdepth_plot.patch('read_depth', 'total_density', color='grey', alpha=0.5, source=read_depth_source)
 
     readdepth_plot.circle(x='haploid_normal', y=0, size=10, source=solutions_source, color='orange')
     readdepth_plot.circle(x='haploid_tumour_mode', y=0, size=10, source=solutions_source, color='green')
 
     panel = Panel(title='Solutions View', closable=False)
-    panel.child = vplot(*[solutions_table, readdepth_plot])
+    panel.child = VBox(solutions_table, readdepth_plot)
 
     return panel
 
 
-class RemixtApp(HBox):
-    extra_generated_classes = [["RemixtApp", "RemixtApp", "HBox"]]
-    jsmodel = "HBox"
+# Make inputs
+patient_select = Select(
+    title="Patient:",
+    name='patients',
+)
 
-    # All plots within this tab
-    tabs = Instance(Tabs)
+patient_select.options = patient_samples.keys()
+patient_select.value = patient_select.options[0]
+patient = patient_select.value
 
-    # data sources
-    solutions_source = Instance(ColumnDataSource)
-    cnv_source = Instance(ColumnDataSource)
-    brk_source = Instance(ColumnDataSource)
+sample_select = Select(
+    title="Sample:",
+    name='patients',
+)
 
-    # inputs
-    patient = String()
-    patient_select = Instance(Select)
-    sample = String
-    sample_select = Instance(Select)
-    solution = String(default="0")
-    solution_select = Instance(Select)
-    input_box = Instance(VBoxForm)
+sample_select.options = patient_samples[patient]
+sample_select.value = sample_select.options[0]
+sample = sample_select.value
 
-    def __init__(self, *args, **kwargs):
-        super(RemixtApp, self).__init__(*args, **kwargs)
+solution_select = Select(
+    title="Solution:",
+    name='solutions',
+)
 
-    @classmethod
-    def create(cls):
-        """
-        This function is called once, and is responsible for
-        creating all objects (plots, datasources, etc)
-        """
-        # create layout widgets
-        obj = cls()
-        obj.input_box = VBoxForm()
+solution_select.options = retrieve_solutions(patient, sample)
+solution_select.value = solution_select.options[0]
+solution = solution_select.value
 
-        # create input widgets
-        obj.make_inputs()
-
-        # outputs
-        obj.make_source()
-        obj.make_plots()
-
-        # layout
-        obj.set_children()
-
-        return obj
-
-    def make_inputs(self):
-        self.patient_select = Select(
-            title="Patient:",
-            name='patients',
-        )
-
-        self.patient_select.options = patient_samples.keys()
-        self.patient_select.value = self.patient_select.options[0]
-        self.patient = self.patient_select.value
-
-        self.sample_select = Select(
-            title="Sample:",
-            name='patients',
-        )
-
-        self.sample_select.options = patient_samples[self.patient]
-        self.sample_select.value = self.sample_select.options[0]
-        self.sample = self.sample_select.value
-
-        self.solution_select = Select(
-            title="Solution:",
-            name='solutions',
-        )
-
-        self.solution_select.options = retrieve_solutions(self.patient, self.sample)
-        self.solution_select.value = self.solution_select.options[0]
-        self.solution = self.solution_select.value
+# Make data sources
+cnv_source = ColumnDataSource()
+brk_source = ColumnDataSource()
+solutions_source = ColumnDataSource()
+read_depth_source = ColumnDataSource()
 
 
-    def make_cnv_source(self, chromosome=''):
-        """
-        """
-        if self.patient is None or self.sample is None:
-            return
-
-        chromosome_plot_info = retrieve_chromosome_plot_info(self.patient, self.sample, self.solution, chromosome)
-
-        cnv = retrieve_cnv_data(self.patient, self.sample, self.solution, chromosome)
-
-        cnv = prepare_cnv_data(cnv, chromosome_plot_info)
-
-        return cnv, chromosome_plot_info
+def reset_sample():
+    global sample
+    sample_select.options = patient_samples[patient]
+    sample_select.value = sample_select.options[0]
+    sample = sample_select.value
 
 
-    def make_solutions_source(self):
-
-        solutions_df = retrieve_solution_data(self.patient, self.sample)
-        self.solutions_source = ColumnDataSource(solutions_df)
-
-
-    def make_source(self):
-        if self.patient is None or self.sample is None:
-            return
-
-        cnv, self._chromosome_plot_info = self.make_cnv_source()
-        self.cnv_source = ColumnDataSource(cnv)
-
-        brk = retrieve_brk_data(self.patient, self.sample, self.solution, self._chromosome_plot_info)
-
-        self.brk_source = ColumnDataSource(brk)
-
-        self.make_solutions_source()
+def reset_solution():
+    global solution
+    solution_select.options = retrieve_solutions(patient, sample)
+    solution_select.value = solution_select.options[0]
+    solution = solution_select.value
 
 
-    def make_plots(self):
-        """
-        """
-
-        self.tabs = Tabs()
-        self.tabs.tabs.append(build_solutions_panel(self.patient, self.sample, self.solutions_source))
-        self.tabs.tabs.append(build_genome_panel(self.cnv_source, self.brk_source, self._chromosome_plot_info))
-        #self.tabs.tabs.append(build_split_panel(self.cnv_source_left, self.cnv_source_right, self.brk_source, self._chromosome_plot_info))
+# Chromosome plot info will be based on first sample loaded
+chromosome_plot_info = retrieve_chromosome_plot_info(patient, sample, solution)
 
 
-    def set_children(self):
-        self.children = [self.input_box, self.tabs]
-        self.input_box.children = [self.patient_select, self.sample_select, self.solution_select]
+def update_data():
+    cnv = retrieve_cnv_data(patient, sample, solution)
+    cnv_data = prepare_cnv_data(cnv, chromosome_plot_info)
+
+    brk_data = retrieve_brk_data(patient, sample, solution, chromosome_plot_info)
+
+    solutions_data = retrieve_solution_data(patient, sample)
+
+    read_depth_data = prepare_read_depth_data(patient, sample, solution)
+
+    assert cnv_data.notnull().all().all()
+    assert brk_data.notnull().all().all()
+    assert solutions_data.notnull().all().all()
+    assert read_depth_data.notnull().all().all()
+
+    cnv_source.data = cnv_data.to_dict(orient='list')
+    brk_source.data = brk_data.to_dict(orient='list')
+    solutions_source.data = solutions_data.to_dict(orient='list')
+    read_depth_source.data = read_depth_data.to_dict(orient='list')
+    
+
+def update_patient(attr, old, new):
+    global patient
+    patient = new
+    reset_sample()
+    reset_solution()
+    update_data()
 
 
-    def input_change(self, obj, attrname, old, new):
-        update_samples = False
-        update_solutions = False
-        if obj == self.patient_select:
-            self.patient = new
-            update_samples = True
-            update_solutions = True
-        if obj == self.sample_select:
-            self.sample = new
-            update_solutions = True
-        if obj == self.solution_select:
-            self.solution = new
-
-        if update_samples:
-            self.sample_select.options = patient_samples[self.patient]
-            self.sample_select.value = self.sample_select.options[0]
-            self.sample = self.sample_select.value
-
-        if update_solutions:
-            self.solution_select.options = retrieve_solutions(self.patient, self.sample)
-            self.solution_select.value = self.solution_select.options[0]
-            self.solution = self.solution_select.value
-
-        self.make_source()
-        self.make_plots()
-        self.set_children()
-        curdoc().add(self)
+def update_sample(attr, old, new):
+    global sample
+    sample = new
+    reset_solution()
+    update_data()
 
 
-    def setup_events(self):
-        super(RemixtApp, self).setup_events()
-        if self.patient_select:
-            self.patient_select.on_change('value', self, 'input_change')
-        if self.sample_select:
-            self.sample_select.on_change('value', self, 'input_change')
-        if self.solution_select:
-            self.solution_select.on_change('value', self, 'input_change')
+def update_solution(attr, old, new):
+    global solution
+    solution = new
+    update_data()
 
 
-@bokeh_app.route("/remixt")
-@object_page("remixt")
-def make_remixt():
-    app = RemixtApp.create()
-    return app
+# Add callbacks
+patient_select.on_change('value', update_patient)
+sample_select.on_change('value', update_sample)
+solution_select.on_change('value', update_solution)
+
+# Create main interface
+tabs = Tabs()
+tabs.tabs.append(build_solutions_panel(patient, sample, solutions_source, read_depth_source))
+tabs.tabs.append(build_genome_panel(cnv_source, brk_source, chromosome_plot_info))
+# self.tabs.tabs.append(build_split_panel(self.cnv_source_left, self.cnv_source_right, self.brk_source, self._chromosome_plot_info))
+
+input_box = VBoxForm(patient_select, sample_select, solution_select)
+main_box = HBox(input_box, tabs)
+
+update_data()
+
+curdoc().add_root(main_box)
+
