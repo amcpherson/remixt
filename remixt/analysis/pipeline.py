@@ -89,7 +89,7 @@ def fit_hmm_viterbi(experiment, emission, prior, h_init, normal_contamination):
 
     # Estimate haploid depths and overdispersion parameters
     estimator = remixt.em.ExpectationMaximizationEstimator()
-    log_posterior, h_converged = estimator.learn_param(
+    log_posterior = estimator.learn_param(
         model,
         emission.h_param,
         emission.r_param,
@@ -102,8 +102,9 @@ def fit_hmm_viterbi(experiment, emission, prior, h_init, normal_contamination):
     results['r'] = emission.r
     results['M'] = emission.M
     results['stats']['h_log_posterior'] = log_posterior
-    results['stats']['h_converged'] = h_converged
+    results['stats']['h_converged'] = estimator.converged
     results['stats']['h_em_iter'] = estimator.em_iter
+    results['stats']['h_error_message'] = estimator.error_message
 
     # Infer copy number from viterbi
     log_posterior_viterbi, cn = model.optimal_state()
@@ -134,7 +135,7 @@ def fit_hmm_graph(experiment, emission, prior, h_init, normal_contamination):
 
     # Estimate haploid depths
     estimator = remixt.em.ExpectationMaximizationEstimator()
-    log_posterior, h_converged = estimator.learn_param(
+    log_posterior = estimator.learn_param(
         model,
         emission.h_param,
         emission.r_param,
@@ -147,8 +148,9 @@ def fit_hmm_graph(experiment, emission, prior, h_init, normal_contamination):
     results['r'] = emission.r
     results['M'] = emission.M
     results['stats']['h_log_posterior'] = log_posterior
-    results['stats']['h_converged'] = h_converged
+    results['stats']['h_converged'] = estimator.converged
     results['stats']['h_em_iter'] = estimator.em_iter
+    results['stats']['h_error_message'] = estimator.error_message
 
     # Set to allele independent prior as allele dependence will
     # cause the genome graph algorithm to fail

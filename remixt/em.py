@@ -1,5 +1,7 @@
+import warnings
 import scipy.optimize
 import numpy as np
+import statsmodels.tools.numdiff
 
 
 class OptimizeError(Exception):
@@ -51,7 +53,7 @@ class ExpectationMaximizationEstimator(object):
             log_likelihood[w == 0] = 0
 
             for n in zip(*np.where(np.isnan(log_likelihood))):
-                raise ValueError('ll is nan', value=value, state=s[n], resp=w[n])
+                raise OptimizeError('ll is nan', value=value, state=s[n], resp=w[n])
 
             q_value += np.sum(log_likelihood)
 
@@ -84,7 +86,7 @@ class ExpectationMaximizationEstimator(object):
                 log_likelihood_partial = (w[:, np.newaxis] * p.log_likelihood_partial(s))
 
                 for n in zip(*np.where(np.isnan(log_likelihood_partial))):
-                    raise ValueError('ll partial is nan', value=value, state=s[n], resp=w[n])
+                    raise OptimizeError('ll partial is nan', value=value, state=s[n], resp=w[n])
 
                 q_derivative[idx:idx+p.length] += np.sum(log_likelihood_partial, axis=0)
 
@@ -143,10 +145,15 @@ class ExpectationMaximizationEstimator(object):
             jac=self.evaluate_q_derivative,
             args=(model, states, weights, params, idxs),
             bounds=bounds,
+            options={'ftol':1e-3},
         )
 
         if not result.success:
-            raise OptimizeError(result.message)
+            value = np.concatenate([p.value for p in params])
+            print 'parameter values: ', value
+            print 'analytic derivative: ', self.evaluate_q_derivative(value, model, states, weights, params, idxs)
+            print 'numerical derivative: ', statsmodels.tools.numdiff.approx_fprime_cs(value, self.evaluate_q, args=(model, states, weights, params, idxs))
+            raise OptimizeError(repr(result))
 
         for p, idx in zip(params, idxs):
             p.value = result.x[idx:idx+p.length]
@@ -171,7 +178,9 @@ class ExpectationMaximizationEstimator(object):
 
         """
 
-        converged = False
+        self.converged = False
+        self.error_message = 'no errors'
+
         log_likelihood_prev = None
         q_value_prev = None
 
@@ -181,32 +190,37 @@ class ExpectationMaximizationEstimator(object):
             # Maximize Log likelihood with respect to copy number
             log_likelihood, states, weights = self.expectation_step(model)
 
-            if log_likelihood_prev is not None and (log_likelihood_prev - log_likelihood) > self.likelihood_error_tol:
-                raise OptimizeError('log likelihood decreased from {} to {} for e step'.format(log_likelihood_prev, log_likelihood))
-
-            # Maximize Log likelihood with respect to haploid read depth
-            q_value = self.maximization_step(model, states, weights, params)
-
             print 'log likelihood:', log_likelihood
             if log_likelihood_prev is not None:
                 print 'log likelihood diff:', log_likelihood - log_likelihood_prev
+
+            if log_likelihood_prev is not None and (log_likelihood_prev - log_likelihood) > self.likelihood_error_tol:
+                self.error_message = 'log likelihood decreased from {} to {} for e step'.format(log_likelihood_prev, log_likelihood)
+                return log_likelihood
+
+            # Maximize Log likelihood with respect to haploid read depth
+            try:
+                q_value = self.maximization_step(model, states, weights, params)
+            except OptimizeError as e:
+                self.error_message = 'error during m step: ' + str(e)
+                return log_likelihood
+
             print 'parameter values:'
             for p in params:
                 print ' ', p.name, p.value
             print
 
             if q_value_prev is not None and (q_value_prev - q_value) > self.lower_bound_error_tol:
-                print 'lower bound decreased from {} to {} for m step'.format(q_value_prev, q_value)
-                # raise OptimizeError('lower bound decreased from {} to {} for m step'.format(q_value_prev, q_value))
+                warnings.warn('lower bound decreased from {} to {} for m step'.format(q_value_prev, q_value))
 
             if log_likelihood_prev is not None and abs(log_likelihood_prev - log_likelihood) < self.likelihood_tol:
-                converged = True
-                break
+                self.converged = True
+                return log_likelihood
 
             log_likelihood_prev = log_likelihood
             q_value_prev = q_value
 
-        return log_likelihood, converged
+        return log_likelihood
 
 
 class HardAssignmentEstimator(ExpectationMaximizationEstimator):
