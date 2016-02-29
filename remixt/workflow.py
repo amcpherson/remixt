@@ -44,7 +44,7 @@ def create_extract_seqdata_workflow(
 
     workflow.transform(
         name='merge_seqdata',
-        ctx={'mem': 4},
+        ctx={'mem': 16},
         func=remixt.seqdataio.merge_seqdata,
         args=(
             mgd.OutputFile(seqdata_filename),
