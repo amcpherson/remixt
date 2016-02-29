@@ -86,12 +86,21 @@ def fit_hmm_viterbi(experiment, emission, prior, h_init, normal_contamination):
     emission.h = h_init
 
     model = remixt.cn_model.HiddenMarkovModel(N, M, emission, prior, experiment.chains, normal_contamination=normal_contamination)
-    model.set_observed_data(experiment.x, experiment.l)
 
-    # Estimate haploid depths
+    # Estimate haploid depths and overdispersion parameters
     estimator = remixt.em.ExpectationMaximizationEstimator()
-    h, log_posterior, h_converged = estimator.learn_param(model, 'h', h_init)
-    results['h'] = h
+    log_posterior, h_converged = estimator.learn_param(
+        model,
+        emission.h_param,
+        emission.r_param,
+        emission.M_param,
+        emission.z_param,
+        emission.hdel_mu_param,
+        emission.loh_p_param,
+    )
+    results['h'] = emission.h
+    results['r'] = emission.r
+    results['M'] = emission.M
     results['stats']['h_log_posterior'] = log_posterior
     results['stats']['h_converged'] = h_converged
     results['stats']['h_em_iter'] = estimator.em_iter
@@ -122,12 +131,21 @@ def fit_hmm_graph(experiment, emission, prior, h_init, normal_contamination):
     emission.h = h_init
 
     model = remixt.cn_model.HiddenMarkovModel(N, M, emission, prior, experiment.chains, normal_contamination=normal_contamination)
-    model.set_observed_data(experiment.x, experiment.l)
 
     # Estimate haploid depths
     estimator = remixt.em.ExpectationMaximizationEstimator()
-    h, log_posterior, h_converged = estimator.learn_param(model, 'h', h_init)
-    results['h'] = h
+    log_posterior, h_converged = estimator.learn_param(
+        model,
+        emission.h_param,
+        emission.r_param,
+        emission.M_param,
+        emission.z_param,
+        emission.hdel_mu_param,
+        emission.loh_p_param,
+    )
+    results['h'] = emission.h
+    results['r'] = emission.r
+    results['M'] = emission.M
     results['stats']['h_log_posterior'] = log_posterior
     results['stats']['h_converged'] = h_converged
     results['stats']['h_em_iter'] = estimator.em_iter
@@ -169,7 +187,6 @@ def fit_graph(experiment, emission, prior, h_init, normal_contamination):
     h_init_single[1] = h_init[1:].sum()
     emission.h = h_init_single
     model = remixt.cn_model.HiddenMarkovModel(N, 2, emission, prior, experiment.chains, normal_contamination=normal_contamination)
-    model.set_observed_data(experiment.x, experiment.l)
     _, cn = model.optimal_state()
     cn_init = np.ones((N, M, 2))
     for m in xrange(1, M):
@@ -223,8 +240,7 @@ def fit(
         h_init = pickle.load(f)
 
     # Create emission / prior / copy number models
-    emission = remixt.likelihood.NegBinBetaBinLikelihood()
-    emission.learn_parameters(experiment.x, experiment.l)
+    emission = remixt.likelihood.NegBinBetaBinLikelihood(experiment.x, experiment.l)
     emission.h = h_init
 
     # Create prior probability model
@@ -250,7 +266,7 @@ def fit(
 
     # Create copy number table
     cn_table = experiment.create_cn_table(emission, cn, h)
-    cn_table['log_likelihood'] = emission.log_likelihood(experiment.x, experiment.l, cn)
+    cn_table['log_likelihood'] = emission.log_likelihood(cn)
     cn_table['log_prior'] = prior.log_prior(cn)
     cn_table['major_expected'] = emission.expected_read_count(experiment.l, cn)[:,0]
     cn_table['minor_expected'] = emission.expected_read_count(experiment.l, cn)[:,1]
@@ -259,7 +275,6 @@ def fit(
     cn_table['major_residual'] = np.absolute(cn_table['major_readcount'] - cn_table['major_expected'])
     cn_table['minor_residual'] = np.absolute(cn_table['minor_readcount'] - cn_table['minor_expected'])
     cn_table['total_residual'] = np.absolute(cn_table['readcount'] - cn_table['total_expected'])
-    cn_table['phi'] = emission.phi
 
     # Create copy number table
     # Account for both orderings of the two breakends
@@ -277,8 +292,6 @@ def fit(
 
     # Create a table of relevant statistics
     stats_table = fit_results['stats'].copy()
-    stats_table['negbin_r'] = emission.r,
-    stats_table['betabin_M'] = emission.M,
     stats_table['num_clones'] = len(h),
     stats_table['num_segments'] = len(experiment.x),
     stats_table = pd.DataFrame(stats_table, index=[0])
@@ -290,6 +303,8 @@ def fit(
         store['h'] = pd.Series(h, index=xrange(len(h)))
         store['cn'] = cn_table
         store['brk_cn'] = brk_cn_table
+        store['negbin_r'] = pd.Series(emission.r, index=xrange(len(emission.r)))
+        store['betabin_M'] = pd.Series(emission.M, index=xrange(len(emission.M)))
 
 
 def collate(collate_filename, experiment_filename, init_results_filename, fit_results_filenames):

@@ -338,7 +338,7 @@ class GenomeGraph(object):
 
         mod_seg_edge_costs = list()
 
-        log_likelihood = self.emission.log_likelihood(self.x, self.l, self.cn) + self.prior.log_prior(self.cn)
+        log_likelihood = self.emission.log_likelihood(self.cn) + self.prior.log_prior(self.cn)
 
         for sign in self.signs:
 
@@ -350,7 +350,7 @@ class GenomeGraph(object):
                 invalid_cn_delta = np.any(cn_delta < 0, axis=(1, 2))
                 cn_delta[invalid_cn_delta] = 1
 
-                log_likelihood_delta = self.emission.log_likelihood(self.x, self.l, cn_delta) + self.prior.log_prior(cn_delta)
+                log_likelihood_delta = self.emission.log_likelihood(cn_delta) + self.prior.log_prior(cn_delta)
 
                 log_likelihood_delta[invalid_cn_delta] = -np.inf
 
@@ -619,7 +619,7 @@ class GenomeGraph(object):
 
         """
 
-        log_likelihood = self.emission.log_likelihood(self.x, self.l, self.cn) + self.prior.log_prior(self.cn)
+        log_likelihood = self.emission.log_likelihood(self.cn) + self.prior.log_prior(self.cn)
 
         for sign in self.signs:
 
@@ -630,7 +630,7 @@ class GenomeGraph(object):
             invalid_cn_delta = np.any(cn_delta < 0, axis=(1, 2))
             cn_delta[invalid_cn_delta] = 1
 
-            log_likelihood_delta = self.emission.log_likelihood(self.x, self.l, cn_delta) + self.prior.log_prior(cn_delta)
+            log_likelihood_delta = self.emission.log_likelihood(cn_delta) + self.prior.log_prior(cn_delta)
 
             log_likelihood_delta[invalid_cn_delta] = -np.inf
 
@@ -646,7 +646,7 @@ class GenomeGraph(object):
                 invalid_cn_delta = np.any(cn_delta < 0, axis=(1, 2))
                 cn_delta[invalid_cn_delta] = 1
 
-                log_likelihood_delta = self.emission.log_likelihood(self.x, self.l, cn_delta) + self.prior.log_prior(cn_delta)
+                log_likelihood_delta = self.emission.log_likelihood(cn_delta) + self.prior.log_prior(cn_delta)
 
                 log_likelihood_delta[invalid_cn_delta] = -np.inf
 
@@ -667,7 +667,7 @@ class GenomeGraph(object):
 
         """
 
-        log_likelihood = self.emission.log_likelihood(self.x, self.l, self.cn) + self.prior.log_prior(self.cn)
+        log_likelihood = self.emission.log_likelihood(self.cn) + self.prior.log_prior(self.cn)
 
         log_likelihood = log_likelihood.sum()
 
@@ -763,24 +763,8 @@ class GenomeGraph(object):
         return brk_cn
 
 
-    def set_parameter(self, param, value):
-        setattr(self.emission, param, value)
-
-
-    def get_parameter_bounds(self, param):
-        return self.emission.param_bounds[param]
-
-
-    def get_parameter_is_global(self, param):
-        return not self.emission.param_per_segment[param]
-
-
     def log_likelihood(self, state):
-        return self.emission.log_likelihood(self.x, self.l, state)
-
-
-    def log_likelihood_partial(self, param, state):
-        return self.emission.log_likelihood_partial_param(self.x, self.l, state, param)
+        return self.emission.log_likelihood(state)
 
 
     def optimal_state(self):

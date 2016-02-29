@@ -165,22 +165,6 @@ class HiddenMarkovModel(object):
         self.log_trans_mat = None
 
 
-    def set_observed_data(self, x, l):
-        """ Set observed data
-
-        Args:
-            x (numpy.array): observed major, minor, and total read counts
-            l (numpy.array): observed lengths of segments
-
-        """
-
-        for n in zip(*np.where(x[:,0] < x[:,1])):
-            raise ValueError('x[:,0] < x[:,1] for {0}'.format(x[n]))
-
-        self.x = x
-        self.l = l
-
-
     def build_cns(self, cn_max, cn_dev_max, bounded=True):
         """ Generate a list of copy number states.
 
@@ -288,15 +272,13 @@ class HiddenMarkovModel(object):
 
         """
 
-        N = self.x.shape[0]
-
         cn_states = self.build_cn_states()
 
         probs = list()
 
         for cn in cn_states:
 
-            log_prob = self.emission.log_likelihood(self.x, self.l, cn) + self.prior.log_prior(cn)
+            log_prob = self.emission.log_likelihood(cn) + self.prior.log_prior(cn)
 
             probs.append(log_prob)
 
@@ -403,25 +385,8 @@ class HiddenMarkovModel(object):
         return log_prob, cn_state
 
 
-    def set_parameter(self, param, value):
-        setattr(self.emission, param, value)
-
-
-    def get_parameter_bounds(self, param):
-        return self.emission.param_bounds[param]
-
-
-    def get_parameter_is_global(self, param):
-        return not self.emission.param_per_segment[param]
-
-
     def log_likelihood(self, state):
-        return self.emission.log_likelihood(self.x, self.l, state)
-
-
-    def log_likelihood_partial(self, param, state):
-        return self.emission.log_likelihood_partial_param(self.x, self.l, state, param)
-
+        return self.emission.log_likelihood(state)
 
 
 def decode_breakpoints_naive(cn, adjacencies, breakpoints):

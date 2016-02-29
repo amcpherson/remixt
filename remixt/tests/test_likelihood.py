@@ -10,25 +10,15 @@ import scipy.optimize
 from scipy.special import gammaln, betaln
 import statsmodels.tools.numdiff
 
-import remixt.simulations.simple as sim_simple
-import remixt.simulations.experiment as sim_experiment
+import remixt.simulations.simple
 import remixt.likelihood as likelihood
 import remixt.tests.unopt.likelihood as likelihood_unopt
 import remixt.likelihood
 import remixt.paramlearn
+import remixt.tests.utils
 
 
 np.random.seed(2014)
-
-
-def assert_grad_correct(func, grad, x0, *args, **kwargs):
-    """ Assert correct gradiant compared to finite difference approximation
-    """
-
-    analytic_fprime = grad(x0, *args)
-    approx_fprime = statsmodels.tools.numdiff.approx_fprime_cs(x0, func, args=args)
-
-    np.testing.assert_almost_equal(analytic_fprime, approx_fprime, 5)
 
 
 class likelihood_unittest(unittest.TestCase):
@@ -43,7 +33,7 @@ class likelihood_unittest(unittest.TestCase):
         phi = np.random.uniform(low=0.2, high=0.4, size=N)
         p = np.vstack([phi, phi, np.ones(phi.shape)]).T
 
-        cn = sim_simple.generate_cn(N, M, 2.0, 0.5, 0.5, 2)
+        cn = remixt.simulations.simple.generate_cn(N, M, 2.0, 0.5, 0.5, 2)
         h = np.random.uniform(low=0.5, high=2.0, size=M)
 
         # Add a 0 copy segment
@@ -213,7 +203,7 @@ class likelihood_unittest(unittest.TestCase):
             emission.phi = phi
             return emission._log_likelihood_partial_phi(x, l, cn)[:,0]
 
-        assert_grad_correct(evaluate_log_likelihood,
+        remixt.tests.utils.assert_grad_correct(evaluate_log_likelihood,
             evaluate_log_likelihood_partial_phi, phi,
             x, l, cn)
 
@@ -236,7 +226,7 @@ class likelihood_unittest(unittest.TestCase):
             emission.r = r
             return emission._log_likelihood_partial_h(x, l, cn)
 
-        assert_grad_correct(evaluate_log_likelihood,
+        remixt.tests.utils.assert_grad_correct(evaluate_log_likelihood,
             evaluate_log_likelihood_partial_h, h,
             x, l, cn, phi)
 
@@ -257,7 +247,7 @@ class likelihood_unittest(unittest.TestCase):
 
         r = np.array([75.])
 
-        assert_grad_correct(evaluate_log_likelihood,
+        remixt.tests.utils.assert_grad_correct(evaluate_log_likelihood,
             evaluate_log_likelihood_partial_r, r)
 
 
@@ -277,7 +267,7 @@ class likelihood_unittest(unittest.TestCase):
             emission.phi = phi
             return emission._log_likelihood_partial_h(x, l, cn)
 
-        assert_grad_correct(evaluate_log_likelihood,
+        remixt.tests.utils.assert_grad_correct(evaluate_log_likelihood,
             evaluate_log_likelihood_partial_h, h,
             x, l, cn, phi)
 
@@ -296,7 +286,7 @@ class likelihood_unittest(unittest.TestCase):
             emission.h = h
             return emission._log_likelihood_partial_h(x, l, cn)
 
-        assert_grad_correct(evaluate_log_likelihood,
+        remixt.tests.utils.assert_grad_correct(evaluate_log_likelihood,
             evaluate_log_likelihood_partial_h, h,
             x, l, cn, phi)
 
@@ -314,7 +304,7 @@ class likelihood_unittest(unittest.TestCase):
         r0 = 100.
         param0 = np.concatenate([g0, [r0]])
 
-        assert_grad_correct(remixt.paramlearn.nll_negbin,
+        remixt.tests.utils.assert_grad_correct(remixt.paramlearn.nll_negbin,
             remixt.paramlearn.nll_negbin_partial_param, param0,
             negbin, x, l)
 
@@ -331,7 +321,7 @@ class likelihood_unittest(unittest.TestCase):
         def evaluate_log_likelihood_partial_p(p):
             return dist.log_likelihood_partial_p(k, n, p)
 
-        assert_grad_correct(evaluate_log_likelihood,
+        remixt.tests.utils.assert_grad_correct(evaluate_log_likelihood,
             evaluate_log_likelihood_partial_p, p)
 
 
@@ -351,7 +341,7 @@ class likelihood_unittest(unittest.TestCase):
 
         M = np.array([50.])
 
-        assert_grad_correct(evaluate_log_likelihood,
+        remixt.tests.utils.assert_grad_correct(evaluate_log_likelihood,
             evaluate_log_likelihood_partial_M, M)
 
 
@@ -369,7 +359,7 @@ class likelihood_unittest(unittest.TestCase):
             def evaluate_log_likelihood_partial_p(p):
                 return dist.log_likelihood_partial_p(k, n, p)
 
-            assert_grad_correct(evaluate_log_likelihood,
+            remixt.tests.utils.assert_grad_correct(evaluate_log_likelihood,
                 evaluate_log_likelihood_partial_p, p)
 
 
@@ -391,7 +381,7 @@ class likelihood_unittest(unittest.TestCase):
 
             M = np.array([50.])
 
-            assert_grad_correct(evaluate_log_likelihood,
+            remixt.tests.utils.assert_grad_correct(evaluate_log_likelihood,
                 evaluate_log_likelihood_partial_M, M)
 
 
@@ -413,7 +403,7 @@ class likelihood_unittest(unittest.TestCase):
 
             z = np.array([0.01])
 
-            assert_grad_correct(evaluate_log_likelihood,
+            remixt.tests.utils.assert_grad_correct(evaluate_log_likelihood,
                 evaluate_log_likelihood_partial_z, z)
 
 
@@ -429,7 +419,7 @@ class likelihood_unittest(unittest.TestCase):
         def evaluate_log_likelihood_partial_p(p):
             return dist.log_likelihood_partial_p(k, n, p)
 
-        assert_grad_correct(evaluate_log_likelihood,
+        remixt.tests.utils.assert_grad_correct(evaluate_log_likelihood,
             evaluate_log_likelihood_partial_p, p)
 
 
@@ -449,7 +439,7 @@ class likelihood_unittest(unittest.TestCase):
 
         M = np.array([50.])
 
-        assert_grad_correct(evaluate_log_likelihood,
+        remixt.tests.utils.assert_grad_correct(evaluate_log_likelihood,
             evaluate_log_likelihood_partial_M, M)
 
 
@@ -463,7 +453,7 @@ class likelihood_unittest(unittest.TestCase):
         M0 = 100.
         param0 = np.concatenate([p0, [M0]])
 
-        assert_grad_correct(remixt.paramlearn.nll_betabin,
+        remixt.tests.utils.assert_grad_correct(remixt.paramlearn.nll_betabin,
             remixt.paramlearn.nll_betabin_partial_param, param0,
             betabin, k, n)
 

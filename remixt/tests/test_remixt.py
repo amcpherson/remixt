@@ -16,6 +16,7 @@ import remixt.em as em
 import remixt.likelihood as likelihood
 import remixt.genome_graph as genome_graph
 import remixt.seqdataio
+import remixt.tests.utils
 
 np.random.seed(2014)
 
@@ -28,12 +29,11 @@ class remixt_unittest(unittest.TestCase):
 
         l = np.random.uniform(low=100000, high=1000000, size=N)
         phi = np.random.uniform(low=0.2, high=0.4, size=N)
-        p = np.vstack([phi, phi, np.ones(phi.shape)]).T
 
         cn = sim_simple.generate_cn(N, M, 2.0, 0.5, 0.5, 1)
         h = np.random.uniform(low=0.5, high=2.0, size=M)
 
-        likelihood_model = likelihood.ReadCountLikelihood()
+        likelihood_model = likelihood.ReadCountLikelihood(None, l)
         likelihood_model.h = h
         likelihood_model.phi = phi
 
@@ -134,27 +134,28 @@ class remixt_unittest(unittest.TestCase):
 
         cn, h, l, phi, r, x = self.generate_simple_data()
 
-        emission = likelihood.NegBinBetaBinLikelihood()
+        emission = likelihood.NegBinBetaBinLikelihood(x, l)
         emission.h = h
-        emission.learn_parameters(x, l)
 
         N = l.shape[0]
         M = h.shape[0]
 
-        prior = cn_model.CopyNumberPrior(N, M, self.perfect_cn_prior(cn))
+        prior = cn_model.CopyNumberPrior(self.perfect_cn_prior(cn))
         prior.set_lengths(l)
         
-        model = cn_model.HiddenMarkovModel(N, M, emission, prior)
-        model.set_observed_data(x, l)
+        model = cn_model.HiddenMarkovModel(N, M, emission, prior, [(0, N)])
 
         log_posterior, cns, resps = model.posterior_marginals()
 
         estimator = em.ExpectationMaximizationEstimator()
 
-        grad_error = scipy.optimize.check_grad(estimator.evaluate_q, estimator.evaluate_q_derivative,
-            h, model, 'h', cns, resps)
+        params = [emission.h_param, emission.r_param, emission.M_param, emission.z_param, emission.hdel_mu_param, emission.loh_p_param]
+        value = np.concatenate([p.value for p in params])
+        idxs = np.array([p.length for p in params]).cumsum() - params[0].length
 
-        self.assertAlmostEqual(grad_error, 0.0, places=-1)
+        remixt.tests.utils.assert_grad_correct(
+            estimator.evaluate_q, estimator.evaluate_q_derivative,
+            value, model, cns, resps, params, idxs)
 
 
     def test_build_cn(self):
@@ -219,7 +220,6 @@ class remixt_unittest(unittest.TestCase):
         cn[1,1,1] = 2
 
         graph = genome_graph.GenomeGraph(emission, prior, adjacencies, breakpoints)
-        graph.set_observed_data(x, l)
         graph.init_copy_number(cn)
 
         graph.optimize()
@@ -254,12 +254,10 @@ class remixt_unittest(unittest.TestCase):
         prior.set_lengths(experiment.l)
 
         model = cn_model.HiddenMarkovModel(N, M, emission, prior)
-        model.set_observed_data(experiment.x, experiment.l)
         
         _, cn_init = model.optimal_state()
 
         graph = genome_graph.GenomeGraph(emission, prior, experiment.adjacencies, experiment.breakpoints)
-        graph.set_observed_data(experiment.x, experiment.l)
         graph.init_copy_number(cn_init)
 
         h_init = experiment.h + experiment.h * 0.05 * np.random.randn(*experiment.h.shape)
@@ -272,10 +270,12 @@ class remixt_unittest(unittest.TestCase):
 
         experiment = self.load_test_experiment()
 
-        emission = likelihood.NegBinLikelihood()
-        emission.h = experiment.h
-        emission.phi = experiment.phi
-        emission.r = experiment.negbin_r
+        h_init = experiment.h * (1. + 0.05 * np.random.randn(*experiment.h.shape))
+
+        emission = likelihood.NegBinBetaBinLikelihood(experiment.x, experiment.l)
+        emission.h = h_init
+
+        print experiment.h, h_init
 
         N = experiment.l.shape[0]
         M = experiment.h.shape[0]
@@ -283,13 +283,10 @@ class remixt_unittest(unittest.TestCase):
         prior = cn_model.CopyNumberPrior(self.perfect_cn_prior(experiment.cn))
         prior.set_lengths(experiment.l)
 
-        model = cn_model.HiddenMarkovModel(N, M, emission, prior, experiment.chains)
-        model.set_observed_data(experiment.x, experiment.l)
+        model = cn_model.HiddenMarkovModel(N, M, emission, prior, experiment.chains, normal_contamination=False)
         
-        h_init = experiment.h * (1. + 0.1 * np.random.randn(*experiment.h.shape))
-
         estimator = em.ExpectationMaximizationEstimator()
-        estimator.learn_param(model, 'h', h_init)
+        estimator.learn_param(model, emission.h_param, emission.r_param, emission.M_param)
 
 
     def test_learn_r(self):
@@ -308,7 +305,6 @@ class remixt_unittest(unittest.TestCase):
         prior.set_lengths(experiment.l)
 
         model = cn_model.HiddenMarkovModel(N, M, emission, prior)
-        model.set_observed_data(experiment.x, experiment.l)
         
         r_init = experiment.negbin_r + experiment.negbin_r * 0.10 * np.random.randn(*experiment.negbin_r.shape)
 
@@ -332,7 +328,6 @@ class remixt_unittest(unittest.TestCase):
         prior.set_lengths(experiment.l)
 
         model = cn_model.HiddenMarkovModel(N, M, emission, prior)
-        model.set_observed_data(experiment.x, experiment.l)
 
         phi_init = experiment.phi + experiment.phi * 0.02 * np.random.randn(*experiment.phi.shape)
 

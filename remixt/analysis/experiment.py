@@ -4,6 +4,8 @@ import pickle
 import numpy as np
 import pandas as pd
 
+import remixt.likelihood
+
 
 def find_closest(a, v):
     """ Find closest value in a to values in v
@@ -321,6 +323,8 @@ class Experiment(object):
                 'minor_readcount': self.x[:, 1],
                 'readcount': self.x[:, 2],
             })
+
+        likelihood.phi = remixt.likelihood.estimate_phi(self.x)
 
         data['major_cov'] = data['major_readcount'] / (likelihood.phi * data['length'])
         data['minor_cov'] = data['minor_readcount'] / (likelihood.phi * data['length'])
