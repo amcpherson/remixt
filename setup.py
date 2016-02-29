@@ -68,6 +68,11 @@ extensions = [
         include_dirs=['src', external_dir, bamtools_dir, numpy.get_include()],
         libraries=['z', 'bz2'],
     ),
+    Extension(
+        name='remixt.hmm',
+        sources=['remixt/hmm.pyx'],
+        include_dirs=[numpy.get_include()],
+    ),
 ]
 
 setup(

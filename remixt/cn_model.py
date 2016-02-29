@@ -10,10 +10,9 @@ import sklearn
 import sklearn.cluster
 import sklearn.mixture
 
-import hmmlearn
-from hmmlearn._hmmc import _viterbi as hmm_viterbi
-from hmmlearn._hmmc import _forward as hmm_forward
-from hmmlearn._hmmc import _backward as hmm_backward
+from remixt.hmm import _viterbi as hmm_viterbi
+from remixt.hmm import _forward as hmm_forward
+from remixt.hmm import _backward as hmm_backward
 
 import remixt.genome_graph
 import remixt.utils
