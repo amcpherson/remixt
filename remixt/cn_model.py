@@ -308,8 +308,8 @@ class HiddenMarkovModel(object):
         # pruned too aggressively. (copied from hmmlearn)
 
         posteriors = np.exp(gamma.T - scipy.misc.logsumexp(gamma, axis=1)).T
-        posteriors += np.finfo(np.float32).eps
         posteriors /= np.sum(posteriors, axis=1).reshape((-1, 1))
+        assert not np.any(np.isnan(posteriors))
         posteriors = posteriors.T
 
         return log_prob, posteriors
