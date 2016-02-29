@@ -292,10 +292,16 @@ def fit(
     brk_cn_table_2 = brk_cn.merge(experiment.breakpoint_segment_data.rename(columns=column_swap))
     brk_cn_table = pd.concat([brk_cn_table_1, brk_cn_table_2], ignore_index=True)
 
+    ploidy = (cn[:,1:,:].mean(axis=1).T * experiment.l).sum() / experiment.l.sum()
+    divergent = (cn[:,1:,:].max(axis=1) != cn[:,1:,:].min(axis=1)) * 1.
+    proportion_divergent = (divergent.T * experiment.l).sum() / (2. * experiment.l.sum())
+
     # Create a table of relevant statistics
     stats_table = fit_results['stats'].copy()
     stats_table['num_clones'] = len(h),
     stats_table['num_segments'] = len(experiment.x),
+    stats_table['ploidy'] = ploidy
+    stats_table['proportion_divergent'] = proportion_divergent
     stats_table = pd.DataFrame(stats_table, index=[0])
 
     # Store in hdf5 format
