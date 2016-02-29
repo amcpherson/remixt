@@ -290,14 +290,17 @@ def create_fit_model_workflow(
 def create_remixt_pipeline(
     segment_filename,
     breakpoint_filename,
-    normal_bam_filename,
     tumour_bam_filenames,
+    normal_bam_filename,
+    normal_id,
     results_filenames,
     raw_data_directory,
     config,
 ):
+    results_filenames = dict([(sample_id, results_filenames[sample_id]) for sample_id in tumour_bam_filenames.keys()])
+
     tumour_seq_data_template = os.path.join(raw_data_directory, 'seqdata', 'sample_{tumour_id}.h5')
-    normal_seq_data_filename = os.path.join(raw_data_directory, 'seqdata', 'normal.h5')
+    normal_seq_data_filename = os.path.join(raw_data_directory, 'seqdata', 'sample_{}.h5'.format(normal_id))
     haplotypes_filename = os.path.join(raw_data_directory, 'haplotypes.tsv')
     counts_table_template = os.path.join(raw_data_directory, 'counts', 'sample_{tumour_id}.tsv')
     experiment_template = os.path.join(raw_data_directory, 'experiment', 'sample_{tumour_id}.pickle')

@@ -62,8 +62,9 @@ if __name__ == '__main__':
     workflow = remixt.workflow.create_remixt_pipeline(
         args['segment_file'],
         args['breakpoint_file'],
-        args['normal_bam_file'],
         tumour_bam_filenames,
+        args['normal_bam_file'],
+        args['normal_sample_id'],
         results_filenames,
         args['raw_data_dir'],
         config,
