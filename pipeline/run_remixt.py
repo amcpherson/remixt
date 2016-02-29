@@ -36,6 +36,9 @@ if __name__ == '__main__':
     argparser.add_argument('--results_files', nargs='+', required=True,
         help='Output results filenames')
 
+    argparser.add_argument('--normal_sample_id', default='normal',
+        help='Normal sample id')
+
     argparser.add_argument('--config', required=False,
         help='Configuration Filename')
 

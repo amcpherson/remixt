@@ -130,7 +130,7 @@ class CopyNumberPrior(object):
 
 class HiddenMarkovModel(object):
 
-    def __init__(self, N, M, emission, prior, chains):
+    def __init__(self, N, M, emission, prior, chains, normal_contamination=True):
         """Create a copy number model.
 
         Args:
@@ -139,6 +139,9 @@ class HiddenMarkovModel(object):
             emission (ReadCountLikelihood): read count likelihood
             prior (CopyNumberPrior): copy number prior
             chains (list of tuple): start end indices of chromosome chains
+
+        KwArgs:
+            normal_contamination (bool): whether the sample is contaminated by normal
 
         """
 
@@ -149,6 +152,8 @@ class HiddenMarkovModel(object):
         self.prior = prior
 
         self.chains = chains
+
+        self.normal_contamination = normal_contamination
 
         self.cn_max = prior.cn_max
 
@@ -203,8 +208,13 @@ class HiddenMarkovModel(object):
             
             if bounded and (np.any(subclone_cn < 0) or np.any(subclone_cn > cn_max)):
                 continue
-                
-            cn = np.array([np.ones(2)] + [base_cn] + list(subclone_cn))
+
+            if self.normal_contamination:
+                normal_cn = np.ones(2)
+            else:
+                normal_cn = np.zeros(2)
+
+            cn = np.array([normal_cn] + [base_cn] + list(subclone_cn))
 
             if np.any(cn[1:,0] != cn[1:,1]) and np.all(cn[1:,0] <= cn[1:,1]):
                 continue

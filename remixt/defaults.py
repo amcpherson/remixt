@@ -93,5 +93,8 @@ num_clones                                  = 3
 # set to None to use proportion data included in package
 cn_proportions_filename                     = None
 
+# Model normal contamination
+normal_contamination                        = True
+
 
 

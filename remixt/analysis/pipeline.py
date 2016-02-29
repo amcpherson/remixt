@@ -75,7 +75,7 @@ def init(
         store['minor_modes'] = pd.Series(minor_modes, index=xrange(len(minor_modes)))
 
 
-def fit_hmm_viterbi(experiment, emission, prior, h_init):
+def fit_hmm_viterbi(experiment, emission, prior, h_init, normal_contamination):
     N = experiment.l.shape[0]
     M = h_init.shape[0]
 
@@ -85,7 +85,7 @@ def fit_hmm_viterbi(experiment, emission, prior, h_init):
     # Initialize haploid depths
     emission.h = h_init
 
-    model = remixt.cn_model.HiddenMarkovModel(N, M, emission, prior, experiment.chains)
+    model = remixt.cn_model.HiddenMarkovModel(N, M, emission, prior, experiment.chains, normal_contamination=normal_contamination)
     model.set_observed_data(experiment.x, experiment.l)
 
     # Estimate haploid depths
@@ -111,7 +111,7 @@ def fit_hmm_viterbi(experiment, emission, prior, h_init):
     return results
 
 
-def fit_hmm_graph(experiment, emission, prior, h_init):
+def fit_hmm_graph(experiment, emission, prior, h_init, normal_contamination):
     N = experiment.l.shape[0]
     M = h_init.shape[0]
 
@@ -121,7 +121,7 @@ def fit_hmm_graph(experiment, emission, prior, h_init):
     # Initialize haploid depths
     emission.h = h_init
 
-    model = remixt.cn_model.HiddenMarkovModel(N, M, emission, prior, experiment.chains)
+    model = remixt.cn_model.HiddenMarkovModel(N, M, emission, prior, experiment.chains, normal_contamination=normal_contamination)
     model.set_observed_data(experiment.x, experiment.l)
 
     # Estimate haploid depths
@@ -156,7 +156,7 @@ def fit_hmm_graph(experiment, emission, prior, h_init):
     return results
 
 
-def fit_graph(experiment, emission, prior, h_init):
+def fit_graph(experiment, emission, prior, h_init, normal_contamination):
     N = experiment.l.shape[0]
     M = h_init.shape[0]
 
@@ -168,7 +168,7 @@ def fit_graph(experiment, emission, prior, h_init):
     h_init_single[0] = h_init[0]
     h_init_single[1] = h_init[1:].sum()
     emission.h = h_init_single
-    model = remixt.cn_model.HiddenMarkovModel(N, 2, emission, prior, experiment.chains)
+    model = remixt.cn_model.HiddenMarkovModel(N, 2, emission, prior, experiment.chains, normal_contamination=normal_contamination)
     model.set_observed_data(experiment.x, experiment.l)
     _, cn = model.optimal_state()
     cn_init = np.ones((N, M, 2))
@@ -213,6 +213,7 @@ def fit(
     config,
 ):
     fit_method = remixt.config.get_param(config, 'fit_method')
+    normal_contamination = remixt.config.get_param(config, 'normal_contamination')
     cn_proportions_filename = remixt.config.get_filename(config, 'cn_proportions')
 
     with open(experiment_filename, 'r') as f:
@@ -235,11 +236,11 @@ def fit(
     emission.add_amplification_mask(experiment.x, experiment.l, prior.cn_max)
 
     if fit_method == 'hmm_viterbi':
-        fit_results = fit_hmm_viterbi(experiment, emission, prior, h_init)
+        fit_results = fit_hmm_viterbi(experiment, emission, prior, h_init, normal_contamination)
     elif fit_method == 'hmm_graph':
-        fit_results = fit_hmm_graph(experiment, emission, prior, h_init)
+        fit_results = fit_hmm_graph(experiment, emission, prior, h_init, normal_contamination)
     elif fit_method == 'graph':
-        fit_results = fit_graph(experiment, emission, prior, h_init)
+        fit_results = fit_graph(experiment, emission, prior, h_init, normal_contamination)
     else:
         raise ValueError('unknown fit method {}'.format(fit_method))
 
