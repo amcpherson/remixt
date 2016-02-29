@@ -386,7 +386,7 @@ class HiddenMarkovModel(object):
 
 
     def log_likelihood(self, state):
-        return self.emission.log_likelihood(state)
+        return self.emission.log_likelihood(state) + self.prior.log_prior(state)
 
 
 def decode_breakpoints_naive(cn, adjacencies, breakpoints):
