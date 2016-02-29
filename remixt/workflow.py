@@ -64,6 +64,7 @@ def create_infer_haps_workflow(
 
     workflow = pypeliner.workflow.Workflow()
 
+    workflow.setobj(obj=mgd.TempOutputObj('config'), value=config)
     workflow.setobj(obj=mgd.OutputChunks('chromosome'), value=chromosomes)
 
     workflow.transform(
@@ -76,7 +77,7 @@ def create_infer_haps_workflow(
             mgd.InputFile(normal_seqdata_filename),
             mgd.InputInstance('chromosome'),
             mgd.TempSpace('haplotyping', 'chromosome'),
-            config,
+            mgd.TempInputObj('config'),
         )
     )
 
@@ -101,6 +102,8 @@ def create_calc_bias_workflow(
 ):
     workflow = pypeliner.workflow.Workflow(default_ctx={'mem': 4})
 
+    workflow.setobj(obj=mgd.TempOutputObj('config'), value=config)
+
     workflow.transform(
         name='calc_fragment_stats',
         ctx={'mem': 16},
@@ -117,7 +120,7 @@ def create_calc_bias_workflow(
             mgd.TempOutputFile('gcsamples.tsv'),
             mgd.InputFile(tumour_seqdata_filename),
             mgd.TempInputObj('fragstats').prop('fragment_mean'),
-            config,
+            mgd.TempInputObj('config'),
         )
     )
 
@@ -153,7 +156,7 @@ def create_calc_bias_workflow(
             mgd.TempInputObj('fragstats').prop('fragment_stddev'),
             mgd.TempInputFile('gcloess.tsv'),
             mgd.TempOutputFile('biases.tsv', 'segment_rows_idx'),
-            config,
+            mgd.TempInputObj('config'),
         )
     )
 
@@ -189,7 +192,15 @@ def create_prepare_counts_workflow(
 
     workflow = pypeliner.workflow.Workflow()
 
-    workflow.setobj(obj=mgd.OutputChunks('tumour_id'), value=tumour_filenames.keys())
+    workflow.setobj(
+        obj=mgd.OutputChunks('tumour_id'),
+        value=tumour_filenames.keys(),
+    )
+
+    workflow.setobj(
+        obj=mgd.TempOutputObj('config'),
+        value=config,
+    )
 
     workflow.transform(
         name='segment_readcount',
@@ -200,7 +211,7 @@ def create_prepare_counts_workflow(
             mgd.TempOutputFile('segment_counts.tsv', 'tumour_id'),
             mgd.InputFile(segment_filename),
             mgd.InputFile('tumour_file', 'tumour_id', fnames=tumour_filenames),
-            config,
+            mgd.TempInputObj('config'),
         ),
     )
 
@@ -214,7 +225,7 @@ def create_prepare_counts_workflow(
             mgd.InputFile(segment_filename),
             mgd.InputFile('tumour_file', 'tumour_id', fnames=tumour_filenames),
             mgd.InputFile(haplotypes_filename),
-            config,
+            mgd.TempInputObj('config'),
         ),
     )
 
@@ -250,6 +261,8 @@ def create_fit_model_workflow(
 ):
     workflow = pypeliner.workflow.Workflow(default_ctx={'mem': 8})
 
+    workflow.setobj(obj=mgd.TempOutputObj('config'), value=config)
+
     workflow.transform(
         name='init',
         func=remixt.analysis.pipeline.init,
@@ -257,7 +270,7 @@ def create_fit_model_workflow(
             mgd.TempOutputFile('h_init', 'byh'),
             mgd.TempOutputFile('init_results'),
             mgd.InputFile(experiment_filename),
-            config,
+            mgd.TempInputObj('config'),
         ),
     )
 
@@ -269,7 +282,7 @@ def create_fit_model_workflow(
             mgd.TempOutputFile('fit_results', 'byh'),
             mgd.InputFile(experiment_filename),
             mgd.TempInputFile('h_init', 'byh'),
-            config,
+            mgd.TempInputObj('config'),
         ),
     )
 
@@ -297,7 +310,8 @@ def create_remixt_workflow(
     raw_data_directory,
     config,
 ):
-    results_filenames = dict([(sample_id, results_filenames[sample_id]) for sample_id in tumour_bam_filenames.keys()])
+    sample_ids = tumour_bam_filenames.keys()
+    results_filenames = dict([(sample_id, results_filenames[sample_id]) for sample_id in sample_ids])
 
     tumour_seq_data_template = os.path.join(raw_data_directory, 'seqdata', 'sample_{tumour_id}.h5')
     normal_seq_data_filename = os.path.join(raw_data_directory, 'seqdata', 'sample_{}.h5'.format(normal_id))
@@ -307,7 +321,15 @@ def create_remixt_workflow(
 
     workflow = pypeliner.workflow.Workflow()
 
-    workflow.setobj(obj=mgd.OutputChunks('tumour_id'), value=tumour_bam_filenames.keys())
+    workflow.setobj(
+        obj=mgd.OutputChunks('tumour_id'),
+        value=tumour_bam_filenames.keys(),
+    )
+
+    workflow.setobj(
+        obj=mgd.TempOutputObj('extract_seqdata_config'), 
+        value=config.get('extract_seqdata', {}),
+    )
 
     workflow.subworkflow(
         name='extract_seqdata_workflow_normal',
@@ -315,7 +337,7 @@ def create_remixt_workflow(
         args=(
             mgd.InputFile(normal_bam_filename),
             mgd.OutputFile(normal_seq_data_filename),
-            config,
+            mgd.TempInputObj('extract_seqdata_config'),
         ),
     )
 
@@ -326,8 +348,13 @@ def create_remixt_workflow(
         args=(
             mgd.InputFile('bam', 'tumour_id', fnames=tumour_bam_filenames),
             mgd.OutputFile('seqdata', 'tumour_id', template=tumour_seq_data_template),
-            config,
+            mgd.TempInputObj('extract_seqdata_config'),
         ),
+    )
+
+    workflow.setobj(
+        obj=mgd.TempOutputObj('infer_haps_config'),
+        value=config.get('infer_haps', {}),
     )
 
     workflow.subworkflow(
@@ -336,8 +363,13 @@ def create_remixt_workflow(
         args=(
             mgd.InputFile(normal_seq_data_filename),
             mgd.OutputFile(haplotypes_filename),
-            config,
+            mgd.TempInputObj('infer_haps_config'),
         ),
+    )
+
+    workflow.setobj(
+        obj=mgd.TempOutputObj('prepare_counts_config'),
+        value=config.get('prepare_counts', {}),
     )
 
     workflow.subworkflow(
@@ -348,8 +380,13 @@ def create_remixt_workflow(
             mgd.InputFile(haplotypes_filename),
             mgd.InputFile('seqdata', 'tumour_id', template=tumour_seq_data_template),
             mgd.TempOutputFile('rawcounts', 'tumour_id', axes_origin=[]),
-            config,
+            mgd.TempInputObj('prepare_counts_config'),
         ),
+    )
+
+    workflow.setobj(
+        obj=mgd.TempOutputObj('calc_bias_config'),
+        value=config.get('calc_bias', {}),
     )
 
     workflow.subworkflow(
@@ -360,7 +397,7 @@ def create_remixt_workflow(
             mgd.InputFile('seqdata', 'tumour_id', template=tumour_seq_data_template),
             mgd.TempInputFile('rawcounts', 'tumour_id'),
             mgd.OutputFile('counts', 'tumour_id', template=counts_table_template),
-            config,
+            mgd.TempInputObj('calc_bias_config'),
         ),
     )
 
@@ -376,6 +413,15 @@ def create_remixt_workflow(
         ),
     )
 
+    fit_model_config = {}
+    for sample_id in sample_ids:
+        fit_model_config[sample_id] = config.get('fit_model', {}).get(sample_id, {})
+        
+    workflow.setobj(
+        obj=mgd.TempOutputObj('fit_model_config', 'tumour_id', axes_origin=[]),
+        value=fit_model_config,
+    )
+
     workflow.subworkflow(
         name='fit_model',
         axes=('tumour_id',),
@@ -383,7 +429,7 @@ def create_remixt_workflow(
         args=(
             mgd.InputFile('experiment', 'tumour_id', template=experiment_template),
             mgd.OutputFile('results', 'tumour_id', fnames=results_filenames),
-            config,
+            mgd.TempInputObj('fit_model_config', 'tumour_id'),
         ),
     )
 
