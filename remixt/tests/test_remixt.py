@@ -93,6 +93,8 @@ class remixt_unittest(unittest.TestCase):
                 else:
                     cn_prior[cn_1, cn_2] += 1.0
 
+        cn_prior[:] += 1.0
+
         cn_prior /= cn.shape[0] * cn.shape[1]
 
         return cn_prior
