@@ -230,10 +230,11 @@ def fit(
     experiment_filename,
     h_init_filename,
     config,
+    ref_data_dir,
 ):
     fit_method = remixt.config.get_param(config, 'fit_method')
     normal_contamination = remixt.config.get_param(config, 'normal_contamination')
-    cn_proportions_filename = remixt.config.get_filename(config, 'cn_proportions')
+    cn_proportions_filename = remixt.config.get_filename(config, ref_data_dir, 'cn_proportions')
 
     with open(experiment_filename, 'r') as f:
         experiment = pickle.load(f)

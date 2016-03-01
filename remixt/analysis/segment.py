@@ -7,12 +7,13 @@ import remixt.segalg
 import remixt.utils
 
 
-def create_segments(segment_filename, config, breakpoint_filename=None):
+def create_segments(segment_filename, config, ref_data_dir, breakpoint_filename=None):
     """ Create segments file based on breakpoints and regular segmentation.
 
     Args:
         segment_filename (str): file to which segments will be written
         config (dict): relavent shapeit parameters including thousand genomes paths
+        ref_data_dir (str): reference data directory
 
     KwArgs:
         breakpoint_filename (str): file containing breakpoints
@@ -21,8 +22,8 @@ def create_segments(segment_filename, config, breakpoint_filename=None):
 
     segment_length = remixt.config.get_param(config, 'segment_length')
     chromosomes = remixt.config.get_param(config, 'chromosomes')
-    genome_fai_filename = remixt.config.get_filename(config, 'genome_fai')
-    gap_table_filename = remixt.config.get_filename(config, 'gap_table')
+    genome_fai_filename = remixt.config.get_filename(config, ref_data_dir, 'genome_fai')
+    gap_table_filename = remixt.config.get_filename(config, ref_data_dir, 'gap_table')
 
     chromosome_lengths = remixt.utils.read_chromosome_lengths(genome_fai_filename)
 

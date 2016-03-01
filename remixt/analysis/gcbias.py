@@ -9,14 +9,14 @@ import remixt.seqdataio
 import remixt.utils
 
 
-def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config):
+def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config, ref_data_dir):
 
     chromosomes = remixt.config.get_param(config, 'chromosomes')
     num_samples = remixt.config.get_param(config, 'sample_gc_num_positions')
     position_offset = remixt.config.get_param(config, 'gc_position_offset')
-    genome_fai = remixt.config.get_filename(config, 'genome_fai')
-    genome_fasta = remixt.config.get_filename(config, 'genome_fasta')
-    mappability_filename = remixt.config.get_filename(config, 'mappability')
+    genome_fai = remixt.config.get_filename(config, ref_data_dir, 'genome_fai')
+    genome_fasta = remixt.config.get_filename(config, ref_data_dir, 'genome_fasta')
+    mappability_filename = remixt.config.get_filename(config, ref_data_dir, 'mappability')
     map_qual_threshold = remixt.config.get_param(config, 'map_qual_threshold')
 
     fragment_length = int(fragment_length)
@@ -202,22 +202,22 @@ class GCCurve(object):
         return np.array([self.predict(float(x)/float(l)) for x in xrange(0, l + 1)])
 
 
-def gc_map_bias(segment_filename, fragment_mean, fragment_stddev, gc_dist_filename, bias_filename, config, do_gc=True, do_map=True):
+def gc_map_bias(segment_filename, fragment_mean, fragment_stddev, gc_dist_filename, bias_filename, config, ref_data_dir, do_gc=True, do_map=True):
     """ Calculate per segment GC and mappability biases
     """
     segments = pd.read_csv(segment_filename, sep='\t', converters={'chromosome':str})
 
-    biases = calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_filename, config, do_gc=do_gc, do_map=do_map)
+    biases = calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_filename, config, ref_data_dir, do_gc=do_gc, do_map=do_map)
 
     biases.to_csv(bias_filename, sep='\t', index=False)
 
 
-def calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_filename, config, do_gc=True, do_map=True):
+def calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_filename, config, ref_data_dir, do_gc=True, do_map=True):
     """ Calculate per segment GC and mappability biases
     """
     position_offset = remixt.config.get_param(config, 'gc_position_offset')
-    genome_fasta = remixt.config.get_filename(config, 'genome_fasta')
-    mappability_filename = remixt.config.get_filename(config, 'mappability')
+    genome_fasta = remixt.config.get_filename(config, ref_data_dir, 'genome_fasta')
+    mappability_filename = remixt.config.get_filename(config, ref_data_dir, 'mappability')
     map_qual_threshold = remixt.config.get_param(config, 'map_qual_threshold')
     read_length = remixt.config.get_param(config, 'mappability_length')
 

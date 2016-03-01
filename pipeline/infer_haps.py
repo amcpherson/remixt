@@ -26,8 +26,7 @@ if __name__ == '__main__':
 
     args = vars(argparser.parse_args())
 
-    config = {'ref_data_dir': args['ref_data_dir']}
-
+    config = {}
     if args['config'] is not None:
         execfile(args['config'], {}, config)
 
@@ -39,6 +38,7 @@ if __name__ == '__main__':
         args['normal_file'],
         args['haplotypes_file'],
         config,
+        args['ref_data_dir'],
     )
 
     pyp.run(workflow)

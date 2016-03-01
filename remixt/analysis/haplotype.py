@@ -93,7 +93,7 @@ def read_snp_counts(seqdata_filename, chromosome, num_rows=1000000):
     return snp_counts
 
     
-def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, config):
+def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, config, ref_data_dir):
     """ Infer haplotype blocks for a chromosome using shapeit
 
     Args:
@@ -102,6 +102,7 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
         chromosome (str): id of chromosome for which haplotype blocks will be inferred
         temp_directory (str): directory in which shapeit temp files will be stored
         config (dict): relavent shapeit parameters including thousand genomes paths
+        ref_data_dir (str): reference dataset directory
 
     The output haps file will contain haplotype blocks for each heterozygous SNP position. The
     file will be TSV format with the following columns:
@@ -133,9 +134,9 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
     phased_chromosome = chromosome
     if chromosome == 'X':
         phased_chromosome = remixt.config.get_param(config, 'phased_chromosome_x')
-    genetic_map_filename = remixt.config.get_filename(config, 'genetic_map', chromosome=phased_chromosome)
-    hap_filename = remixt.config.get_filename(config, 'haplotypes', chromosome=phased_chromosome)
-    legend_filename = remixt.config.get_filename(config, 'legend', chromosome=phased_chromosome)
+    genetic_map_filename = remixt.config.get_filename(config, ref_data_dir, 'genetic_map', chromosome=phased_chromosome)
+    hap_filename = remixt.config.get_filename(config, ref_data_dir, 'haplotypes', chromosome=phased_chromosome)
+    legend_filename = remixt.config.get_filename(config, ref_data_dir, 'legend', chromosome=phased_chromosome)
 
     # Call snps based on reference and alternate read counts from normal
     snp_counts_df = read_snp_counts(seqdata_filename, chromosome)
@@ -179,7 +180,7 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
     chr_x_flag = ''
     if chromosome == 'X':
         chr_x_flag = '--chrX'
-    sample_filename = remixt.config.get_filename(config, 'sample')
+    sample_filename = remixt.config.get_filename(config, ref_data_dir, 'sample')
     pypeliner.commandline.execute('shapeit', '-M', genetic_map_filename, '-R', hap_filename, legend_filename, sample_filename,
                                   '-G', temp_gen_filename, temp_sample_filename, '--output-graph', hgraph_filename, chr_x_flag,
                                   '--no-mcmc', '-L', hgraph_logs_prefix)

@@ -50,8 +50,7 @@ if __name__ == '__main__':
     if len(args['results_files']) != len(args['tumour_sample_ids']):
         raise Exception('--results_files must correspond one to one with --tumour_sample_ids')
 
-    config = {'ref_data_dir': args['ref_data_dir']}
-
+    config = {}
     if args['config'] is not None:
         execfile(args['config'], {}, config)
 
@@ -71,6 +70,7 @@ if __name__ == '__main__':
         results_filenames,
         args['raw_data_dir'],
         config,
+        args['ref_data_dir'],
     )
 
     pyp.run(workflow)

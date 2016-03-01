@@ -28,8 +28,9 @@ if __name__ == '__main__':
 
     args = vars(argparser.parse_args())
 
-    config = {'ref_data_dir': args['ref_data_dir']}
+    ref_data_dir = args['ref_data_dir']
 
+    config = {}
     if args['config'] is not None:
         execfile(args['config'], {}, config)
 
@@ -40,8 +41,8 @@ if __name__ == '__main__':
     workflow = pypeliner.workflow.Workflow(default_ctx={'mem': 6})
 
     mappability_length = remixt.config.get_param(config, 'mappability_length')
-    genome_fasta = remixt.config.get_filename(config, 'genome_fasta')
-    mappability_filename = remixt.config.get_filename(config, 'mappability')
+    genome_fasta = remixt.config.get_filename(config, ref_data_dir, 'genome_fasta')
+    mappability_filename = remixt.config.get_filename(config, ref_data_dir, 'mappability')
 
     workflow.transform(
         name='create_kmers',
