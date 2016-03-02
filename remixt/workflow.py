@@ -287,7 +287,7 @@ def create_fit_model_workflow(
     return workflow
 
 
-def create_remixt_pipeline(
+def create_remixt_workflow(
     segment_filename,
     breakpoint_filename,
     tumour_bam_filenames,

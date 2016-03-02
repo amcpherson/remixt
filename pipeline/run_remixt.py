@@ -62,7 +62,7 @@ if __name__ == '__main__':
 
     pyp = pypeliner.app.Pypeline([remixt], config)
 
-    workflow = remixt.workflow.create_remixt_pipeline(
+    workflow = remixt.workflow.create_remixt_workflow(
         args['segment_file'],
         args['breakpoint_file'],
         tumour_bam_filenames,
