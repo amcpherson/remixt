@@ -18,14 +18,12 @@ def calculate_fragment_stats(seqdata_filename):
     chromosomes = remixt.seqdataio.read_chromosomes(seqdata_filename)
 
     for chrom in chromosomes:
+        for chrom_reads in remixt.seqdataio.read_fragment_data(seqdata_filename, chrom, chunksize=1000000):
+            length = chrom_reads['end'].values - chrom_reads['start'].values
 
-        chrom_reads = remixt.seqdataio.read_fragment_data(seqdata_filename, chrom)
-
-        length = chrom_reads['end'].values - chrom_reads['start'].values
-
-        sum_x += length.sum()
-        sum_x2 += (length * length).sum()
-        n += length.shape[0]
+            sum_x += length.sum()
+            sum_x2 += (length * length).sum()
+            n += length.shape[0]
 
     mean = sum_x / n
     stdev = np.sqrt((sum_x2 / n) - (mean * mean))
