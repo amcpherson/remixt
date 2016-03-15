@@ -192,6 +192,13 @@ def retrieve_solution_data(patient, sample):
         ploidy = (cnv['length'] * (cnv['major_raw_e'] + cnv['minor_raw_e'])).sum() / cnv['length'].sum()
         solutions_df.loc[idx, 'ploidy'] = ploidy
 
+        # Calculate proportion subclonal
+        subclonal = (
+            (cnv['major_1'] != cnv['major_2']) +
+            (cnv['minor_1'] != cnv['minor_2']))
+        prop_subclonal = (subclonal * cnv['length']).sum() / (2. * cnv['length'].sum())
+        solutions_df.loc[idx, 'prop_subclonal'] = prop_subclonal
+
         # Add haploid normal/tumour depth and clone fraction
         h = store['/solutions/solution_{0}/h'.format(row['idx'])]
         solutions_df.loc[idx, 'haploid_normal'] = h.values[0]
@@ -495,9 +502,8 @@ def build_split_panel(cnv_source_left, cnv_source_right, brk_source, chromosome_
 
 def build_solutions_panel(patient, sample, solutions_source, read_depth_source):
     # Create solutions table
-    solutions_columns = ['decreased_log_posterior', 'graph_opt_iter', 'h_converged',
-       'h_em_iter', 'log_posterior', 'log_posterior_graph', 'num_clones',
-       'num_segments', 'idx', 'bic', 'bic_optimal', 'ploidy',
+    solutions_columns = ['log_posterior', 'log_posterior_graph', 'num_clones',
+       'num_segments', 'idx', 'ploidy', 'prop_subclonal',
        'haploid_normal', 'haploid_tumour', 'clone_1_fraction', 'clone_2_fraction']
     columns = [TableColumn(field=a, title=a) for a in solutions_columns]
     solutions_table = DataTable(source=solutions_source, columns=columns, width=1000, height=500)
