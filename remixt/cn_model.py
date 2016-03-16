@@ -71,6 +71,8 @@ class CopyNumberPrior(object):
         self.prior_cn_scale = 5e-8
         self.prior_dvg_scale = 5e-8
 
+        self.prior_divergence = 1e-6
+
 
     def log_prior(self, cn):
         """ Evaluate log prior probability of segment copy number.
@@ -102,9 +104,7 @@ class CopyNumberPrior(object):
             lp = np.sum(np.log(cn_prop), axis=(1, 2)) * self.l * self.prior_cn_scale
 
         subclonal = (cn[:,1:,:].max(axis=1) != cn[:,1:,:].min(axis=1)) * 1
-        subclonal_prob = self.divergence_probs[subclonal]
-        
-        lp += (np.sum(np.log(subclonal_prob), axis=1)) * self.l * self.prior_dvg_scale
+        lp -= np.sum(subclonal, axis=1) * self.l * self.prior_divergence
 
         subclonal_divergence = (cn[:,1:,:].max(axis=1) - cn[:,1:,:].min(axis=1)) * 1
         invalid_divergence = (subclonal_divergence > self.max_divergence).any(axis=1)
