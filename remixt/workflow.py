@@ -308,22 +308,19 @@ def create_fit_model_workflow(
     return workflow
 
 
-def create_remixt_workflow(
+def create_remixt_seqdata_workflow(
     segment_filename,
     breakpoint_filename,
-    tumour_bam_filenames,
-    normal_bam_filename,
-    normal_id,
+    tumour_seqdata_filenames,
+    normal_seqdata_filename,
     results_filenames,
     raw_data_directory,
     config,
     ref_data_dir,
 ):
-    sample_ids = tumour_bam_filenames.keys()
+    sample_ids = tumour_seqdata_filenames.keys()
     results_filenames = dict([(sample_id, results_filenames[sample_id]) for sample_id in sample_ids])
 
-    tumour_seq_data_template = os.path.join(raw_data_directory, 'seqdata', 'sample_{tumour_id}.h5')
-    normal_seq_data_filename = os.path.join(raw_data_directory, 'seqdata', 'sample_{}.h5'.format(normal_id))
     haplotypes_filename = os.path.join(raw_data_directory, 'haplotypes.tsv')
     counts_table_template = os.path.join(raw_data_directory, 'counts', 'sample_{tumour_id}.tsv')
     experiment_template = os.path.join(raw_data_directory, 'experiment', 'sample_{tumour_id}.pickle')
@@ -332,35 +329,7 @@ def create_remixt_workflow(
 
     workflow.setobj(
         obj=mgd.OutputChunks('tumour_id'),
-        value=tumour_bam_filenames.keys(),
-    )
-
-    workflow.setobj(
-        obj=mgd.TempOutputObj('extract_seqdata_config'), 
-        value=config.get('extract_seqdata', {}),
-    )
-
-    workflow.subworkflow(
-        name='extract_seqdata_workflow_normal',
-        func=remixt.workflow.create_extract_seqdata_workflow,
-        args=(
-            mgd.InputFile(normal_bam_filename),
-            mgd.OutputFile(normal_seq_data_filename),
-            mgd.TempInputObj('extract_seqdata_config'),
-            ref_data_dir,
-        ),
-    )
-
-    workflow.subworkflow(
-        name='extract_seqdata_workflow_tumour',
-        axes=('tumour_id',),
-        func=remixt.workflow.create_extract_seqdata_workflow,
-        args=(
-            mgd.InputFile('bam', 'tumour_id', fnames=tumour_bam_filenames),
-            mgd.OutputFile('seqdata', 'tumour_id', template=tumour_seq_data_template),
-            mgd.TempInputObj('extract_seqdata_config'),
-            ref_data_dir,
-        ),
+        value=tumour_seqdata_filenames.keys(),
     )
 
     workflow.setobj(
@@ -372,7 +341,7 @@ def create_remixt_workflow(
         name='infer_haps_workflow',
         func=remixt.workflow.create_infer_haps_workflow,
         args=(
-            mgd.InputFile(normal_seq_data_filename),
+            mgd.InputFile(normal_seqdata_filename),
             mgd.OutputFile(haplotypes_filename),
             mgd.TempInputObj('infer_haps_config'),
             ref_data_dir,
@@ -390,7 +359,7 @@ def create_remixt_workflow(
         args=(
             mgd.InputFile(segment_filename),
             mgd.InputFile(haplotypes_filename),
-            mgd.InputFile('seqdata', 'tumour_id', template=tumour_seq_data_template),
+            mgd.InputFile('seqdata', 'tumour_id', template=tumour_seqdata_filenames),
             mgd.TempOutputFile('rawcounts', 'tumour_id', axes_origin=[]),
             mgd.TempInputObj('prepare_counts_config'),
         ),
@@ -406,7 +375,7 @@ def create_remixt_workflow(
         axes=('tumour_id',),
         func=remixt.workflow.create_calc_bias_workflow,
         args=(
-            mgd.InputFile('seqdata', 'tumour_id', template=tumour_seq_data_template),
+            mgd.InputFile('seqdata', 'tumour_id', template=tumour_seqdata_filenames),
             mgd.TempInputFile('rawcounts', 'tumour_id'),
             mgd.OutputFile('counts', 'tumour_id', template=counts_table_template),
             mgd.TempInputObj('calc_bias_config'),
@@ -449,3 +418,82 @@ def create_remixt_workflow(
 
     return workflow
     
+
+def create_remixt_bam_workflow(
+    segment_filename,
+    breakpoint_filename,
+    tumour_bam_filenames,
+    normal_bam_filename,
+    normal_id,
+    results_filenames,
+    raw_data_directory,
+    config,
+    ref_data_dir,
+):
+    sample_ids = tumour_bam_filenames.keys()
+    results_filenames = dict([(sample_id, results_filenames[sample_id]) for sample_id in sample_ids])
+
+    tumour_seqdata_template = os.path.join(raw_data_directory, 'seqdata', 'sample_{tumour_id}.h5')
+    normal_seqdata_filename = os.path.join(raw_data_directory, 'seqdata', 'sample_{}.h5'.format(normal_id))
+
+    workflow = pypeliner.workflow.Workflow()
+
+    workflow.setobj(
+        obj=mgd.OutputChunks('tumour_id'),
+        value=tumour_bam_filenames.keys(),
+    )
+
+    workflow.setobj(
+        obj=mgd.TempOutputObj('extract_seqdata_config'),
+        value=config.get('extract_seqdata', {}),
+    )
+
+    workflow.subworkflow(
+        name='extract_seqdata_workflow_normal',
+        func=remixt.workflow.create_extract_seqdata_workflow,
+        args=(
+            mgd.InputFile(normal_bam_filename),
+            mgd.OutputFile(normal_seqdata_filename),
+            mgd.TempInputObj('extract_seqdata_config'),
+            ref_data_dir,
+        ),
+    )
+
+    workflow.subworkflow(
+        name='extract_seqdata_workflow_tumour',
+        axes=('tumour_id',),
+        func=remixt.workflow.create_extract_seqdata_workflow,
+        args=(
+            mgd.InputFile('bam', 'tumour_id', fnames=tumour_bam_filenames),
+            mgd.OutputFile('seqdata', 'tumour_id', template=tumour_seqdata_template),
+            mgd.TempInputObj('extract_seqdata_config'),
+            ref_data_dir,
+        ),
+    )
+
+    remixt_config = dict(config)
+    if 'extract_seqdata' in remixt_config:
+        del remixt_config['extract_seqdata']
+
+    workflow.setobj(
+        obj=mgd.TempOutputObj('remixt_config'),
+        value=remixt_config,
+    )
+
+    workflow.subworkflow(
+        name='remixt_seqdata_workflow',
+        func=create_remixt_seqdata_workflow,
+        args=(
+            mgd.InputFile(segment_filename),
+            mgd.InputFile(breakpoint_filename),
+            mgd.InputFile('seqdata', 'tumour_id', template=tumour_seqdata_template),
+            mgd.InputFile(normal_seqdata_filename),
+            mgd.OutputFile('results', 'tumour_id', fnames=results_filenames),
+            raw_data_directory,
+            mgd.TempInputObj('remixt_config'),
+            ref_data_dir,
+        ),
+    )
+
+    return workflow
+
