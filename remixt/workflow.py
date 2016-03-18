@@ -359,7 +359,7 @@ def create_remixt_seqdata_workflow(
         args=(
             mgd.InputFile(segment_filename),
             mgd.InputFile(haplotypes_filename),
-            mgd.InputFile('seqdata', 'tumour_id', template=tumour_seqdata_filenames),
+            mgd.InputFile('seqdata', 'tumour_id', fnames=tumour_seqdata_filenames),
             mgd.TempOutputFile('rawcounts', 'tumour_id', axes_origin=[]),
             mgd.TempInputObj('prepare_counts_config'),
         ),
@@ -375,7 +375,7 @@ def create_remixt_seqdata_workflow(
         axes=('tumour_id',),
         func=remixt.workflow.create_calc_bias_workflow,
         args=(
-            mgd.InputFile('seqdata', 'tumour_id', template=tumour_seqdata_filenames),
+            mgd.InputFile('seqdata', 'tumour_id', fnames=tumour_seqdata_filenames),
             mgd.TempInputFile('rawcounts', 'tumour_id'),
             mgd.OutputFile('counts', 'tumour_id', template=counts_table_template),
             mgd.TempInputObj('calc_bias_config'),
