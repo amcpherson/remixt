@@ -68,8 +68,7 @@ class CopyNumberPrior(object):
         self.divergence_probs = np.array([0.8, 0.2])
         self.max_divergence = 1
 
-        self.prior_cn_scale = 5e-8
-        self.prior_dvg_scale = 5e-8
+        self.prior_cn_scale = 0.
 
         self.prior_divergence = 1e-6
 
