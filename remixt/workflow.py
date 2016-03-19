@@ -488,7 +488,7 @@ def create_remixt_bam_workflow(
             mgd.InputFile(breakpoint_filename),
             mgd.InputFile('seqdata', 'tumour_id', template=tumour_seqdata_template),
             mgd.InputFile(normal_seqdata_filename),
-            mgd.OutputFile('results', 'tumour_id', fnames=results_filenames),
+            mgd.OutputFile('results', 'tumour_id', fnames=results_filenames, axes_origin=[]),
             raw_data_directory,
             mgd.TempInputObj('remixt_config'),
             ref_data_dir,
