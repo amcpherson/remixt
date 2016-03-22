@@ -63,20 +63,14 @@ def calculate_minor_modes(read_depth):
     return means
 
 
-def calculate_candidate_h(minor_modes, num_clones=None, num_mix_samples=20, dirichlet_alpha=1.0):
-    """ Calculate modes in distribution of read depths for minor allele
+def calculate_candidate_h_monoclonal(minor_modes):
+    """ Calculate possible haploid tumour depth from modes of minor allele depth.
 
     Args:
         minor_modes (list): minor read depth modes
 
-    Kwargs:
-        num_clones (int): number of clones, if None, sample from poisson
-        num_mix_samples (int): number of mixture fraction samples
-        dirichlet_alpha (float): alpha parameter for dirichlet sampling
-
     Returns:
-        list of numpy.array: candidate haploid normal and tumour read depths
-
+        list: haploid depths
     """
 
     h_normal = minor_modes.min()
@@ -92,43 +86,60 @@ def calculate_candidate_h(minor_modes, num_clones=None, num_mix_samples=20, diri
         # Consider the possibility that the first minor mode
         # is composed of segments with 2 minor copies
         for scale in (1., 0.5):
-            for _ in xrange(num_mix_samples):
-                if num_clones is None:
-                    while True:
-                        num_tumour_clones = np.random.geometric(p=0.5)
-                        if num_tumour_clones <= 3:
-                            break
-                else:
-                    num_tumour_clones = num_clones - 1
-
-                mix = np.random.dirichlet([dirichlet_alpha] * num_tumour_clones)
-
-                h = np.array([h_normal] + list(h_tumour * scale * mix))
-
-                h_candidates.append(h)
+            h_mono = np.array([h_normal, h_tumour])
+            h_candidates.append(h_mono)
 
     return h_candidates
 
 
-def filter_high_ploidy(candidate_h, experiment, max_ploidy=5.0):
+def calculate_candidate_h_polyclonal(h_mono, num_clones=None, num_mix_samples=20, dirichlet_alpha=1.0):
     """ Calculate modes in distribution of read depths for minor allele
 
     Args:
-        candidate_h (list of numpy.array): candidate haploid normal and tumour read depths
-        experiment (remixt.Experiment): experiment object
+        h_mono (numpy.array): candidate single clone haploid depth
 
     Kwargs:
-        max_ploidy (int): maximum ploidy of potential solutions
+        num_clones (int): number of clones, if None, sample from poisson
+        num_mix_samples (int): number of mixture fraction samples
+        dirichlet_alpha (float): alpha parameter for dirichlet sampling
 
     Returns:
-        candidate_h (list of numpy.array): candidate haploid normal and tumour read depths
+        list of numpy.array: candidate haploid normal and tumour read depths
+
+    """
+    
+    h_candidates = list()
+
+    for _ in xrange(num_mix_samples):
+        if num_clones is None:
+            while True:
+                num_tumour_clones = np.random.geometric(p=0.5)
+                if num_tumour_clones <= 3:
+                    break
+        else:
+            num_tumour_clones = num_clones - 1
+
+        mix = np.random.dirichlet([dirichlet_alpha] * num_tumour_clones)
+
+        h_poly = np.array([h_mono[0]] + list(h_mono[1] * mix))
+
+        h_candidates.append(h_poly)
+
+    return h_candidates
+
+
+def estimate_ploidy(h, experiment):
+    """ Estimate ploidy for a candidate haploid depth.
+
+    Args:
+        h (numpy.array): haploid normal and tumour clones read depths
+        experiment (remixt.Experiment): experiment object
+
+    Returns:
+        float: ploidy estimate
 
     """
 
-    def calculate_ploidy(h):
-        mean_cn = remixt.likelihood.calculate_mean_cn(h, experiment.x, experiment.l)
-        return (mean_cn.T * experiment.l).sum() / experiment.l.sum()
-
-    return filter(lambda h: calculate_ploidy(h) < max_ploidy, candidate_h)
-
+    mean_cn = remixt.likelihood.calculate_mean_cn(h, experiment.x, experiment.l)
+    return (mean_cn.T * experiment.l).sum() / experiment.l.sum()
 

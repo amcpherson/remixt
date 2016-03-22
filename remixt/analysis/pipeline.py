@@ -51,28 +51,38 @@ def create_cn_prior_matrix(cn_proportions_filename=None):
 
 
 def init(
-    candidate_h_filenames,
     init_results_filename,
     experiment_filename,
     config,
 ):
     num_clones = remixt.config.get_param(config, 'num_clones')
+    max_ploidy = remixt.config.get_param(config, 'max_ploidy')
 
     with open(experiment_filename, 'r') as f:
         experiment = pickle.load(f)
 
+    # Calculate candidate haploid depths for normal contamination and a single
+    # tumour clone based on modes of the minor allele depth
     read_depth = remixt.analysis.readdepth.calculate_depth(experiment)
     minor_modes = remixt.analysis.readdepth.calculate_minor_modes(read_depth)
-    candidate_h = remixt.analysis.readdepth.calculate_candidate_h(minor_modes, num_clones=num_clones)
-    candidate_h = remixt.analysis.readdepth.filter_high_ploidy(candidate_h, experiment, max_ploidy=5.0)
+    candidate_h_mono = remixt.analysis.readdepth.calculate_candidate_h_monoclonal(minor_modes)
 
-    for idx, h in enumerate(candidate_h):
-        with open(candidate_h_filenames[idx], 'w') as f:
-            pickle.dump(h, f)
+    # Calculate candidate haploid depths for normal contamination and multiple clones
+    # and add to initialization params
+    init_params = []
+    for mode_idx, h_mono in enumerate(candidate_h_mono):
+        for h_poly in remixt.analysis.readdepth.calculate_candidate_h_polyclonal(h_mono, num_clones=num_clones):
+            if remixt.analysis.readdepth.estimate_ploidy(h_poly) > max_ploidy:
+                continue
+
+            params = {'mode_idx': mode_idx, 'h_init': h_poly}
+            init_params.append(params)
 
     with pd.HDFStore(init_results_filename, 'w') as store:
         store['read_depth'] = read_depth
         store['minor_modes'] = pd.Series(minor_modes, index=xrange(len(minor_modes)))
+
+    return dict(enumerate(init_params))
 
 
 def fit_hmm_viterbi(experiment, emission, prior, h_init, normal_contamination):

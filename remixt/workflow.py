@@ -273,8 +273,8 @@ def create_fit_model_workflow(
     workflow.transform(
         name='init',
         func=remixt.analysis.pipeline.init,
+        ret=mgd.TempOutputObj('init_params', 'byh'),
         args=(
-            mgd.TempOutputFile('h_init', 'byh'),
             mgd.TempOutputFile('init_results'),
             mgd.InputFile(experiment_filename),
             mgd.TempInputObj('config'),
@@ -288,7 +288,7 @@ def create_fit_model_workflow(
         args=(
             mgd.TempOutputFile('fit_results', 'byh'),
             mgd.InputFile(experiment_filename),
-            mgd.TempInputFile('h_init', 'byh'),
+            mgd.TempInputObj('init_params', 'byh'),
             mgd.TempInputObj('config'),
             ref_data_dir,
         ),

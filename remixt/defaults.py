@@ -89,6 +89,9 @@ fit_method                                  = 'hmm_graph'
 # Maximum number of clones to consider including tumour and 1 contaminating normal
 num_clones                                  = 3
 
+# Maximum ploidy of initial haploid depth parameters
+max_ploidy                                  = 5.0
+
 # Table of expected proportion of each genotype for use as prior,
 # set to None to use proportion data included in package
 cn_proportions_filename                     = None
