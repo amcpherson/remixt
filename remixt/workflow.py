@@ -410,7 +410,7 @@ def create_remixt_seqdata_workflow(
         func=remixt.workflow.create_fit_model_workflow,
         args=(
             mgd.InputFile('experiment', 'tumour_id', template=experiment_template),
-            mgd.OutputFile('results', 'tumour_id', fnames=results_filenames),
+            mgd.OutputFile('results', 'tumour_id', fnames=results_filenames, axes_origin=[]),
             mgd.TempInputObj('fit_model_config', 'tumour_id'),
             ref_data_dir,
         ),
