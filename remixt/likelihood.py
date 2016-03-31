@@ -101,10 +101,13 @@ def calculate_mean_cn(h, x, l):
 
     """
 
-    ratio = x[:,1] / x[:,0:2].sum(axis=1)
-    ratio[np.isnan(ratio)] = 0.5
+    minor = x[:,1]
+    total = x[:,0:2].sum(axis=1)
+    ratio = minor.astype(float) / total.astype(float)
+    ratio[total == 0] = 0.5
 
     total_depth = (x[:,2] / l)
+    total_depth[l == 0.] = 0.
     total_cn = (total_depth - h[0]) / h[1:].sum()
 
     dom_cn = np.array([total_cn * (1. - ratio), total_cn * ratio]).T
@@ -168,7 +171,7 @@ class ReadCountLikelihood(object):
 
         """
 
-        p = self.x[:,:2].sum(axis=1) / (self.x[:,2] + 1e-16)
+        p = self.x[:,:2].sum(axis=1).astype(float) / (self.x[:,2].astype(float) + 1e-16)
 
         self.mask &= (p >= min_proportion_genotyped)
 
