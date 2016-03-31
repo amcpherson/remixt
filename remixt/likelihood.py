@@ -101,22 +101,13 @@ def calculate_mean_cn(h, x, l):
 
     """
 
-    phi = estimate_phi(x)
-    p = proportion_measureable_matrix(phi)
+    ratio = x[:,1] / x[:,0:2].sum(axis=1)
+    ratio[np.isnan(ratio)] = 0.5
 
-    # Avoid divide by zero
-    x = x + 1e-16
-    l = l + 1e-16
-    p = p + 1e-16
+    total_depth = (x[:,2] / l)
+    total_cn = (total_depth - h[0]) / h[1:].sum()
 
-    # Calculate the total haploid depth of the tumour clones
-    h_t = ((x[:,0:2] / p[:,0:2]).T / l).T
-
-    for n, ell in zip(*np.where(np.isnan(h_t))):
-        raise ProbabilityError('h_t is nan', n=n, x=x[n], l=l[n], h=h, p=p[n])
-
-    # Calculate the dominant cn assuming no divergence
-    dom_cn = (h_t - h[0]) / h[1:].sum()
+    dom_cn = np.array([total_cn * (1. - ratio), total_cn * ratio]).T
 
     return dom_cn
 
