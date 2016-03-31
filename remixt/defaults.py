@@ -96,5 +96,10 @@ cn_proportions_filename                     = None
 # Model normal contamination
 normal_contamination                        = True
 
+# Minimum length of segments modelled by the likelihood
+likelihood_min_segment_length               = 10000
+
+# Minimum proportion genotyped reads for segments modelled by the likelihood
+likelihood_min_proportion_genotyped         = 0.01
 
 

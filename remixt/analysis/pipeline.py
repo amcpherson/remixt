@@ -239,6 +239,9 @@ def fit(
     normal_contamination = remixt.config.get_param(config, 'normal_contamination')
     cn_proportions_filename = remixt.config.get_filename(config, ref_data_dir, 'cn_proportions')
 
+    likelihood_min_segment_length = remixt.config.get_param(config, 'likelihood_min_segment_length')
+    likelihood_min_proportion_genotyped = remixt.config.get_param(config, 'likelihood_min_proportion_genotyped')
+
     with open(experiment_filename, 'r') as f:
         experiment = pickle.load(f)
 
@@ -254,8 +257,10 @@ def fit(
     prior = remixt.cn_model.CopyNumberPrior(cn_probs)
     prior.set_lengths(experiment.l)
 
-    # Mask amplifications from likelihood
-    emission.add_amplification_mask(experiment.x, experiment.l, prior.cn_max)
+    # Mask amplifications and poorly modelled segments from likelihood
+    emission.add_amplification_mask(prior.cn_max)
+    emission.add_segment_length_mask(likelihood_min_segment_length)
+    emission.add_proportion_genotyped_mask(likelihood_min_proportion_genotyped)
 
     if fit_method == 'hmm_viterbi':
         fit_results = fit_hmm_viterbi(experiment, emission, prior, h_init, normal_contamination)

@@ -122,9 +122,6 @@ class ReadCountLikelihood(object):
             x (numpy.array): observed major, minor, and total read counts
             l (numpy.array): observed lengths of segments
 
-        KwArgs:
-            min_length_likelihood (int): minimum length for likelihood calculation
-
         Attributes:
             h (numpy.array): haploid read depths, h[0] for normal
             phi (numpy.array): proportion genotypable reads
@@ -134,31 +131,46 @@ class ReadCountLikelihood(object):
         self.x = x
         self.l = l
 
-        self.min_length_likelihood = kwargs.get('min_length_likelihood', 10000)
-
         self.param_partial_func = dict()
         self.param_bounds = dict()
         self.param_per_segment = dict()
 
-        self.mask = None
+        self.mask = np.array([True] * len(self.l))
 
-    def add_amplification_mask(self, x, l, cn_max):
+    def add_amplification_mask(self, cn_max):
         """ Add a mask for highly amplified regions.
 
         Args:
-            x (numpy.array): major, minor, and total read counts
-            l (numpy.array): segment lengths
             cn_max (int): max unmasked dominant copy number
-
-        Returns:
-            float: proportion of the genome masked
 
         """
 
-        dom_cn = calculate_mean_cn(self.h, x, l)
+        dom_cn = calculate_mean_cn(self.h, self.x, self.l)
         dom_cn = np.clip(dom_cn.round().astype(int), 0, int(1e6))
 
-        self.mask = np.all(dom_cn <= cn_max, axis=1)
+        self.mask &= np.all(dom_cn <= cn_max, axis=1)
+
+    def add_segment_length_mask(self, min_segment_length):
+        """ Add a mask for short segments.
+
+        Args:
+            min_segment_length (float): minimum length of modelled segments
+
+        """
+
+        self.mask &= (self.l >= min_segment_length)
+
+    def add_proportion_genotyped_mask(self, min_proportion_genotyped):
+        """ Add a mask for segments with too few genotyped reads.
+
+        Args:
+            min_proportion_genotyped (float): minimum proportion genotyped reads
+
+        """
+
+        p = self.x[:,:2].sum(axis=1) / (self.x[:,2] + 1e-16)
+
+        self.mask &= (p >= min_proportion_genotyped)
 
     def _get_h(self):
         return self._h
@@ -291,10 +303,7 @@ class ReadCountLikelihood(object):
 
         ll[np.where(np.any(cn < 0, axis=(-1, -2)))] = -np.inf
 
-        ll[self.l < self.min_length_likelihood] = 0.0
-
-        if self.mask is not None:
-            ll[~self.mask] = 0.0
+        ll[~self.mask] = 0.0
 
         for n in zip(*np.where(np.isnan(ll))):
             raise ProbabilityError('ll is nan', n=n, x=self.x[n], l=self.l[n], cn=cn[n])
@@ -316,10 +325,7 @@ class ReadCountLikelihood(object):
 
         """
 
-        ll_partial[self.l < self.min_length_likelihood, :] = 0.0
-
-        if self.mask is not None:
-            ll_partial[~self.mask, :] = 0.0
+        ll_partial[~self.mask, :] = 0.0
 
         for n, idx in zip(*np.where(np.isnan(ll_partial))):
             raise ProbabilityError('ll derivative is nan', n=n, x=self.x[n], l=self.l[n], cn=cn[n])
