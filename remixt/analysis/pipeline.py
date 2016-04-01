@@ -1,5 +1,5 @@
 import pickle
-import pkg_resources
+import itertools
 import numpy as np
 import pandas as pd
 
@@ -11,52 +11,16 @@ import remixt.genome_graph
 import remixt.analysis.experiment
 import remixt.analysis.readdepth
 
-default_cn_proportions_filename = pkg_resources.resource_filename('remixt', 'data/cn_proportions.tsv')
-
-
-def create_cn_prior_matrix(cn_proportions_filename=None):
-    """ Create a matrix of prior probabilities for copy number states.
-
-    KwArgs:
-        cn_proportions_filename (str): tsv table of proportions of each state
-
-    Returns:
-        numpy.array: copy number prior matrix
-
-    """
-
-    if cn_proportions_filename is None:
-        cn_proportions_filename = default_cn_proportions_filename
-
-    cn_proportions = pd.read_csv(cn_proportions_filename, sep='\t',
-        converters={'major':int, 'minor':int})
-
-    cn_max = cn_proportions['major'].max()
-
-    cn_amp_prior = 1. - cn_proportions['proportion'].sum()
-
-    cn_prior = cn_proportions.set_index(['major', 'minor'])['proportion'].unstack().fillna(0.0)
-    cn_prior = cn_prior.reindex(columns=range(cn_max+1), index=range(cn_max+1))
-
-    assert not cn_prior.isnull().any().any()
-
-    cn_prior = cn_prior.values
-    cn_prior = cn_prior + cn_prior.T - cn_prior * np.eye(*cn_prior.shape)
-
-    cn_prior_full = np.ones((cn_prior.shape[0] + 1, cn_prior.shape[1] + 1)) * cn_amp_prior
-
-    cn_prior_full[0:cn_prior.shape[0], 0:cn_prior.shape[1]] = cn_prior
-
-    return cn_prior_full
-
 
 def init(
     init_results_filename,
     experiment_filename,
     config,
 ):
-    num_clones = remixt.config.get_param(config, 'num_clones')
+    min_ploidy = remixt.config.get_param(config, 'min_ploidy')
     max_ploidy = remixt.config.get_param(config, 'max_ploidy')
+    tumour_mix_fractions = remixt.config.get_param(config, 'tumour_mix_fractions')
+    divergence_weights = remixt.config.get_param(config, 'divergence_weights')
 
     with open(experiment_filename, 'r') as f:
         experiment = pickle.load(f)
@@ -65,18 +29,34 @@ def init(
     # tumour clone based on modes of the minor allele depth
     read_depth = remixt.analysis.readdepth.calculate_depth(experiment)
     minor_modes = remixt.analysis.readdepth.calculate_minor_modes(read_depth)
-    candidate_h_mono = remixt.analysis.readdepth.calculate_candidate_h_monoclonal(minor_modes)
+    init_h_mono = remixt.analysis.readdepth.calculate_candidate_h_monoclonal(minor_modes)
 
     # Calculate candidate haploid depths for normal contamination and multiple clones
-    # and add to initialization params
-    init_params = []
-    for mode_idx, h_mono in enumerate(candidate_h_mono):
-        for h_poly in remixt.analysis.readdepth.calculate_candidate_h_polyclonal(h_mono, num_clones=num_clones):
-            if remixt.analysis.readdepth.estimate_ploidy(h_poly) > max_ploidy:
+    # Filter candidates with inappropriate ploidy
+    init_h_params = []
+    for mode_idx, h_mono in enumerate(init_h_mono):
+        for mix_frac in xrange(tumour_mix_fractions):
+            mix_frac = np.array(mix_frac)
+            h_poly = np.array([h_mono[0]] + list(h_mono[1] * mix_frac))
+
+            estimated_ploidy = remixt.analysis.readdepth.estimate_ploidy(h_poly)
+
+            if min_ploidy is not None and estimated_ploidy < min_ploidy:
+                continue
+
+            if max_ploidy is not None and estimated_ploidy > max_ploidy:
                 continue
 
             params = {'mode_idx': mode_idx, 'h_init': h_poly}
-            init_params.append(params)
+            init_h_params.append(params)
+
+    # Attempt several divergence parameters
+    init_params = []
+    divergence_weight_params = [{'divergence_weight': w} for w in divergence_weights]
+    for h_p, w_p in itertools.product(init_h_params, divergence_weight_params):
+        params = h_p.copy()
+        params.update(w_p)
+        init_params.append(params)
 
     with pd.HDFStore(init_results_filename, 'w') as store:
         store['read_depth'] = read_depth
@@ -99,7 +79,7 @@ def fit_hmm_viterbi(experiment, emission, prior, h_init, normal_contamination):
 
     # Estimate haploid depths and overdispersion parameters
     estimator = remixt.em.ExpectationMaximizationEstimator()
-    log_posterior = estimator.learn_param(
+    log_likelihood = estimator.learn_param(
         model,
         emission.h_param,
         emission.r_param,
@@ -111,13 +91,13 @@ def fit_hmm_viterbi(experiment, emission, prior, h_init, normal_contamination):
     results['h'] = emission.h
     results['r'] = emission.r
     results['M'] = emission.M
-    results['stats']['h_log_posterior'] = log_posterior
+    results['stats']['h_log_likelihood'] = log_likelihood
     results['stats']['h_converged'] = estimator.converged
     results['stats']['h_em_iter'] = estimator.em_iter
     results['stats']['h_error_message'] = estimator.error_message
 
     # Infer copy number from viterbi
-    log_posterior_viterbi, cn = model.optimal_state()
+    log_likelihood_viterbi, cn = model.optimal_state()
 
     # Naive breakpoint copy number
     brk_cn = remixt.cn_model.decode_breakpoints_naive(cn, experiment.adjacencies, experiment.breakpoints)
@@ -125,8 +105,8 @@ def fit_hmm_viterbi(experiment, emission, prior, h_init, normal_contamination):
     # Infer copy number
     results['cn'] = cn
     results['brk_cn'] = brk_cn
-    results['stats']['viterbi_log_posterior'] = log_posterior_viterbi
-    results['stats']['log_posterior'] = log_posterior_viterbi
+    results['stats']['viterbi_log_likelihood'] = log_likelihood_viterbi
+    results['stats']['log_likelihood'] = log_likelihood_viterbi
     results['stats']['log_prior'] = prior.log_prior(cn).sum()
 
     return results
@@ -146,7 +126,7 @@ def fit_hmm_graph(experiment, emission, prior, h_init, normal_contamination):
 
     # Estimate haploid depths
     estimator = remixt.em.ExpectationMaximizationEstimator()
-    log_posterior = estimator.learn_param(
+    log_likelihood = estimator.learn_param(
         model,
         emission.h_param,
         emission.r_param,
@@ -158,7 +138,7 @@ def fit_hmm_graph(experiment, emission, prior, h_init, normal_contamination):
     results['h'] = emission.h
     results['r'] = emission.r
     results['M'] = emission.M
-    results['stats']['h_log_posterior'] = log_posterior
+    results['stats']['h_log_likelihood'] = log_likelihood
     results['stats']['h_converged'] = estimator.converged
     results['stats']['h_em_iter'] = estimator.em_iter
     results['stats']['h_error_message'] = estimator.error_message
@@ -176,13 +156,13 @@ def fit_hmm_graph(experiment, emission, prior, h_init, normal_contamination):
     graph.init_copy_number(cn_init)
 
     # Infer copy number
-    log_posterior_graph, cn = graph.optimize()
+    log_likelihood_graph, cn = graph.optimize()
     results['cn'] = cn
     results['brk_cn'] = graph.breakpoint_copy_number
     results['stats']['graph_opt_iter'] = graph.opt_iter
-    results['stats']['graph_log_posterior'] = log_posterior_graph
-    results['stats']['graph_decreased_log_posterior'] = graph.decreased_log_posterior
-    results['stats']['log_posterior'] = log_posterior_graph
+    results['stats']['graph_log_likelihood'] = log_likelihood_graph
+    results['stats']['graph_decreased_log_likelihood'] = graph.decreased_log_likelihood
+    results['stats']['log_likelihood'] = log_likelihood_graph
     results['stats']['log_prior'] = prior.log_prior(cn).sum()
 
     return results
@@ -216,16 +196,16 @@ def fit_graph(experiment, emission, prior, h_init, normal_contamination):
 
     # Estimate haploid depths and copy number
     estimator = remixt.em.HardAssignmentEstimator()
-    h, log_posterior, h_converged = estimator.learn_param(graph, 'h', h_init)
+    h, log_likelihood, h_converged = estimator.learn_param(graph, 'h', h_init)
 
     results['h'] = h
     results['cn'] = graph.cn
     results['brk_cn'] = graph.breakpoint_copy_number
     results['stats']['h_em_iter'] = estimator.em_iter
     results['stats']['graph_opt_iter'] = graph.opt_iter
-    results['stats']['graph_log_posterior'] = log_posterior
-    results['stats']['graph_decreased_log_posterior'] = graph.decreased_log_posterior
-    results['stats']['log_posterior'] = log_posterior
+    results['stats']['graph_log_likelihood'] = log_likelihood
+    results['stats']['graph_decreased_log_likelihood'] = graph.decreased_log_likelihood
+    results['stats']['log_likelihood'] = log_likelihood
     results['stats']['log_prior'] = prior.log_prior(graph.cn).sum()
 
     return results
@@ -241,13 +221,12 @@ fit_methods = [
 def fit(
     results_filename,
     experiment_filename,
-    h_init_filename,
+    init_params,
     config,
     ref_data_dir,
 ):
     fit_method = remixt.config.get_param(config, 'fit_method')
     normal_contamination = remixt.config.get_param(config, 'normal_contamination')
-    cn_proportions_filename = remixt.config.get_filename(config, ref_data_dir, 'cn_proportions')
 
     likelihood_min_segment_length = remixt.config.get_param(config, 'likelihood_min_segment_length')
     likelihood_min_proportion_genotyped = remixt.config.get_param(config, 'likelihood_min_proportion_genotyped')
@@ -255,17 +234,15 @@ def fit(
     with open(experiment_filename, 'r') as f:
         experiment = pickle.load(f)
 
-    with open(h_init_filename, 'r') as f:
-        h_init = pickle.load(f)
+    h_init = init_params['h_init']
+    divergence_weight = init_params['divergence_weight']
 
     # Create emission / prior / copy number models
     emission = remixt.likelihood.NegBinBetaBinLikelihood(experiment.x, experiment.l)
     emission.h = h_init
 
     # Create prior probability model
-    cn_probs = create_cn_prior_matrix(cn_proportions_filename)
-    prior = remixt.cn_model.CopyNumberPrior(cn_probs)
-    prior.set_lengths(experiment.l)
+    prior = remixt.cn_model.CopyNumberPrior(experiment.l, divergence_weight=divergence_weight)
 
     # Mask amplifications and poorly modelled segments from likelihood
     emission.add_amplification_mask(prior.cn_max)
@@ -336,32 +313,35 @@ def fit(
 
 def collate(collate_filename, experiment_filename, init_results_filename, fit_results_filenames):
 
+    # Extract the statistics for selecting solutions
+    stats_table = list()
+    for init_id, results_filename in fit_results_filenames.iteritems():
+        with pd.HDFStore(results_filename, 'r') as results:
+            stats = results['stats']
+            stats['init_id'] = init_id
+            stats_table.append(stats)
+    stats_table = pd.concat(stats_table, ignore_index=True)
+
+    # Select the solution that maximizes the likelihood for a given mode of the
+    # minor read depth (mode_idx) and prior on divergence (divergence_weight)
+    stats_table.sort('log_likelihood', ascending=False, inplace=True)
+    stats_table = stats_table.groupby(['mode_idx', 'divergence_weight'], sort=False).first().reset_index()
+
+    # Write out selected solutions
     with pd.HDFStore(collate_filename, 'w') as collated:
+        collated['stats'] = stats_table
 
         with pd.HDFStore(init_results_filename, 'r') as results:
             for key, value in results.iteritems():
                 collated[key] = results[key]
 
-        stats_table = list()
-
-        for idx, results_filename in fit_results_filenames.iteritems():
+        for init_id, results_filename in fit_results_filenames.iteritems():
+            if init_id not in stats_table['init_id']:
+                pass
 
             with pd.HDFStore(results_filename, 'r') as results:
                 for key, value in results.iteritems():
-                    collated['solutions/solution_{0}/{1}'.format(idx, key)] = results[key]
-
-                stats = results['stats']
-                stats['idx'] = idx
-
-                stats_table.append(stats)
-
-        stats_table = pd.concat(stats_table, ignore_index=True)
-        stats_table['bic'] = -2. * stats_table['log_posterior'] + stats_table['num_clones'] * np.log(stats_table['num_segments'])
-        stats_table.sort('bic', ascending=True, inplace=True)
-        stats_table['bic_optimal'] = False
-        stats_table.loc[stats_table.index[0], 'bic_optimal'] = True
-
-        collated['stats'] = stats_table
+                    collated['solutions/solution_{0}/{1}'.format(init_id, key)] = results[key]
 
         with open(experiment_filename, 'r') as f:
             experiment = pickle.load(f)

@@ -80,6 +80,5 @@ setup(
     name='remixt',
     version='1.0',
     packages=find_packages(),
-    package_data={'remixt': ['data/cn_proportions.tsv']},
     ext_modules=cythonize(extensions),
 )

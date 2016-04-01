@@ -92,42 +92,6 @@ def calculate_candidate_h_monoclonal(minor_modes):
     return h_candidates
 
 
-def calculate_candidate_h_polyclonal(h_mono, num_clones=None, num_mix_samples=20, dirichlet_alpha=1.0):
-    """ Calculate modes in distribution of read depths for minor allele
-
-    Args:
-        h_mono (numpy.array): candidate single clone haploid depth
-
-    Kwargs:
-        num_clones (int): number of clones, if None, sample from poisson
-        num_mix_samples (int): number of mixture fraction samples
-        dirichlet_alpha (float): alpha parameter for dirichlet sampling
-
-    Returns:
-        list of numpy.array: candidate haploid normal and tumour read depths
-
-    """
-    
-    h_candidates = list()
-
-    for _ in xrange(num_mix_samples):
-        if num_clones is None:
-            while True:
-                num_tumour_clones = np.random.geometric(p=0.5)
-                if num_tumour_clones <= 3:
-                    break
-        else:
-            num_tumour_clones = num_clones - 1
-
-        mix = np.random.dirichlet([dirichlet_alpha] * num_tumour_clones)
-
-        h_poly = np.array([h_mono[0]] + list(h_mono[1] * mix))
-
-        h_candidates.append(h_poly)
-
-    return h_candidates
-
-
 def estimate_ploidy(h, experiment):
     """ Estimate ploidy for a candidate haploid depth.
 

@@ -4,19 +4,10 @@ import pandas as pd
 import scipy
 import scipy.optimize
 import scipy.misc
-from scipy.special import gammaln
-
-import sklearn
-import sklearn.cluster
-import sklearn.mixture
 
 from remixt.hmm import _viterbi as hmm_viterbi
 from remixt.hmm import _forward as hmm_forward
 from remixt.hmm import _backward as hmm_backward
-
-import remixt.genome_graph
-import remixt.utils
-import remixt.em
 
 
 class ProbabilityError(ValueError):
@@ -39,38 +30,20 @@ class ProbabilityError(ValueError):
 
 class CopyNumberPrior(object):
 
-    def __init__(self, cn_prob, allele_specific=True):
-        """Create a copy number model.
+    def __init__(self, l, max_divergence=1, divergence_weight=1e-6):
+        """ Create a copy number prior.
 
         Args:
-            cn_prob (numpy.array): copy number prior probability matrix
+            l (numpy.array): observed lengths of segments
 
         KwArgs:
-            allele_specific (boolean): calculate allele specific prior
-
-        Copy number probability matrix is a symmetric matrix of prior probabilities of
-        each copy number state.  The last row and column are the prior of seeing a 
-        state not representable by the matrix.
+            max_divergence (int): maxmimum allowed divergence between segments
+            divergence_weight (float): prior length scaled weight on divergent segments
 
         """
-
-        self.allele_specific = allele_specific
-
-        self.cn_max = cn_prob.shape[0] - 2
-        self.cn_prob = cn_prob
-        self.cn_prob_allele = cn_prob.sum(axis=1)
-
-        self.transition_log_prob = -10.
-        self.transition_model = 'step'
-
-        self.min_length_likelihood = 10000
         
-        self.divergence_probs = np.array([0.8, 0.2])
-        self.max_divergence = 1
-
-        self.prior_cn_scale = 0.
-
-        self.prior_divergence = 1e-6
+        self.max_divergence = max_divergence
+        self.divergence_weight = divergence_weight
 
 
     def log_prior(self, cn):
@@ -84,53 +57,21 @@ class CopyNumberPrior(object):
 
         """
 
-        cn = cn.copy().astype(int)
-
-        if self.allele_specific:
-            cn[np.any(cn > self.cn_max + 1, axis=(1, 2)),:,:] = self.cn_max + 1
-
-            cn_minor, cn_major = cn.swapaxes(0, 2).swapaxes(1, 2)
-
-            cn_prop = self.cn_prob[cn_minor, cn_major]
-
-            lp = np.sum(np.log(cn_prop), axis=1) * self.l * self.prior_cn_scale
-
-        else:
-            cn[cn > self.cn_max + 1] = self.cn_max + 1
-
-            cn_prop = self.cn_prob_allele[cn]
-
-            lp = np.sum(np.log(cn_prop), axis=(1, 2)) * self.l * self.prior_cn_scale
-
         subclonal = (cn[:,1:,:].max(axis=1) != cn[:,1:,:].min(axis=1)) * 1
-        lp -= np.sum(subclonal, axis=1) * self.l * self.prior_divergence
+        lp = np.sum(subclonal, axis=1) * self.l * self.divergence_weight
 
         subclonal_divergence = (cn[:,1:,:].max(axis=1) - cn[:,1:,:].min(axis=1)) * 1
         invalid_divergence = (subclonal_divergence > self.max_divergence).any(axis=1)
 
         lp[invalid_divergence] -= 1000.
 
-        lp[self.l < self.min_length_likelihood] = 0.0
-
         return lp
-
-
-    def set_lengths(self, l):
-        """ Set the observed lengths
-
-        Args:
-            l (numpy.array): observed lengths of segments
-
-        """
-
-        self.l = l
-
 
 
 class HiddenMarkovModel(object):
 
     def __init__(self, N, M, emission, prior, chains, normal_contamination=True):
-        """Create a copy number model.
+        """ Create a copy number model.
 
         Args:
             N (int): number of segments

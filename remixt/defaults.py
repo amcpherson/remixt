@@ -86,10 +86,13 @@ gc_position_offset                          = 4
 # Method to use for fitting segment/breakpoint copy number model
 fit_method                                  = 'hmm_graph'
 
-# Maximum number of clones to consider including tumour and 1 contaminating normal
-num_clones                                  = 3
+# Tumour mixture fractions for initialization of haploid depth
+# parameter optimization
+tumour_mix_fractions                        = [[0.5, 0.5], [0.6, 0.4], [0.75, 0.25], [0.9, 0.1]]
 
-# Maximum ploidy of initial haploid depth parameters
+# Maximum and minimum ploidy of initial haploid depth parameters
+# Ploidy selection can be performed by setting min and max ploidy to a small range
+min_ploidy                                  = 0.5
 max_ploidy                                  = 5.0
 
 # Table of expected proportion of each genotype for use as prior,
@@ -105,4 +108,6 @@ likelihood_min_segment_length               = 10000
 # Minimum proportion genotyped reads for segments modelled by the likelihood
 likelihood_min_proportion_genotyped         = 0.01
 
+# Length scaled weights on divergent segments
+divergence_weights                          = [1e-6, 1e-7, 1e-8]
 
