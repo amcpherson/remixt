@@ -503,17 +503,17 @@ def build_split_panel(cnv_source_left, cnv_source_right, brk_source, chromosome_
 def build_solutions_panel(patient, sample, solutions_source, read_depth_source):
     # Create solutions table
     solutions_columns = [
-        'init_id',
-        'log_likelihood',
-        'ploidy',
-        'prop_subclonal',
-        'haploid_normal',
-        'haploid_tumour',
-        'clone_1_fraction',
-        'clone_2_fraction',
-        'divergence_weight',
+        ('init_id', NumberFormatter(format='0')),
+        ('log_likelihood', NumberFormatter(format='0.000')),
+        ('ploidy', NumberFormatter(format='0.000')),
+        ('prop_subclonal', NumberFormatter(format='0.000')),
+        ('haploid_normal', NumberFormatter(format='0.000')),
+        ('haploid_tumour', NumberFormatter(format='0.000')),
+        ('clone_1_fraction', NumberFormatter(format='0.000')),
+        ('clone_2_fraction', NumberFormatter(format='0.000')),
+        ('divergence_weight', None),
     ]
-    columns = [TableColumn(field=a, title=a) for a in solutions_columns]
+    columns = [TableColumn(field=a, title=a, formatter=f) for a, f in solutions_columns]
     solutions_table = DataTable(source=solutions_source, columns=columns, width=1000, height=500)
 
     readdepth_plot = Figure(
