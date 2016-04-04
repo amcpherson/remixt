@@ -309,6 +309,7 @@ def fit(
         store['h_init'] = pd.Series(h_init, index=xrange(len(h)))
         store['h'] = pd.Series(h, index=xrange(len(h)))
         store['cn'] = cn_table
+        store['mix'] = h.values / h.values.sum()
         store['brk_cn'] = brk_cn_table
         store['negbin_r'] = pd.Series(emission.r, index=xrange(len(emission.r)))
         store['betabin_M'] = pd.Series(emission.M, index=xrange(len(emission.M)))
