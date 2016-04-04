@@ -187,20 +187,20 @@ def retrieve_solution_data(patient, sample):
     for idx, row in solutions_df.iterrows():
 
         # Calculate ploidy
-        cnv = retrieve_cnv_data(patient, sample, row['idx'])
+        cnv = retrieve_cnv_data(patient, sample, row['init_id'])
         cnv = cnv.replace([np.inf, -np.inf], np.nan).dropna()
         ploidy = (cnv['length'] * (cnv['major_raw_e'] + cnv['minor_raw_e'])).sum() / cnv['length'].sum()
         solutions_df.loc[idx, 'ploidy'] = ploidy
 
         # Calculate proportion subclonal
         subclonal = (
-            (cnv['major_1'] != cnv['major_2']) +
-            (cnv['minor_1'] != cnv['minor_2']))
+            ((cnv['major_1'] != cnv['major_2']) * 1) +
+            ((cnv['minor_1'] != cnv['minor_2']) * 1))
         prop_subclonal = (subclonal * cnv['length']).sum() / (2. * cnv['length'].sum())
         solutions_df.loc[idx, 'prop_subclonal'] = prop_subclonal
 
         # Add haploid normal/tumour depth and clone fraction
-        h = store['/solutions/solution_{0}/h'.format(row['idx'])]
+        h = store['/solutions/solution_{0}/h'.format(row['init_id'])]
         solutions_df.loc[idx, 'haploid_normal'] = h.values[0]
         solutions_df.loc[idx, 'haploid_tumour'] = h.values[1:].sum()
         solutions_df.loc[idx, 'haploid_tumour_mode'] = h.values.sum()
@@ -215,7 +215,7 @@ def retrieve_solutions(patient, sample):
     """
     store = sample_stores[(patient, sample)]
 
-    return list(store['stats']['idx'].astype(str).values)
+    return list(store['stats']['init_id'].astype(str).values)
 
 
 def retrieve_cnv_data(patient, sample, solution, chromosome=''):
@@ -502,9 +502,17 @@ def build_split_panel(cnv_source_left, cnv_source_right, brk_source, chromosome_
 
 def build_solutions_panel(patient, sample, solutions_source, read_depth_source):
     # Create solutions table
-    solutions_columns = ['log_posterior', 'log_posterior_graph', 'num_clones',
-       'num_segments', 'idx', 'ploidy', 'prop_subclonal',
-       'haploid_normal', 'haploid_tumour', 'clone_1_fraction', 'clone_2_fraction']
+    solutions_columns = [
+        'init_id',
+        'log_likelihood',
+        'ploidy',
+        'prop_subclonal',
+        'haploid_normal',
+        'haploid_tumour',
+        'clone_1_fraction',
+        'clone_2_fraction',
+        'divergence_weight',
+    ]
     columns = [TableColumn(field=a, title=a) for a in solutions_columns]
     solutions_table = DataTable(source=solutions_source, columns=columns, width=1000, height=500)
 
