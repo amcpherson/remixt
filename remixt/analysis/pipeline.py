@@ -65,32 +65,31 @@ def init(
     return dict(enumerate(init_params))
 
 
-def fit_hmm_viterbi(experiment, emission, prior, h_init, max_copy_number, normal_contamination):
+def fit_hmm_viterbi(
+    experiment,
+    emission,
+    prior,
+    max_copy_number,
+    normal_contamination,
+    likelihood_params,
+):
     N = experiment.l.shape[0]
-    M = h_init.shape[0]
+    M = emission.h.shape[0]
 
     results = dict()
     results['stats'] = dict()
 
-    # Initialize haploid depths
-    emission.h = h_init
-
-    model = remixt.cn_model.HiddenMarkovModel(N, M, emission, prior, experiment.chains, max_copy_number=max_copy_number, normal_contamination=normal_contamination)
+    model = remixt.cn_model.HiddenMarkovModel(
+        N, M, emission, prior, experiment.chains,
+        max_copy_number=max_copy_number,
+        normal_contamination=normal_contamination,
+    )
 
     # Estimate haploid depths and overdispersion parameters
     estimator = remixt.em.ExpectationMaximizationEstimator()
-    log_likelihood = estimator.learn_param(
-        model,
-        emission.h_param,
-        emission.r_param,
-        emission.M_param,
-        emission.z_param,
-        emission.hdel_mu_param,
-        emission.loh_p_param,
-    )
-    results['h'] = emission.h
-    results['r'] = emission.r
-    results['M'] = emission.M
+    log_likelihood = estimator.learn_param(model, *likelihood_params)
+
+    # Save estimation statistics
     results['stats']['h_log_likelihood'] = log_likelihood
     results['stats']['h_converged'] = estimator.converged
     results['stats']['h_em_iter'] = estimator.em_iter
@@ -112,40 +111,35 @@ def fit_hmm_viterbi(experiment, emission, prior, h_init, max_copy_number, normal
     return results
 
 
-def fit_hmm_graph(experiment, emission, prior, h_init, max_copy_number, normal_contamination):
+def fit_hmm_graph(
+    experiment,
+    emission,
+    prior,
+    max_copy_number,
+    normal_contamination,
+    likelihood_params,
+):
     N = experiment.l.shape[0]
-    M = h_init.shape[0]
+    M = emission.h.shape[0]
 
     results = dict()
     results['stats'] = dict()
 
-    # Initialize haploid depths
-    emission.h = h_init
-
-    model = remixt.cn_model.HiddenMarkovModel(N, M, emission, prior, experiment.chains, max_copy_number=max_copy_number, normal_contamination=normal_contamination)
+    model = remixt.cn_model.HiddenMarkovModel(
+        N, M, emission, prior, experiment.chains,
+        max_copy_number=max_copy_number,
+        normal_contamination=normal_contamination,
+    )
 
     # Estimate haploid depths
     estimator = remixt.em.ExpectationMaximizationEstimator()
-    log_likelihood = estimator.learn_param(
-        model,
-        emission.h_param,
-        emission.r_param,
-        emission.M_param,
-        emission.z_param,
-        emission.hdel_mu_param,
-        emission.loh_p_param,
-    )
-    results['h'] = emission.h
-    results['r'] = emission.r
-    results['M'] = emission.M
+    log_likelihood = estimator.learn_param(model, *likelihood_params)
+
+    # Save estimation statistics
     results['stats']['h_log_likelihood'] = log_likelihood
     results['stats']['h_converged'] = estimator.converged
     results['stats']['h_em_iter'] = estimator.em_iter
     results['stats']['h_error_message'] = estimator.error_message
-
-    # Set to allele independent prior as allele dependence will
-    # cause the genome graph algorithm to fail
-    prior.allele_specific = False
 
     # Infer copy number from viterbi
     _, cn_init = model.optimal_state()
@@ -168,19 +162,33 @@ def fit_hmm_graph(experiment, emission, prior, h_init, max_copy_number, normal_c
     return results
 
 
-def fit_graph(experiment, emission, prior, h_init, max_copy_number, normal_contamination):
+def fit_graph(
+    experiment,
+    emission,
+    prior,
+    max_copy_number,
+    normal_contamination,
+    likelihood_params,
+):
     N = experiment.l.shape[0]
-    M = h_init.shape[0]
+    M = emission.h.shape[0]
 
     results = dict()
     results['stats'] = dict()
+
+    # Save initial h in preparation for single clone viterbi
+    h_init = emission.h
 
     # Infer initial copy number from viterbi with 1 tumour clone
     h_init_single = np.zeros((2,))
     h_init_single[0] = h_init[0]
     h_init_single[1] = h_init[1:].sum()
     emission.h = h_init_single
-    model = remixt.cn_model.HiddenMarkovModel(N, 2, emission, prior, experiment.chains, max_copy_number=max_copy_number, normal_contamination=normal_contamination)
+    model = remixt.cn_model.HiddenMarkovModel(
+        N, 2, emission, prior, experiment.chains,
+        max_copy_number=max_copy_number,
+        normal_contamination=normal_contamination,
+    )
     _, cn = model.optimal_state()
     cn_init = np.ones((N, M, 2))
     for m in xrange(1, M):
@@ -196,12 +204,13 @@ def fit_graph(experiment, emission, prior, h_init, max_copy_number, normal_conta
 
     # Estimate haploid depths and copy number
     estimator = remixt.em.HardAssignmentEstimator()
-    h, log_likelihood, h_converged = estimator.learn_param(graph, 'h', h_init)
+    log_likelihood = estimator.learn_param(graph, *likelihood_params)
 
-    results['h'] = h
+    # Save copy number and estimation statistics
     results['cn'] = graph.cn
     results['brk_cn'] = graph.breakpoint_copy_number
     results['stats']['h_em_iter'] = estimator.em_iter
+    results['stats']['h_converged'] = estimator.converged
     results['stats']['graph_opt_iter'] = graph.opt_iter
     results['stats']['graph_log_likelihood'] = log_likelihood
     results['stats']['graph_decreased_log_posterior'] = graph.decreased_log_posterior
@@ -211,11 +220,11 @@ def fit_graph(experiment, emission, prior, h_init, max_copy_number, normal_conta
     return results
 
 
-fit_methods = [
-    'hmm_viterbi',
-    'hmm_graph',
-    'graph',
-]
+fit_methods = {
+    'hmm_viterbi': fit_hmm_viterbi,
+    'hmm_graph': fit_hmm_graph,
+    'graph': fit_graph,
+}
 
 
 def fit(
@@ -225,7 +234,7 @@ def fit(
     config,
     ref_data_dir,
 ):
-    fit_method = remixt.config.get_param(config, 'fit_method')
+    fit_method_name = remixt.config.get_param(config, 'fit_method')
     normal_contamination = remixt.config.get_param(config, 'normal_contamination')
 
     likelihood_min_segment_length = remixt.config.get_param(config, 'likelihood_min_segment_length')
@@ -250,16 +259,33 @@ def fit(
     emission.add_segment_length_mask(likelihood_min_segment_length)
     emission.add_proportion_genotyped_mask(likelihood_min_proportion_genotyped)
 
-    if fit_method == 'hmm_viterbi':
-        fit_results = fit_hmm_viterbi(experiment, emission, prior, h_init, max_copy_number, normal_contamination)
-    elif fit_method == 'hmm_graph':
-        fit_results = fit_hmm_graph(experiment, emission, prior, h_init, max_copy_number, normal_contamination)
-    elif fit_method == 'graph':
-        fit_results = fit_graph(experiment, emission, prior, h_init, max_copy_number, normal_contamination)
-    else:
+    # Additional parameters of the likelihood to include in optimization
+    likelihood_params = [
+        emission.h_param,
+        emission.r_param,
+        emission.M_param,
+        emission.z_param,
+        emission.hdel_mu_param,
+        emission.loh_p_param,
+    ]
+
+    try:
+        fit_method = fit_methods[fit_method_name]
+    except KeyError:
         raise ValueError('unknown fit method {}'.format(fit_method))
 
-    h = fit_results['h']
+    # Fit using the specified model
+    fit_results = fit_method(
+        experiment,
+        emission,
+        prior,
+        max_copy_number,
+        normal_contamination,
+        likelihood_params,
+    )
+
+    h = emission.h
+
     cn = fit_results['cn']
     brk_cn = fit_results['brk_cn']
 
@@ -278,12 +304,12 @@ def fit(
     # Create copy number table
     # Account for both orderings of the two breakends
     column_swap = {
-        'n_1':'n_2',
-        'ell_1':'ell_2',
-        'side_1':'side_2',
-        'n_2':'n_1',
-        'ell_2':'ell_1',
-        'side_2':'side_1', 
+        'n_1': 'n_2',
+        'ell_1': 'ell_2',
+        'side_1': 'side_2',
+        'n_2': 'n_1',
+        'ell_2': 'ell_1',
+        'side_2': 'side_1',
     }
     brk_cn_table_1 = brk_cn.merge(experiment.breakpoint_segment_data)
     brk_cn_table_2 = brk_cn.merge(experiment.breakpoint_segment_data.rename(columns=column_swap))
@@ -307,12 +333,11 @@ def fit(
     with pd.HDFStore(results_filename, 'w') as store:
         store['stats'] = stats_table
         store['h_init'] = pd.Series(h_init, index=xrange(len(h)))
-        store['h'] = pd.Series(h, index=xrange(len(h)))
         store['cn'] = cn_table
-        store['mix'] = h.values / h.values.sum()
+        store['mix'] = pd.Series(h / h.sum(), index=xrange(len(h)))
         store['brk_cn'] = brk_cn_table
-        store['negbin_r'] = pd.Series(emission.r, index=xrange(len(emission.r)))
-        store['betabin_M'] = pd.Series(emission.M, index=xrange(len(emission.M)))
+        for param in likelihood_params:
+            store[param.name] = pd.Series(param.value, index=xrange(len(param.value)))
 
 
 def collate(collate_filename, experiment_filename, init_results_filename, fit_results_filenames):
@@ -353,5 +378,4 @@ def collate(collate_filename, experiment_filename, init_results_filename, fit_re
         collated['breakpoints'] = experiment.breakpoint_data
         collated['reference_adjacencies'] = pd.DataFrame(list(experiment.adjacencies), columns=['n_1', 'n_2'])
         collated['breakpoint_adjacencies'] = experiment.breakpoint_segment_data
-
 
