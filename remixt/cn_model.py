@@ -47,6 +47,9 @@ class CopyNumberPrior(object):
         self.max_divergence = max_divergence
         self.divergence_weight = divergence_weight
 
+        if divergence_weight < 0.:
+            raise ValueError('divergence weight should be positive, was {}'.format(divergence_weight))
+
 
     def log_prior(self, cn):
         """ Evaluate log prior probability of segment copy number.
@@ -60,7 +63,7 @@ class CopyNumberPrior(object):
         """
 
         subclonal = (cn[:,1:,:].max(axis=1) != cn[:,1:,:].min(axis=1)) * 1
-        lp = np.sum(subclonal, axis=1) * self.l * self.divergence_weight
+        lp = -1.0 * np.sum(subclonal, axis=1) * self.l * self.divergence_weight
 
         subclonal_divergence = (cn[:,1:,:].max(axis=1) - cn[:,1:,:].min(axis=1)) * 1
         invalid_divergence = (subclonal_divergence > self.max_divergence).any(axis=1)
