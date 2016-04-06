@@ -125,9 +125,13 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config, re
 
 def gc_lowess(gc_samples_filename, gc_dist_filename, gc_table_filename, gc_resolution=100):
 
-    gc_samples = pd.read_csv(gc_samples_filename, sep='\t', names=['chromosome', 'position', 'gc', 'count'])
+    gc_samples = pd.read_csv(
+        gc_samples_filename, sep='\t',
+        names=['chromosome', 'position', 'gc', 'count'],
+        converters={'chromosome': str},
+    )
 
-    gc_samples['gc_bin'] = np.round(gc_samples['gc'] * gc_resolution)
+    gc_samples['gc_bin'] = (gc_samples['gc'] * gc_resolution).round()
 
     gc_binned = gc_samples.groupby('gc_bin')['count'] \
                           .agg({'sum':np.sum, 'len':len, 'mean':np.mean}) \
