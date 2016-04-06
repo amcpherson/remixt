@@ -413,22 +413,30 @@ class GenomeGraph(object):
         # Merge in current copy number
         mod_bond_edge_costs = df_merge_product(self.bond_cn, 'sign', self.signs)
 
+        # Annotate edges as having positive unmodified copy number
+        mod_bond_edge_costs['is_used_unmod'] = (mod_bond_edge_costs.loc[:, self.cn_cols] > 0).any(axis=1)
+
         # Modify copy number
         for m in xrange(self.M):
             mod_bond_edge_costs[f_cn_col(m)] += mod_bond_edge_costs['sign'] * delta[m]
 
+        # Annotate edges as having positive modified copy number
+        mod_bond_edge_costs['is_used_mod'] = (mod_bond_edge_costs.loc[:, self.cn_cols] > 0).any(axis=1)
+
         # Set default edge cost to zero
         mod_bond_edge_costs['cost'] = 0
 
+        # Set unscaled cost as indicator of having modified positive copy
+        # number from original zero copy number
+        mod_bond_edge_costs['unscaled_cost'] = ((mod_bond_edge_costs['is_used_mod'] * 1) - (mod_bond_edge_costs['is_used_unmod']) * 1)
+
         # Set cost for telomere edges
         is_telomere = (mod_bond_edge_costs['is_telomere'])
-        mod_bond_edge_costs.loc[is_telomere, 'cost'] = (
-            self.telomere_cost * mod_bond_edge_costs.loc[is_telomere, 'sign'] * delta.sum())
+        mod_bond_edge_costs.loc[is_telomere, 'cost'] = self.telomere_cost * mod_bond_edge_costs.loc[is_telomere, 'unscaled_cost']
 
         # Set cost for breakpoint edges
         is_breakpoint = (mod_bond_edge_costs['is_breakpoint'])
-        mod_bond_edge_costs.loc[is_breakpoint, 'cost'] = (
-            self.breakpoint_cost * mod_bond_edge_costs.loc[is_breakpoint, 'sign'] * delta.sum())
+        mod_bond_edge_costs.loc[is_breakpoint, 'cost'] = self.breakpoint_cost * mod_bond_edge_costs.loc[is_breakpoint, 'unscaled_cost']
 
         # Set cost to infinite for edges with negative copy number
         for m in xrange(self.M):
@@ -668,15 +676,27 @@ class GenomeGraph(object):
         """
 
         log_likelihood = self.emission.log_likelihood(self.cn) + self.prior.log_prior(self.cn)
-
         log_likelihood = log_likelihood.sum()
 
-        telomere_copies = self.bond_cn.loc[self.bond_cn['is_telomere'], self.tumour_cn_cols].values.sum()
-        breakpoint_copies = self.bond_cn.loc[self.bond_cn['is_breakpoint'], self.tumour_cn_cols].values.sum()
+        log_likelihood += self.calculate_bond_log_prob()
 
-        log_posterior = (log_likelihood - self.telomere_cost * telomere_copies - self.breakpoint_cost * breakpoint_copies)
+        return log_likelihood
 
-        return log_posterior
+
+    def calculate_bond_log_prob(self):
+        """ Calculate log probability of bond copy number.
+
+        Returns:
+            float: log posterior of bond copy number.
+
+        """
+
+        telomere_is_used = (self.bond_cn.loc[self.bond_cn['is_telomere'], self.tumour_cn_cols] > 0).any(axis=1).sum()
+        breakpoint_is_used = (self.bond_cn.loc[self.bond_cn['is_breakpoint'], self.tumour_cn_cols] > 0).any(axis=1).sum()
+
+        log_prob = -(self.telomere_cost * telomere_is_used + self.breakpoint_cost * breakpoint_is_used)
+
+        return log_prob
 
 
     def build_deltas(self, M):
