@@ -369,15 +369,15 @@ def decode_breakpoints_naive(cn, adjacencies, breakpoints):
 
             n, side = breakend
 
-            if breakend not in breakend_adj:
-                continue
-
-            n_adj, side_adj = breakend_adj[breakend]
-
             for allele in (0, 1):
-
                 cn_self = cn[n,:,allele]
-                cn_adj = cn[n_adj,:,allele]
+
+                if breakend in breakend_adj:
+                    n_adj, side_adj = breakend_adj[breakend]
+                    cn_adj = cn[n_adj,:,allele]
+                else:
+                    cn_adj = 0
+
                 cn_residual = np.maximum(cn_self - cn_adj, 0)
 
                 breakend_cn[(n, allele, side)] = cn_residual
