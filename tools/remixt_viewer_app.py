@@ -69,6 +69,7 @@ def major_minor_segment_plot(source, major_column, minor_column, x_range, name, 
     """
     hover = HoverTool(
         tooltips=[
+            ('segment_idx', '@segment_idx'),
             ('chromosome', '@chromosome'),
             ('start', '@start'),
             ('end', '@end'),
@@ -227,6 +228,8 @@ def retrieve_cnv_data(patient, sample, solution, chromosome=''):
 
     if chromosome != '':
         cnv = cnv[cnv['chromosome'] == chromosome].copy()
+
+    cnv['segment_idx'] = cnv.index
 
     return cnv
 
