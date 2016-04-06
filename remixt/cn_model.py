@@ -104,7 +104,7 @@ class HiddenMarkovModel(object):
         self.cn_max = max_copy_number
 
         self.transition_log_prob = -10.
-        self.transition_model = 'step'
+        self.transition_model = 'step_allele'
 
         self.cn_dev_max = 1
 
@@ -188,6 +188,18 @@ class HiddenMarkovModel(object):
             self.log_trans_mat[:,:] = self.transition_log_prob
             self.log_trans_mat[xrange(num_states), xrange(num_states)] = 0.
 
+        elif self.transition_model == 'step_allele':
+
+            for idx_1 in xrange(num_states):
+                cn_1 = cn_states[idx_1]
+
+                for idx_2 in xrange(num_states):
+                    cn_2 = cn_states[idx_2]
+
+                    for ell in xrange(2):
+                        cn_is_diff = np.any(cn_1[0,1:,ell] != cn_2[0,1:,ell]) * 1.
+                        self.log_trans_mat[idx_1, idx_2] += self.transition_log_prob * cn_is_diff
+
         elif self.transition_model == 'geometric':
 
             for idx_1 in xrange(num_states):
@@ -197,9 +209,8 @@ class HiddenMarkovModel(object):
                     cn_2 = cn_states[idx_2]
 
                     for ell in xrange(2):
-
                         cn_diff = np.absolute(cn_1[0,1:,ell] - cn_2[0,1:,ell]).sum()
-                        self.log_trans_mat[idx_1, idx_2] = self.transition_log_prob * cn_diff
+                        self.log_trans_mat[idx_1, idx_2] += self.transition_log_prob * cn_diff
 
         else:
             raise ValueError('Unknown transition model {0}'.format(self.transition_model))
