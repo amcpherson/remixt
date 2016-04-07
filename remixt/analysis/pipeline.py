@@ -351,11 +351,6 @@ def collate(collate_filename, experiment_filename, init_results_filename, fit_re
             stats_table.append(stats)
     stats_table = pd.concat(stats_table, ignore_index=True)
 
-    # Select the solution that maximizes the likelihood for a given mode of the
-    # minor read depth (mode_idx) and prior on divergence (divergence_weight)
-    stats_table.sort('log_likelihood', ascending=False, inplace=True)
-    stats_table = stats_table.groupby(['mode_idx', 'divergence_weight'], sort=False).first().reset_index()
-
     # Write out selected solutions
     with pd.HDFStore(collate_filename, 'w') as collated:
         collated['stats'] = stats_table
@@ -365,13 +360,9 @@ def collate(collate_filename, experiment_filename, init_results_filename, fit_re
                 collated[key] = results[key]
 
         for init_id, results_filename in fit_results_filenames.iteritems():
-            table_prefix = 'solutions'
-            if init_id not in stats_table['init_id']:
-                table_prefix = 'solutions/sub_optimal'
-
             with pd.HDFStore(results_filename, 'r') as results:
                 for key, value in results.iteritems():
-                    collated['{0}/solution_{1}/{2}'.format(table_prefix, init_id, key)] = results[key]
+                    collated['solutions/solution_{1}/{2}'.format(init_id, key)] = results[key]
 
         with open(experiment_filename, 'r') as f:
             experiment = pickle.load(f)
