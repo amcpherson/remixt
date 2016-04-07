@@ -63,13 +63,13 @@ def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor'):
 
     major_segments = create_segments(cnv, major_col)
     minor_segments = create_segments(cnv, minor_col)
-    ax.add_collection(matplotlib.collections.LineCollection(major_segments, colors=segment_color_major, lw=2))
-    ax.add_collection(matplotlib.collections.LineCollection(minor_segments, colors=segment_color_minor, lw=2))
+    ax.add_collection(matplotlib.collections.LineCollection(major_segments, colors=segment_color_major, lw=1))
+    ax.add_collection(matplotlib.collections.LineCollection(minor_segments, colors=segment_color_minor, lw=1))
 
     major_connectors = create_connectors(cnv, major_col)
     minor_connectors = create_connectors(cnv, minor_col)
-    ax.add_collection(matplotlib.collections.LineCollection(major_connectors, colors=segment_color_major, lw=2))
-    ax.add_collection(matplotlib.collections.LineCollection(minor_connectors, colors=segment_color_minor, lw=2))
+    ax.add_collection(matplotlib.collections.LineCollection(major_connectors, colors=segment_color_major, lw=1))
+    ax.add_collection(matplotlib.collections.LineCollection(minor_connectors, colors=segment_color_minor, lw=1))
 
     major_quads = create_quads(cnv, major_col)
     minor_quads = create_quads(cnv, minor_col)
@@ -132,7 +132,7 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', min
 
     plot_cnv_segments(ax, cnv, major_col=major_col, minor_col=minor_col)
 
-    ax.set_ylim((0, maxcopies+.6))
+    ax.set_ylim((-0.4, maxcopies+.6))
     ax.set_yticks(range(0, maxcopies+1))
     ax.set_yticklabels(ax.get_yticks(), ha='left')
     ax.yaxis.tick_left()
