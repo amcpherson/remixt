@@ -19,14 +19,18 @@ class gaussian_kde_set_covariance(scipy.stats.gaussian_kde):
         self._norm_factor = np.sqrt(2*np.pi*self.covariance) * self.n
 
 
-def filled_density(ax, data, c, a, xmin, xmax, cov):
+def filled_density(ax, data, c, a, xmin, xmax, cov, rotate=False):
     density = gaussian_kde_set_covariance(data, cov)
     xs = [xmin] + list(np.linspace(xmin, xmax, 2000)) + [xmax]
     ys = density(xs)
     ys[0] = 0.0
     ys[-1] = 0.0
-    ax.plot(xs, ys, color=c, alpha=a)
-    ax.fill(xs, ys, color=c, alpha=a)
+    if rotate:
+        ax.plot(ys, xs, color=c, alpha=a)
+        ax.fill_betweenx(xs, ys, color=c, alpha=a)
+    else:
+        ax.plot(xs, ys, color=c, alpha=a)
+        ax.fill(xs, ys, color=c, alpha=a)
 
 
 def weighted_resample(data, weights, num_samples=10000, randomize=False):
@@ -39,11 +43,11 @@ def weighted_resample(data, weights, num_samples=10000, randomize=False):
     return samples
 
 
-def filled_density_weighted(ax, data, weights, c, a, xmim, xmax, cov):
+def filled_density_weighted(ax, data, weights, c, a, xmim, xmax, cov, rotate=False):
     weights = weights.astype(float)
     resample_prob = weights / weights.sum()
     samples = np.random.choice(data, size=10000, replace=True, p=resample_prob)
-    filled_density(ax, samples, c, a, xmim, xmax, cov)
+    filled_density(ax, samples, c, a, xmim, xmax, cov, rotate=rotate)
 
 
 def read_sequences(fasta_filename):
