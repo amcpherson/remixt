@@ -12,6 +12,34 @@ import remixt.analysis.experiment
 import remixt.analysis.readdepth
 
 
+def merge_breakpoint_prediction_info(breakpoint_cn, breakpoint_info):
+    """ Merge prediction info based on segment, allele, side break end columns.
+
+    Args:
+        breakpoint_cn (pandas.DataFrame): table of breakpoint copy number
+        breakpoint_info (pandas.DataFrame): table of breakpoint information
+
+    Returns:
+        pandas.DataFrame: merged table
+    """
+
+    # Create copy number table
+    # Account for both orderings of the two breakends
+    column_swap = {
+        'n_1': 'n_2',
+        'ell_1': 'ell_2',
+        'side_1': 'side_2',
+        'n_2': 'n_1',
+        'ell_2': 'ell_1',
+        'side_2': 'side_1',
+    }
+    brk_cn_table_1 = breakpoint_cn.merge(breakpoint_info)
+    brk_cn_table_2 = breakpoint_cn.merge(breakpoint_info.rename(columns=column_swap))
+    brk_cn_table = pd.concat([brk_cn_table_1, brk_cn_table_2], ignore_index=True)
+
+    return brk_cn_table
+
+
 def init(
     init_results_filename,
     experiment_filename,
@@ -301,19 +329,7 @@ def fit(
     cn_table['minor_residual'] = np.absolute(cn_table['minor_readcount'] - cn_table['minor_expected'])
     cn_table['total_residual'] = np.absolute(cn_table['readcount'] - cn_table['total_expected'])
 
-    # Create copy number table
-    # Account for both orderings of the two breakends
-    column_swap = {
-        'n_1': 'n_2',
-        'ell_1': 'ell_2',
-        'side_1': 'side_2',
-        'n_2': 'n_1',
-        'ell_2': 'ell_1',
-        'side_2': 'side_1',
-    }
-    brk_cn_table_1 = brk_cn.merge(experiment.breakpoint_segment_data)
-    brk_cn_table_2 = brk_cn.merge(experiment.breakpoint_segment_data.rename(columns=column_swap))
-    brk_cn_table = pd.concat([brk_cn_table_1, brk_cn_table_2], ignore_index=True)
+    brk_cn_table = merge_breakpoint_prediction_info(brk_cn, experiment.breakpoint_segment_data)
 
     ploidy = (cn[:,1:,:].mean(axis=1).T * experiment.l).sum() / experiment.l.sum()
     divergent = (cn[:,1:,:].max(axis=1) != cn[:,1:,:].min(axis=1)) * 1.
