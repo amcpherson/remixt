@@ -86,7 +86,7 @@ def calculate_candidate_h_monoclonal(minor_modes):
         # Consider the possibility that the first minor mode
         # is composed of segments with 2 minor copies
         for scale in (1., 0.5):
-            h_mono = np.array([h_normal, h_tumour])
+            h_mono = np.array([h_normal, h_tumour * scale])
             h_candidates.append(h_mono)
 
     return h_candidates

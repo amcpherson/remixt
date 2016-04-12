@@ -1,13 +1,14 @@
+import collections
 import subprocess
-import time
 import itertools
 import uuid
 import os
-import pickle
+import networkx
+import random
 import numpy as np
 import pandas as pd
 
-import blossomv
+import remixt.blossomv
 
 blossomv_bin = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir, 'bin', 'blossom5'))
 
@@ -53,448 +54,545 @@ def min_weight_perfect_matching(edges):
     return min_cost_edges
 
 
-def df_stack(df, cols, suffixes):
-
-    other_columns = list(df.columns.values)
-    for suffix in suffixes:
-        for col in cols:
-            other_columns.remove(col + suffix)
-
-    stacked = list()
-
-    for suffix in suffixes:
-        stack_columns = list()
-        for col in cols:
-            stack_columns.append(col + suffix)
-        data = df[stack_columns + other_columns].copy()
-        data['suffix'] = suffix
-        data = data.rename(columns=dict(zip(stack_columns, cols)))
-        stacked.append(data)
-
-    return pd.concat(stacked, ignore_index=True)
-
-def df_merge_product(df, col, values):
-
-    merged = list()
-
-    for value in values:
-
-        data = df.copy()
-        data[col] = value
-
-        merged.append(data)
-
-    return pd.concat(merged, ignore_index=True)
-
-
 vertex_cols = ['n', 'ell', 'side']
 
 
 edge_cols = ['n_1', 'ell_1', 'side_1', 'n_2', 'ell_2', 'side_2']
 
 
-def create_adj_table(adj):
-
-    adj_table = list()
-
-    for ((n_1, ell_1), side_1), ((n_2, ell_2), side_2) in adj:
-
-        end_1 = (n_1, ell_1, side_1)
-        end_2 = (n_2, ell_2, side_2)
-
-        # Ensure that vertices are sorted for edge
-        end_1, end_2 = sorted([end_1, end_2])
-
-        adj_table.append(end_1 + end_2)
-
-    adj_table = pd.DataFrame(adj_table, columns=edge_cols)
-
-    return adj_table
-
-
 def f_cn_col(m):
     return 'cn_{0}'.format(m)
 
+N = 3
+adjacencies = [(0, 1), (1, 2)]
+breakpoints = [((1, 0), (2, 0)), ((0, 0), (0, 1))]
 
-class GenomeGraph(object):
+def create_genome_graph(N, adjacencies, breakpoints):
+    """ Create a genome graph.
 
-    def __init__(self, emission, prior, adjacencies, breakpoints):
+    Args:
+        N (int): number of segments
+        adjacencies (list of tuple): wild type adjacencies
+        breakpoints (list of tuple): breakpoints, pairs of segment, side
+
+    Returns:
+        networkx.MultiGraph: genome graph
+
+    A genome graph is defined as a multi-graph on the set of segment
+    extremities, plus additional dummy telomere nodes.
+
+    Edges are classified as segment or bond. Bond edges are further
+    classified as breakpoint, reference or telomere.  Segment edges
+    include dummy edges between dummy telomere nodes.
+
+    Telomere edges are a complete bipartite graph on regular segment
+    extremeties and the dummy segment extremeties.  Dummy edges are
+    a complete graph on dummy nodes.
+
+    Each edge is given an edge index unique within its edge type.
+
+    """
+
+    G = networkx.MultiGraph()
+
+    num_dummy_nodes = 2
+
+    # Segment node generator
+    def segment_nodes():
+        return itertools.product(xrange(N), (0, 1))
+
+    # Dummy node generator
+    def dummy_nodes():
+        return itertools.product(xrange(N, N + num_dummy_nodes), (None,))
+
+    # Dummy edge generator, complete graph on dummy nodes
+    def dummy_edges():
+        return itertools.combinations(dummy_nodes(), 2)
+
+    # Telomere edge generator, complete bipartite graph on segment and dummy nodes
+    def telomere_edges():
+        return itertools.product(segment_nodes(), dummy_nodes())
+
+    # Add segment end nodes
+    G.add_nodes_from(segment_nodes())
+
+    # Add dummy nodes
+    G.add_nodes_from(dummy_nodes())
+
+    # Add segment edges
+    for n in xrange(N):
+        for allele in xrange(2):
+            node_1 = (n, 0)
+            node_2 = (n, 1)
+            G.add_edge(node_1, node_2, edge_type='segment', edge_idx=n, allele=allele)
+
+    # Add dummy edges as complete graph on dummy nodes
+    num_dummy_edges = 0
+    for edge_idx, (node_1, node_2) in enumerate(dummy_edges()):
+        G.add_edge(node_1, node_2, edge_type='dummy', edge_idx=edge_idx)
+        num_dummy_edges += 1
+
+    # Add reference edges
+    for edge_idx, (n_1, n_2) in enumerate(adjacencies):
+        node_1 = (n_1, 1)
+        node_2 = (n_2, 0)
+        for node in (node_1, node_2):
+            assert node in G
+        G.add_edge(node_1, node_2, edge_type='reference', edge_idx=edge_idx)
+
+    # Add breakpoint edges
+    for edge_idx, (node_1, node_2) in enumerate(breakpoints):
+        for node in (node_1, node_2):
+            assert node in G
+        G.add_edge(node_1, node_2, edge_type='breakpoint', edge_idx=edge_idx)
+
+    # Add telomere edges
+    for edge_idx, (seg_node, tel_node) in enumerate(telomere_edges()):
+        G.add_edge(seg_node, tel_node, edge_type='telomere', edge_idx=edge_idx)
+
+    return G
+
+
+def create_genome_mod_graph(G):
+    """ Create a genome modification graph.
+
+    Args:
+        G (networkx.MultiGraph): genome graph
+
+    Returns:
+        networkx.MultiGraph: genome modification graph
+
+    The genome modification graph is defined as follows:
+     - identical node set as genome graph
+     - create a +1 and -1 signed edge for each original edge
+     - color each edge:
+        - segment edges: +1 -> red, -1 -> blue
+        - bond edges: +1 -> blue, -1 -> red
+
+    """
+
+    # Create graph with duplicated edges for each sign
+    H = networkx.MultiGraph()
+    H.add_nodes_from(G)
+
+    # Add two edges to H for each edge in G, give opposite signs
+    # Color each edge, +1 for red, -1 for blue
+    for node_1, node_2, edge_attr in G.edges_iter(data=True):
+        edge_type = edge_attr['edge_type']
+        for sign in (-1, 1):
+            if edge_type == 'segment':
+                color = sign
+            elif edge_type == 'dummy':
+                color = sign
+            elif edge_type == 'breakpoint':
+                color = -sign
+            elif edge_type == 'reference':
+                color = -sign
+            elif edge_type == 'telomere':
+                color = -sign
+            else:
+                raise ValueError('unknown edge type {}'.format(edge_type))
+            H.add_edge(node_1, node_2, attr_dict=edge_attr, sign=sign, color=color)
+
+    return H
+
+
+def create_matching_graph(H, transverse_edge_bonus):
+    """ Create matching graph.
+
+    Args:
+        H (networkx.MultiGraph): genome modification graph
+        transverse_edge_bonus: cost of transverse edges
+
+    Returns:
+        networkx.Graph: genome modification matching graph
+
+    The genome modification matching graph is defined as follows:
+     - duplicate nodes, one set red, one set blue
+     - add transverse edges (v_red, v_blue)
+     - for each original edge:
+       - add (u_red, v_red) for red edges
+       - add (u_blue, v_blue) for blue edges
+       - replacate edge costs
+
+    """
+
+    M = networkx.Graph()
+    for node in H.nodes_iter():
+        transverse_edge = []
+        for color in (1, -1):
+            colored_node = node + (color,)
+            M.add_node(colored_node)
+            transverse_edge.append(colored_node)
+        M.add_edge(*transverse_edge, cost=transverse_edge_bonus)
+
+    for node_1, node_2, edge_attr in H.edges_iter(data=True):
+        cost = edge_attr['cost']
+        if np.isinf(cost):
+            continue
+        color = edge_attr['color']
+        colored_node_1 = node_1 + (color,)
+        colored_node_2 = node_2 + (color,)
+        M.add_edge(colored_node_1, colored_node_2, attr_dict=edge_attr, cost=cost)
+
+    return M
+
+
+class GenomeGraphModel(object):
+
+    def __init__(self, N, M, emission, prior, adjacencies, breakpoints):
         """ Create a GenomeGraph.
 
         Args:
+            N (int): number of segments
+            M (int): number of clones including normal
             emission (ReadCountLikelihood): read count likelihood
-            prior (CopyNumberPrior): copy number prior 
+            prior (CopyNumberPrior): copy number prior
             adjacencies (list of tuple): ordered pairs of segments representing wild type adjacencies
             breakpoints (list of frozenset of tuple): list of pairs of segment/side pairs representing detected breakpoints
 
-        Attributes:
-            wt_adj (list of 'breakpoints'): list of 'breakpoint' representing wild type adjacencies
-            tmr_adj (list of 'breakpoints'): list of 'breakpoint' representing detected tumour specific breakpoints
-
         A 'breakpoint' is represented as the frozenset (['breakend_1', 'breakend_2'])
 
-        A 'breakend' is represented as the tuple (('segment', 'allele'), 'side').
+        A 'breakend' is represented as the tuple ('segment', 'side').
 
         """
+
+        self.N = N
+        self.M = M
+
+        # If some tumour adjacencies are also wild type adjacencies, we will
+        # get problems with maintenence of the copy balance condition
+        for breakpoint in breakpoints:
+            (n_1, side_1), (n_2, side_2) = sorted(breakpoint)
+            if (n_1, n_2) in adjacencies and side_1 == 1 and side_2 == 0:
+                raise ValueError('breakpoint {} equals wild type adjacency {}'.format(repr(breakpoint), repr((n_1, n_2))))
 
         self.emission = emission
         self.prior = prior
 
-        self.wt_adj = set()
-        for seg_1, seg_2 in adjacencies:
-            for allele in (0, 1):
-                breakend_1 = ((seg_1, allele), 1)
-                breakend_2 = ((seg_2, allele), 0)
-                self.wt_adj.add(frozenset([breakend_1, breakend_2]))
+        self.G = create_genome_graph(N, adjacencies, breakpoints)
+        self.H = create_genome_mod_graph(self.G)
 
-        self.tmr_adj = set()
-        for brkend_1, brkend_2 in breakpoints:
-            for allele_1, allele_2 in itertools.product((0, 1), repeat=2):
-                brkend_al_1 = ((brkend_1[0], allele_1), brkend_1[1])
-                brkend_al_2 = ((brkend_2[0], allele_2), brkend_2[1])
-                self.tmr_adj.add(frozenset([brkend_al_1, brkend_al_2]))
+        # Count edge types
+        self.edge_type_count = collections.Counter()
+        for node_1, node_2, edge_attr in self.G.edges_iter(data=True):
+            self.edge_type_count[edge_attr['edge_type']] += 1
 
         self.integral_cost_scale = 100.
 
-        # If some tumour adjacencies are also wild type adjacencies, we will
-        # get problems with maintenence of the copy balance condition
-        assert len(self.wt_adj.intersection(self.tmr_adj)) == 0
+        self.telomere_penalty = -10.
+        self.reference_penalty = 0.
+        self.breakpoint_penalty = -.1
+        self.transverse_edge_bonus = 1. / self.integral_cost_scale
 
-        self.telomere_cost = 10.
-        self.breakpoint_cost = .1
+        # Calculate a per edge penalty for telomeres, allowing for
+        # unpenalized telomeres incident to nodes with no incident
+        # reference edge
+        ref_adj_nodes = set()
+        for node_1, node_2, edge_attr in self.G.edges_iter(data=True):
+            if edge_attr['edge_type'] == 'reference':
+                for node in (node_1, node_2):
+                    ref_adj_nodes.add(node)
+
+        is_telomere_penalized = np.zeros(self.edge_type_count['telomere'])
+        for node_1, node_2, edge_attr in self.G.edges_iter(data=True):
+            if edge_attr['edge_type'] == 'telomere':
+                for node in (node_1, node_2):
+                    if node in ref_adj_nodes:
+                        is_telomere_penalized[edge_attr['edge_idx']] = 1.
+
+        self.telomere_penalty = self.telomere_penalty * is_telomere_penalized
 
         self.opt_iter = None
-        self.decreased_log_posterior = None
+        self.decreased_log_prob = None
 
-
-    def set_observed_data(self, x, l):
-        """ Set observed data
-
-        Args:
-            x (numpy.array): observed major, minor, and total read counts
-            l (numpy.array): observed lengths of segments
-
-        """
-
-        self.x = x
-        self.l = l
-
-
-    def init_copy_number(self, cn):
+    def init_copy_number(self, segment_cn, init_breakpoints=True):
         """ Initialize copy number
 
         Args:
             cn (numpy.array): initial copy number matrix
 
+        KwArgs:
+            init_breakpoints (bool): initialize breakpoint copy number
+    
+        Copy number matrix has dimensions (N, M, L) for N breakpoints,
+        and M clones, L alleles.
+
         """
 
-        self.M = cn.shape[1]
+        if not segment_cn.shape[0] * 2 == self.edge_type_count['segment']:
+            raise ValueError('incorrect number segments for segment_cn')
 
-        self.build_edge_tables(cn)
+        # Create edge copy number tables
+        self.segment_cn = segment_cn.copy()
+        self.breakpoint_cn = np.zeros((self.edge_type_count['breakpoint'], self.M))
+        self.reference_cn = np.zeros((self.edge_type_count['reference'], self.M))
+
+        # Calculate node copy number from segments
+        node_cn = collections.defaultdict(lambda: np.zeros(self.M))
+        for node_1, node_2, edge_attr in self.G.edges_iter(data=True):
+            if edge_attr['edge_type'] == 'segment':
+                allele = edge_attr['allele']
+                for node in (node_1, node_2):
+                    node_cn[node] += self.segment_cn[edge_attr['edge_idx'], :, allele]
+
+        # Initialize edge copy number as minimum of segment copy number pushed
+        # through adjacent nodes, decrease flow pushed through each node. Perform
+        # this operation on reference then breakpoint edges, giving breakpoints
+        # the remainder of what cannot be explained by reference adjacencies
+        # Initializing breakpoint copy number is optional, mainly disabled for
+        # testing purposes
+        init_edges = [('reference', self.reference_cn)]
+        if init_breakpoints:
+            init_edges += [('breakpoint', self.breakpoint_cn)]
+        for edge_type, edge_cn in init_edges:
+            for node_1, node_2, edge_attr in self.G.edges_iter(data=True):
+                if edge_attr['edge_type'] != edge_type:
+                    continue
+                cn = np.minimum(node_cn[node_1], node_cn[node_2])
+                for node in (node_1, node_2):
+                    node_cn[node] -= cn
+                edge_cn[edge_attr['edge_idx']] = cn
+
+        self.init_telomere_copy_number()
 
 
-    def build_edge_tables(self, cn):
-        """ Build the edge table
+    def init_telomere_copy_number(self):
+        """ Initialize telomere copy number
+
+        """
+
+        # Create telomere associated copy number tables
+        self.dummy_cn = np.zeros((self.edge_type_count['dummy'], self.M))
+        self.telomere_cn = np.zeros((self.edge_type_count['telomere'], self.M))
+
+        # Calculate node copy number from segment, reference and breakpoint edges
+        node_cn = collections.defaultdict(lambda: np.zeros(self.M))
+        for node_1, node_2, edge_attr in self.G.edges_iter(data=True):
+            if edge_attr['edge_type'] == 'segment':
+                allele = edge_attr['allele']
+                for node in (node_1, node_2):
+                    node_cn[node] += self.segment_cn[edge_attr['edge_idx'], :, allele]
+            elif edge_attr['edge_type'] == 'reference':
+                for node in (node_1, node_2):
+                    node_cn[node] -= self.reference_cn[edge_attr['edge_idx']]
+            elif edge_attr['edge_type'] == 'breakpoint':
+                for node in (node_1, node_2):
+                    node_cn[node] -= self.breakpoint_cn[edge_attr['edge_idx']]
+
+        # Remove zero nodes and check for negatives
+        for node in node_cn.keys():
+            assert np.all(node_cn[node] >= 0)
+            if np.all(node_cn[node] == 0):
+                del node_cn[node]
+
+        # While we still have non-zero nodes, iterate through dummy segment
+        # edges, pick a pair of remaining non-zero nodes, increase the dummy
+        # segment copy number by the minimum of the pair, and decrease each
+        # pair by that same ammount, then delete nodes at zero
+        dummy_edges = filter(lambda a: a[2]['edge_type'] == 'dummy', self.G.edges_iter(data=True))
+
+        telomere_edges = filter(lambda a: a[2]['edge_type'] == 'telomere', self.G.edges_iter(data=True))
+        telomere_subgraph = networkx.Graph(data=telomere_edges)
+
+        prev_total_node_cn = None
+        while len(node_cn) > 0:
+            total_node_cn = sum([a.sum() for a in node_cn.values()])
+            assert prev_total_node_cn is None or total_node_cn < prev_total_node_cn
+            prev_total_node_cn = total_node_cn
+
+            for node_1, node_2, edge_attr in dummy_edges:
+                cn_nodes = node_cn.keys()
+                random.shuffle(cn_nodes)
+
+                # Find 2 nodes with overlapping positive copy number
+                seg_node_1 = cn_nodes.pop()
+                seg_node_2 = None
+                for seg_node in cn_nodes:
+                    cn = np.minimum(node_cn[seg_node_1], node_cn[seg_node])
+                    if np.any(cn > 0):
+                        seg_node_2 = seg_node
+                        break
+
+                # If no pair of nodes have overlapping positive copy number, then
+                # the remaining nodes must have even copy number
+                if seg_node_2 is None:
+                    seg_node_2 = seg_node_1
+                    cn = np.round(node_cn[seg_node_1] / 2.)
+                    if not np.all(node_cn[seg_node_1] == cn * 2):
+                        raise Exception('expected even copy number for all nodes, node_cn=' + repr(node_cn))
+
+                if not np.any(cn > 0):
+                    raise Exception('expected overlapping positive copy number, node_cn=' + repr(node_cn))
+
+                dummy_edge_idx = edge_attr['edge_idx']
+                self.dummy_cn[dummy_edge_idx] += cn
+
+                for seg_node, dummy_node in zip((seg_node_1, seg_node_2), (node_1, node_2)):
+                    telomere_edge_idx = telomere_subgraph[seg_node][dummy_node]['edge_idx']
+                    self.telomere_cn[telomere_edge_idx] += cn
+
+                    node_cn[seg_node] -= cn
+                    assert np.all(node_cn[seg_node] >= 0)
+
+                    if np.all(node_cn[seg_node] == 0):
+                        del node_cn[seg_node]
+
+
+    def calculate_segment_edge_log_prob(self, cn):
+        """ Calculate probability per segment edge
 
         Args:
-            cn (numpy.array): initial copy number matrix
+            cn (numpy.array): current copy number
+
+        Returns:
+            numpy.array: per edge probability
+
+        Copy number matrix has dimensions (N, M, L) for N segments,
+        M clones, and L alleles
 
         """
 
-        self.cn = cn.copy()
-
-        self.N = self.cn.shape[0]
-        self.M = self.cn.shape[1]
-
-        self.cn_cols = [f_cn_col(m) for m in xrange(self.M)]
-        self.tumour_cn_cols = [f_cn_col(m) for m in xrange(1, self.M)]
-
-        # Create reference bond edges
-        wt_table = create_adj_table(self.wt_adj)
-        wt_table['is_reference'] = True
-
-        # Create breakpoint bond edges
-        tmr_table = create_adj_table(self.tmr_adj)
-        tmr_table['is_breakpoint'] = True
-
-        # Create telomere bond edges
-        self.tel_segment_idx = self.N
-        tel_table = list()
-
-        v_1_iter = itertools.product(xrange(self.N), xrange(2), xrange(2))
-        v_t_iter = itertools.product([self.tel_segment_idx], xrange(2), xrange(2))
-
-        for v_1, v_t in itertools.product(v_1_iter, v_t_iter):
-            assert v_1 < v_t
-            tel_table.append(v_1 + v_t)
-
-        tel_table = pd.DataFrame(tel_table, columns=edge_cols)
-        tel_table['is_telomere'] = True
-
-        # Table of bond copy number
-        self.bond_cn = pd.concat([wt_table, tmr_table, tel_table], ignore_index=True)
-        self.bond_cn['is_reference'] = self.bond_cn['is_reference'].fillna(False)
-        self.bond_cn['is_breakpoint'] = self.bond_cn['is_breakpoint'].fillna(False)
-        self.bond_cn['is_telomere'] = self.bond_cn['is_telomere'].fillna(False)
-
-        # Initialize bond copy number to 0
-        for m in xrange(self.M):
-            self.bond_cn[f_cn_col(m)] = 0
-
-        # Initialize bond reference edge copy number to minimum of adjacent segment copy number
-        self.tel_segment_cn = np.zeros((self.M, 2))
-        for idx, row in self.bond_cn[self.bond_cn['is_reference']].iterrows():
-
-            for m in xrange(self.M):
-
-                cn_1 = self.cn[row['n_1'],m,row['ell_1']]
-                cn_2 = self.cn[row['n_2'],m,row['ell_2']]
-
-                cn_ref = min(cn_1, cn_2)
-
-                self.bond_cn.loc[idx, f_cn_col(m)] = min(cn_1, cn_2)
-
-        # Calculate total bond copy number incident at vertices
-        vertex_bond_cn = (
-            df_stack(self.bond_cn, vertex_cols, ('_1', '_2'))
-            .groupby(vertex_cols)[self.cn_cols+['is_reference']]
-            .sum()
+        # Calculate current log probability for total copy number
+        log_prob = (
+            self.emission.log_likelihood_total(cn) +
+            self.prior.log_prior(cn)
         )
 
-        # Initialize telomere edge copy number to remainder from segment and bond
-        # Calculate total telomere edge copy number
-        for n in xrange(self.N):
-
-            for ell in xrange(2):
-
-                for side in xrange(2):
-
-                    telomere_row = (
-                        (self.bond_cn['n_1'] == n) &
-                        (self.bond_cn['n_2'] == self.tel_segment_idx) &
-                        (self.bond_cn['ell_1'] == ell) &
-                        (self.bond_cn['ell_2'] == ell) &
-                        (self.bond_cn['side_1'] == side) &
-                        (self.bond_cn['side_2'] == side)
-                    )
-
-                    if not vertex_bond_cn.loc[(n,ell,side),'is_reference']:
-
-                        self.bond_cn.loc[telomere_row, 'is_telomere'] = False
-                        self.bond_cn.loc[telomere_row, 'is_reference'] = True
-
-                    for m in xrange(self.M):
-
-                        cn_seg = self.cn[n,m,ell]
-                        cn_bond = vertex_bond_cn.loc[(n,ell,side),f_cn_col(m)]
-                        cn_tel = cn_seg - cn_bond
-
-                        self.bond_cn.loc[telomere_row, f_cn_col(m)] = cn_tel
-
-                        self.tel_segment_cn[m,ell] += cn_tel
-
-        # Each copy at a telomere was double counted towards the telomere segment copy number
-        self.tel_segment_cn /= 2
-
-        # Sign of modifications
-        self.signs = (+1, -1)
-
-        # Create a table of segment edges in modification graph
-        self.mod_seg_edges = pd.DataFrame(list(itertools.product(xrange(self.N+1), xrange(2), self.signs)),
-                                          columns=['n_1', 'ell_1', 'sign'])
-        self.mod_seg_edges['n_2'] = self.mod_seg_edges['n_1']
-        self.mod_seg_edges['ell_2'] = self.mod_seg_edges['ell_1']
-        self.mod_seg_edges['side_1'] = 0
-        self.mod_seg_edges['side_2'] = 1
-
-        self.mod_seg_edges.sort_values('n_1')
-
-        # List of vertices of matching graph
-        v_iter = itertools.product(xrange(self.N+1), xrange(2), xrange(2), self.signs)
-        self.matching_vertices = pd.DataFrame(list(v_iter), columns=['n', 'ell', 'side', 'color'])
-        self.matching_vertices['vertex_id'] = xrange(len(self.matching_vertices.index))
-
-        # List of vertex edges of matching graph
-        self.matching_vertex_edges = self.matching_vertices.set_index(['n', 'ell', 'side', 'color']) \
-                                                           .unstack()['vertex_id'] \
-                                                           .reset_index(drop=True) \
-                                                           .rename(columns={-1:'vertex_id_1', 1:'vertex_id_2'})
-        self.matching_vertex_edges['cost'] = -1e-8
+        return log_prob
 
 
-    def build_mod_seg_edge_costs(self, delta):
-        """ Create a table of segment edge costs
-        
+    def calculate_segment_edge_cost(self, cn, delta, sign, allele):
+        """ Calculate cost per segment edge for modifying copy number
+
         Args:
-            delta (numpy.array): copy number modification
+            cn (numpy.array): current copy number
+            delta (numpy.array): copy number change
+            sign (int): direction of change
+            allele (int): allele to change
 
         Returns:
-            pandas.DataFrame: segment edge modification costs table
+            numpy.array: per edge cost
 
-        The returned table has the following essential columns:
-            'n_1', 'ell_1', 'side_1', 'n_2', 'ell_2', 'side_2', 'sign', 'cost'
+        Copy number matrix has dimensions (N, M, L) for N segments,
+        M clones, and L alleles
 
         """
 
-        mod_seg_edge_costs = list()
+        # Calculate current log probability for total copy number
+        log_prob = self.calculate_segment_edge_log_prob(cn)
 
-        log_likelihood = self.emission.log_likelihood(self.cn) + self.prior.log_prior(self.cn)
+        # Calculate delta copy number
+        cn_delta = cn.copy()
+        cn_delta[:, :, allele] += sign * delta[np.newaxis, :]
 
-        for sign in self.signs:
+        # Calculate log probability delta, checking for negative copy number
+        invalid_cn_delta = np.any(cn_delta < 0, axis=(1, 2))
+        cn_delta[invalid_cn_delta] = 1
+        log_prob_delta = self.calculate_segment_edge_log_prob(cn_delta)
+        log_prob_delta[invalid_cn_delta] = -np.inf
 
-            for ell in xrange(2):
+        cost = log_prob - log_prob_delta
 
-                cn_delta = self.cn.copy()
-                cn_delta[:,:,ell] += sign * delta
-
-                invalid_cn_delta = np.any(cn_delta < 0, axis=(1, 2))
-                cn_delta[invalid_cn_delta] = 1
-
-                log_likelihood_delta = self.emission.log_likelihood(cn_delta) + self.prior.log_prior(cn_delta)
-
-                log_likelihood_delta[invalid_cn_delta] = -np.inf
-
-                cost = log_likelihood - log_likelihood_delta
-
-                data = pd.DataFrame({'cost':cost})
-                for m in xrange(self.M):
-                    data[f_cn_col(m)] = cn_delta[:,m,ell]
-                data['n_1'] = xrange(self.N)
-                data['ell_1'] = ell
-                data['sign'] = sign
-
-                mod_seg_edge_costs.append(data)
-
-                tel_cn_delta = self.tel_segment_cn.copy()
-                tel_cn_delta[:,ell] += sign * delta
-
-                tel_cost = 0
-
-                if np.any(tel_cn_delta < 0):
-                    tel_cost = np.inf
-
-                tel_data = pd.DataFrame([{'cost':tel_cost,
-                                          'sign':sign,
-                                          'n_1':self.tel_segment_idx,
-                                          'n_2':self.tel_segment_idx,
-                                          'ell_1':ell,
-                                          'ell_2':ell,
-                                          'side_1':0,
-                                          'side_2':1}])
-
-                for m in xrange(self.M):
-                    tel_data[f_cn_col(m)] = tel_cn_delta[m,ell]
-
-                mod_seg_edge_costs.append(tel_data)
-
-        mod_seg_edge_costs = pd.concat(mod_seg_edge_costs, ignore_index=True)
-        mod_seg_edge_costs['n_2'] = mod_seg_edge_costs['n_1']
-        mod_seg_edge_costs['ell_2'] = mod_seg_edge_costs['ell_1']
-        mod_seg_edge_costs['side_1'] = 0
-        mod_seg_edge_costs['side_2'] = 1
-
-        return mod_seg_edge_costs
+        return cost
 
 
-    def build_mod_bond_edge_costs(self, delta):
-        """ Create a table of bond edge costs
-        
+    def calculate_bond_edge_log_prob(self, cn, edge_penalty):
+        """ Calculate probability per bond edge
+
         Args:
-            delta (numpy.array): copy number modification
+            cn (numpy.array): current copy number
+            edge_penalty (float): penalty for positive copy number on edge
 
         Returns:
-            pandas.DataFrame: bond edge modification costs table
+            numpy.array: per edge cost
 
-        The returned table has the following essential columns:
-            'n_1', 'ell_1', 'side_1', 'n_2', 'ell_2', 'side_2', 'sign', 'cost'
+        Copy number matrix has dimensions (N, M) for N breakpoints,
+        and M clones.
 
         """
 
-        # Merge in current copy number
-        mod_bond_edge_costs = df_merge_product(self.bond_cn, 'sign', self.signs)
+        # Calculate cost based on copy number and event weight
+        log_prob = edge_penalty * cn.sum(axis=1)
 
-        # Annotate edges as having positive unmodified copy number
-        mod_bond_edge_costs['is_used_unmod'] = (mod_bond_edge_costs.loc[:, self.cn_cols] > 0).any(axis=1)
-
-        # Modify copy number
-        for m in xrange(self.M):
-            mod_bond_edge_costs[f_cn_col(m)] += mod_bond_edge_costs['sign'] * delta[m]
-
-        # Annotate edges as having positive modified copy number
-        mod_bond_edge_costs['is_used_mod'] = (mod_bond_edge_costs.loc[:, self.cn_cols] > 0).any(axis=1)
-
-        # Set default edge cost to zero
-        mod_bond_edge_costs['cost'] = 0
-
-        # Set unscaled cost as indicator of having modified positive copy
-        # number from original zero copy number
-        mod_bond_edge_costs['unscaled_cost'] = ((mod_bond_edge_costs['is_used_mod'] * 1) - (mod_bond_edge_costs['is_used_unmod']) * 1)
-
-        # Set cost for telomere edges
-        is_telomere = (mod_bond_edge_costs['is_telomere'])
-        mod_bond_edge_costs.loc[is_telomere, 'cost'] = self.telomere_cost * mod_bond_edge_costs.loc[is_telomere, 'unscaled_cost']
-
-        # Set cost for breakpoint edges
-        is_breakpoint = (mod_bond_edge_costs['is_breakpoint'])
-        mod_bond_edge_costs.loc[is_breakpoint, 'cost'] = self.breakpoint_cost * mod_bond_edge_costs.loc[is_breakpoint, 'unscaled_cost']
-
-        # Set cost to infinite for edges with negative copy number
-        for m in xrange(self.M):
-            mod_bond_edge_costs.loc[(mod_bond_edge_costs[f_cn_col(m)] < 0.), 'cost'] = np.inf
-
-        return mod_bond_edge_costs
+        return log_prob
 
 
-    def build_mod_edge_costs(self, delta):
-        """ Build a table of bond and segment edge costs
-        
+    def calculate_bond_edge_cost(self, cn, delta, sign, edge_penalty):
+        """ Calculate cost per bond edge for modifying copy number
+
         Args:
-            delta (numpy.array): copy number modification
+            cn (numpy.array): current copy number
+            delta (numpy.array): copy number change
+            sign (int): direction of change
+            edge_penalty (float): penalty for positive copy number on edge
 
         Returns:
-            pandas.DataFrame: edge modification costs table
+            numpy.array: per edge cost
 
-        The returned table has the following essential columns:
-            'vertex_id_1', 'vertex_id_2', 'cost'
+        Copy number matrix has dimensions (N, M) for N breakpoints,
+        and M clones.
 
         """
 
-        mod_seg_edge_costs = self.build_mod_seg_edge_costs(delta)
-        mod_bond_edge_costs = self.build_mod_bond_edge_costs(delta)
+        # Calculate current log probability for total copy number
+        log_prob = self.calculate_bond_edge_log_prob(cn, edge_penalty)
 
-        # Label edges as segment or bond
-        mod_seg_edge_costs['is_seg'] = True
-        mod_seg_edge_costs['is_reference'] = False
-        mod_seg_edge_costs['is_breakpoint'] = False
-        mod_seg_edge_costs['is_telomere'] = False
-        mod_bond_edge_costs['is_seg'] = False
+        # Calculate delta copy number
+        cn_delta = cn + sign * delta[np.newaxis, :]
 
-        # Label color of edges, invert bond edges
-        mod_seg_edge_costs['color'] = mod_seg_edge_costs['sign']
-        mod_bond_edge_costs['color'] = -mod_bond_edge_costs['sign']
+        # Calculate log probability delta, checking for negative copy number
+        log_prob_delta = self.calculate_bond_edge_log_prob(cn_delta, edge_penalty)
+        log_prob_delta[np.any(cn_delta < 0, axis=1)] = -np.inf
 
-        # Create a table of all edges
-        mod_edge_costs = pd.concat([mod_seg_edge_costs, mod_bond_edge_costs], ignore_index=True)
+        cost = log_prob - log_prob_delta
 
-        # Merge vertex ids
-        for a in ('_1', '_2'):
-            mod_edge_costs = mod_edge_costs.merge(self.matching_vertices,
-                                                  left_on=['n'+a, 'ell'+a, 'side'+a, 'color'],
-                                                  right_on=['n', 'ell', 'side', 'color'], how='left')
-            mod_edge_costs.drop(['n', 'ell', 'side'], axis=1, inplace=True)
-            mod_edge_costs.rename(columns={'vertex_id':'vertex_id'+a}, inplace=True)
+        return cost
 
-        # Drop infinte cost edges
-        mod_edge_costs = mod_edge_costs[mod_edge_costs['cost'].replace(np.inf, np.nan).notnull()]
 
-        # Select least cost edge for duplicated edges
-        mod_edge_costs = mod_edge_costs.sort_values('cost')
-        mod_edge_costs = mod_edge_costs.groupby(['vertex_id_1', 'vertex_id_2', 'color'],
-                                                sort=False) \
-                                       .first() \
-                                       .reset_index()
+    def add_edge_costs(self, H, delta):
+        """ Add edge costs to genome modification graph.
 
-        return mod_edge_costs
+        Args:
+            H (networkx.MultiGraph): genome modification graph
+            delta (numpy.array): clone copy number change
+
+        Adds edge costs to graph.
+
+        """
+
+        segment_edge_costs = {}
+        dummy_edge_costs = {}
+        breakpoint_edge_costs = {}
+        reference_edge_costs = {}
+        telomere_edge_costs = {}
+
+        for sign in (-1, 1):
+            for allele in xrange(2):
+                segment_edge_costs[(sign, allele)] = self.calculate_segment_edge_cost(self.segment_cn, delta, sign, allele)
+
+        for sign in (-1, 1):
+            dummy_edge_costs[sign] = self.calculate_bond_edge_cost(self.dummy_cn, delta, sign, 0.)
+            breakpoint_edge_costs[sign] = self.calculate_bond_edge_cost(self.breakpoint_cn, delta, sign, self.breakpoint_penalty)
+            reference_edge_costs[sign] = self.calculate_bond_edge_cost(self.reference_cn, delta, sign, self.reference_penalty)
+            telomere_edge_costs[sign] = self.calculate_bond_edge_cost(self.telomere_cn, delta, sign, self.telomere_penalty)
+
+        # Add edge costs to graph
+        for node_1, node_2, edge_attr in H.edges_iter(data=True):
+            edge_type = edge_attr['edge_type']
+            edge_idx = edge_attr['edge_idx']
+            sign = edge_attr['sign']
+            if edge_type == 'segment':
+                allele = edge_attr['allele']
+                edge_attr['cost'] = segment_edge_costs[(sign, allele)][edge_idx]
+            elif edge_type == 'dummy':
+                edge_attr['cost'] = dummy_edge_costs[sign][edge_idx]
+            elif edge_type == 'breakpoint':
+                edge_attr['cost'] = breakpoint_edge_costs[sign][edge_idx]
+            elif edge_type == 'reference':
+                edge_attr['cost'] = reference_edge_costs[sign][edge_idx]
+            elif edge_type == 'telomere':
+                edge_attr['cost'] = telomere_edge_costs[sign][edge_idx]
 
 
     def optimize_modification(self, delta):
@@ -504,39 +602,62 @@ class GenomeGraph(object):
             delta (numpy.array): copy number modification
 
         Returns:
-            float, list: minimized cost, list of edges in minimum cost modification
+            networkx.Graph: minimum cost modification graph
 
         """
 
-        mod_edge_costs = self.build_mod_edge_costs(delta)
+        self.add_edge_costs(self.H, delta)
 
-        edge_cost_cols = ['vertex_id_1', 'vertex_id_2', 'cost']
+        M = create_matching_graph(self.H, self.transverse_edge_bonus)
 
-        edge_costs = [
-            self.matching_vertex_edges[edge_cost_cols],
-            mod_edge_costs[edge_cost_cols],
-        ]
-        edge_costs = pd.concat(edge_costs, ignore_index=True)
+        # Integer nodes for passing to blossomv
+        M1 = networkx.convert_node_labels_to_integers(M, label_attribute='node_tuple')
 
-        edge_costs['cost'] = np.rint(edge_costs['cost'] * self.integral_cost_scale).astype(int)
+        # Min cost perfect matching
+        edges = networkx.get_edge_attributes(M1, 'cost')
+        for edge in edges.keys():
+            edges[edge] = int(edges[edge] * self.integral_cost_scale)
+        min_cost_edges = remixt.blossomv.min_weight_perfect_matching(edges)
 
-        edges = edge_costs.set_index(['vertex_id_1', 'vertex_id_2'])['cost'].to_dict()
-        min_cost_edges = blossomv.min_weight_perfect_matching(edges)
+        # Remove unselected edges
+        assert set(min_cost_edges).issubset(edges.keys())
+        remove_edges = set(edges.keys()).difference(min_cost_edges)
+        M2 = M1.copy()
+        M2.remove_edges_from(remove_edges)
 
-        min_cost_edges = pd.DataFrame(list(min_cost_edges), columns=['vertex_id_1', 'vertex_id_2'])
+        # Re-create original graph with matched edges
+        M3 = networkx.relabel_nodes(M2, mapping=networkx.get_node_attributes(M2, 'node_tuple'))
 
-        min_cost_edges = mod_edge_costs.merge(min_cost_edges)
+        # Create subgraph of H with only selected edges
+        H1 = networkx.Graph()
+        for node_1, node_2, edge_attr in M3.edges_iter(data=True):
+            node_1 = node_1[:-1]
+            node_2 = node_2[:-1]
+            if node_1 == node_2:
+                continue
+            if H1.has_edge(node_1, node_2):
+                H1.remove_edge(node_1, node_2)
+            else:
+                H1.add_edge(node_1, node_2, attr_dict=edge_attr)
 
-        # Remove duplicated edges resulting from non-convex cost functions
-        min_cost_edges.set_index(edge_cols, inplace=True)
-        min_cost_edges['edge_count'] = min_cost_edges.groupby(level=range(len(edge_cols))).size()
-        min_cost_edges.reset_index(inplace=True)
-        assert not np.any(min_cost_edges['edge_count'] > 2)
-        min_cost_edges = min_cost_edges[min_cost_edges['edge_count'] == 1]
+        return H1
 
-        total_cost = min_cost_edges['cost'].sum()
 
-        return total_cost, min_cost_edges
+    def calculate_modification_cost(self, modification):
+        """ Calculate cost of a modifcation graph.
+
+        Args:
+            modification (networkx.Graph): minimum cost modification graph
+
+        Returns:
+            float: cost
+
+        """
+
+        # Calculate total cost
+        total_cost = sum((a[2]['cost'] for a in modification.edges_iter(data=True)))
+
+        return total_cost
 
 
     def apply_modification(self, delta, modification):
@@ -544,157 +665,104 @@ class GenomeGraph(object):
 
         Args:
             delta (numpy.array): copy number modification
-            modification (list): list of edges in minimum cost modification
+            modification (networkx.Graph): minimum cost modification graph
 
         """
 
-        seg_mods = modification[modification['is_seg']]
-        bond_mods = modification[~modification['is_seg']]
-
-        for n, ell, sign in seg_mods[['n_1', 'ell_1', 'sign']].values:
-            if n == self.tel_segment_idx:
-                self.tel_segment_cn[:,ell] += sign * delta
-            else:
-                self.cn[n,:,ell] += sign * delta
-
-        for idx, row in seg_mods[seg_mods.duplicated(edge_cols)].iterrows():
-            raise Exception('duplicated edge {0}'.format(row[edge_cols].to_dict()))
-
-        for idx, row in bond_mods[bond_mods.duplicated(edge_cols)].iterrows():
-            raise Exception('duplicated edge {0}'.format(row[edge_cols].to_dict()))
-
-        for m in xrange(self.M):
-
-            self.bond_cn = self.bond_cn.merge(bond_mods[edge_cols + [f_cn_col(m)]],
-                                              on=edge_cols,
-                                              suffixes=('', '_mod'),
-                                              how='left')
-            mod_cn_col = f_cn_col(m) + '_mod'
-
-            self.bond_cn.loc[self.bond_cn[mod_cn_col].notnull(),
-                             f_cn_col(m)] = self.bond_cn[mod_cn_col]
-
-            self.bond_cn = self.bond_cn.drop(mod_cn_col, axis=1)
+        for node_1, node_2, edge_attr in modification.edges_iter(data=True):
+            edge_type = edge_attr['edge_type']
+            edge_idx = edge_attr['edge_idx']
+            sign = edge_attr['sign']
+            if edge_type == 'segment':
+                allele = edge_attr['allele']
+                self.segment_cn[edge_idx, :, allele] += sign * delta
+            elif edge_type == 'dummy':
+                self.dummy_cn[edge_idx] += sign * delta
+            elif edge_type == 'breakpoint':
+                self.breakpoint_cn[edge_idx] += sign * delta
+            elif edge_type == 'reference':
+                self.reference_cn[edge_idx] += sign * delta
+            elif edge_type == 'telomere':
+                self.telomere_cn[edge_idx] += sign * delta
 
 
-    def test_circulation(self):
+    def test_circulation(self, node_cn=None):
         """ Test if current copy number state represents a valid circulation.
 
-        Raises:
-            Exception: raised if not a valid circulation
-
-        """
-
-        vertex_bond_cn = df_stack(self.bond_cn, vertex_cols, ('_1', '_2'))
-
-        vertex_seg_cn = list()
-
-        for n in xrange(self.N):
-            
-            for ell in xrange(2):
-
-                for side in (0, 1):
-
-                    vertex_seg_cn.append([n, ell, side] + list(-self.cn[n,:,ell]))
-
-        for ell in xrange(2):
-
-            for side in (0, 1):
-
-                vertex_seg_cn.append([self.tel_segment_idx, ell, side] + list(-self.tel_segment_cn[:,ell]))
-
-        vertex_seg_cn = pd.DataFrame(vertex_seg_cn, columns=['n', 'ell', 'side'] + self.cn_cols)
-
-        vertex_cn = pd.concat([vertex_bond_cn, vertex_seg_cn], ignore_index=True)
-
-        vertex_sum = vertex_cn.groupby(vertex_cols).sum()
-
-        for v, v_sum in vertex_sum.iterrows():
-
-            if v_sum.sum() != 0:
-
-                raise Exception('vertex {0} has nonzero sum {1}'.format(v, v_sum.values))
-
-
-    def test_allele_independence(self, delta):
-        """ Test allele costs are independent
-        
-        Args:
-            delta (numpy.array): copy number modification
+        KwArgs:
+            node_cn (dict): dictionary of remainder copy number at each node
 
         Raises:
             Exception: raised if not a valid circulation
 
         """
 
-        log_likelihood = self.emission.log_likelihood(self.cn) + self.prior.log_prior(self.cn)
+        if node_cn is None:
+            node_cn = {}
 
-        for sign in self.signs:
+        for node_1, node_2 in self.G.edges_iter():
+            if node_1 == node_2:
+                raise Exception('graph should not contain loops')
 
-            cn_delta = self.cn.copy()
-            for ell in xrange(2):
-                cn_delta[:,:,ell] += sign * delta
-
-            invalid_cn_delta = np.any(cn_delta < 0, axis=(1, 2))
-            cn_delta[invalid_cn_delta] = 1
-
-            log_likelihood_delta = self.emission.log_likelihood(cn_delta) + self.prior.log_prior(cn_delta)
-
-            log_likelihood_delta[invalid_cn_delta] = -np.inf
-
-            cost_joint = log_likelihood - log_likelihood_delta
-
-            cost_independent = np.zeros(cost_joint.shape)
-
-            for ell in xrange(2):
-
-                cn_delta = self.cn.copy()
-                cn_delta[:,:,ell] += sign * delta
-
-                invalid_cn_delta = np.any(cn_delta < 0, axis=(1, 2))
-                cn_delta[invalid_cn_delta] = 1
-
-                log_likelihood_delta = self.emission.log_likelihood(cn_delta) + self.prior.log_prior(cn_delta)
-
-                log_likelihood_delta[invalid_cn_delta] = -np.inf
-
-                cost_independent += log_likelihood - log_likelihood_delta
-
-            dependent, = np.where(np.absolute(cost_joint - cost_independent) > 0.01)
-
-            for n in dependent:
-
-                pass #raise Exception('Cost of segment {0} is {1} jointly and {2} independently'.format(n, cost_joint[n], cost_independent[n]))
+        for node in self.G.nodes_iter():
+            cn = -node_cn.get(node, np.zeros(self.M))
+            for node_1, node_2, edge_attr in self.G.edges_iter(node, data=True):
+                edge_type = edge_attr['edge_type']
+                edge_idx = edge_attr['edge_idx']
+                if edge_type == 'segment':
+                    allele = edge_attr['allele']
+                    cn += self.segment_cn[edge_idx, :, allele]
+                elif edge_type == 'dummy':
+                    cn += self.dummy_cn[edge_idx]
+                elif edge_type == 'breakpoint':
+                    cn -= self.breakpoint_cn[edge_idx]
+                elif edge_type == 'reference':
+                    cn -= self.reference_cn[edge_idx]
+                elif edge_type == 'telomere':
+                    cn -= self.telomere_cn[edge_idx]
+            if cn.sum() != 0:
+                raise Exception('node {0} has nonzero sum {1}'.format(repr(node), repr(cn)))
 
 
-    def calculate_log_posterior(self):
-        """ Calculate log posterior of segment/bond copy number.
+    def calculate_log_prob(self):
+        """ Calculate log probability of segment/bond copy number.
 
         Returns:
-            float: log posterior of segment/bond copy number.
+            float: log probability of segment/bond copy number.
 
         """
 
-        log_likelihood = self.emission.log_likelihood(self.cn) + self.prior.log_prior(self.cn)
-        log_likelihood = log_likelihood.sum()
+        log_prob = self.calculate_segment_log_prob() + self.calculate_bond_log_prob()
 
-        log_likelihood += self.calculate_bond_log_prob()
+        return log_prob
 
-        return log_likelihood
+
+    def calculate_segment_log_prob(self):
+        """ Calculate log probability of segment/bond copy number.
+
+        Returns:
+            float: log probability of segment/bond copy number.
+
+        """
+
+        log_prob = self.calculate_segment_edge_log_prob(self.segment_cn).sum()
+
+        return log_prob
 
 
     def calculate_bond_log_prob(self):
         """ Calculate log probability of bond copy number.
 
         Returns:
-            float: log posterior of bond copy number.
+            float: log probability of bond copy number.
 
         """
 
-        telomere_is_used = (self.bond_cn.loc[self.bond_cn['is_telomere'], self.tumour_cn_cols] > 0).any(axis=1).sum()
-        breakpoint_is_used = (self.bond_cn.loc[self.bond_cn['is_breakpoint'], self.tumour_cn_cols] > 0).any(axis=1).sum()
-
-        log_prob = -(self.telomere_cost * telomere_is_used + self.breakpoint_cost * breakpoint_is_used)
+        log_prob = (
+            self.calculate_bond_edge_log_prob(self.breakpoint_cn, self.breakpoint_penalty).sum() +
+            self.calculate_bond_edge_log_prob(self.reference_cn, self.reference_penalty).sum() +
+            self.calculate_bond_edge_log_prob(self.telomere_cn, self.telomere_penalty).sum()
+        )
 
         return log_prob
 
@@ -713,35 +781,33 @@ class GenomeGraph(object):
         return list(np.eye(M-1, M, 1, dtype=int))
 
 
-    def optimize(self, max_iter=1000):
+    def optimize(self, max_iter=1000, max_shuffle_telomere=10):
         """ Calculate optimal segment/bond copy number.
 
         KwArgs:
             max_iter (int): maximum iterations
+            max_shuffle_telomere (int): maximum number of times to shuffle telomeres
 
         Returns:
-            numpy.array: optimized segment copy number
+            float: optimized log probability
 
         """
         
-        self.decreased_log_posterior = False
+        self.decreased_log_prob = False
 
         self.test_circulation()
 
         deltas = self.build_deltas(self.M)
 
-        log_posterior_prev = self.calculate_log_posterior()
+        log_prob_prev = self.calculate_log_prob()
 
+        self.shuffle_telomere_iter = 0
         for self.opt_iter in xrange(max_iter):
-
             mod_list = list()
 
             for delta in deltas:
-
-                self.test_allele_independence(delta)
-
-                cost, modification = self.optimize_modification(delta)
-
+                modification = self.optimize_modification(delta)
+                cost = self.calculate_modification_cost(modification)
                 mod_list.append((cost, delta, modification))
 
             mod_list.sort(key=lambda a: a[0])
@@ -749,21 +815,28 @@ class GenomeGraph(object):
             best_cost, best_delta, best_modification = mod_list[0]
 
             if best_cost == 0:
-                break
+                if self.shuffle_telomere_iter < max_shuffle_telomere:
+                    self.init_telomere_copy_number()
+                    self.shuffle_telomere_iter += 1
+                    continue
+                else:
+                    self.shuffle_telomere_iter = 0
+                    break
 
             self.apply_modification(best_delta, best_modification)
 
             self.test_circulation()
 
-            log_posterior = self.calculate_log_posterior()
+            log_prob = self.calculate_log_prob()
 
-            if log_posterior < log_posterior_prev:
-                self.decreased_log_posterior = True
-                break #raise Exception('decreased log posterior from {0} to {1}'.format(log_posterior_prev, log_posterior))
+            if log_prob < log_prob_prev:
+                self.decreased_log_prob = True
+                print 'decreased log prob from {0} to {1}'.format(log_prob_prev, log_prob)
+                break
 
-            log_posterior_prev = log_posterior
+            log_prob_prev = log_prob
 
-        return log_posterior_prev, self.cn
+        return log_prob_prev
 
 
     @property
@@ -771,16 +844,31 @@ class GenomeGraph(object):
         """ Table of breakpoint copy number.
 
         pandas.DataFrame with columns:
-            'n_1', 'ell_1', 'side_1', 'n_2', 'ell_2', 'side_2', 'cn_*'
+            'n_1', 'side_1', 'n_2', 'side_2', 'cn_*'
 
         """
 
-        brk_cn = self.bond_cn.loc[
-            (self.bond_cn['is_breakpoint']) &
-            (self.bond_cn[self.tumour_cn_cols].sum(axis=1) > 0),
-            edge_cols + self.cn_cols].copy()
+        brk_cn_table = list()
 
-        return brk_cn
+        for node_1, node_2, edge_attr in self.G.edges_iter(data=True):
+            if edge_attr['edge_type'] == 'breakpoint':
+                cn = self.breakpoint_cn[edge_attr['edge_idx']]
+
+                row = {
+                    'n_1': node_1[0],
+                    'side_1': node_1[1],
+                    'n_2': node_2[0],
+                    'side_2': node_2[1],
+                }
+
+                for m in xrange(self.M):
+                    row['cn_{}'.format(m)] = cn[m]
+
+                brk_cn_table.append(row)
+
+        brk_cn_table = pd.DataFrame(brk_cn_table)
+
+        return brk_cn_table
 
 
     def log_likelihood(self, state):

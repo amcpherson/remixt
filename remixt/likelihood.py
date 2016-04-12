@@ -52,8 +52,9 @@ class OptimizeParameter(object):
     @property
     def bounds(self):
         return [self._bounds] * self.length
-    
-    
+
+
+allele_measurement_matrix = np.array([[1, 0, 1], [0, 1, 1]])
 
 
 def estimate_phi(x):
@@ -86,6 +87,40 @@ def proportion_measureable_matrix(phi):
 
     return np.vstack([phi, phi, np.ones(phi.shape)]).T
 
+
+def expected_read_count(l, cn, h, phi):
+    """ Calculate expected major, minor and total read counts.
+
+    Args:
+        l (numpy.array): segment lengths
+        cn (numpy.array): copy number state
+        h (numpy.array): haploid read depths
+        phi (numpy.array): estimate of proportion of genotypable reads
+
+    Returns:
+        numpy.array: expected read depths
+    """
+
+    p = proportion_measureable_matrix(phi)
+    q = allele_measurement_matrix
+
+    gamma = np.sum(cn * np.vstack([h, h]).T, axis=-2)
+
+    x1 = np.dot(q.T, gamma.T).T
+
+    x2 = x1 * p
+
+    x3 = (x2.T * l.T).T
+
+    x3 += 1e-16
+
+    for n, ell in zip(*np.where(x3 <= 0)):
+        raise ProbabilityError('mu <= 0', n=n, cn=cn[n], l=l[n], h=h, p=p[n], mu=x3[n])
+
+    for n, ell in zip(*np.where(np.isnan(x3))):
+        raise ProbabilityError('mu is nan', n=n, cn=cn[n], l=l[n], h=h, p=p[n], mu=x3[n])
+
+    return x3
 
 
 def calculate_mean_cn(h, x, l):
@@ -191,18 +226,6 @@ class ReadCountLikelihood(object):
         
         self.phi = estimate_phi(x)
 
-    def allele_measurement_matrix(self):
-        """ Allele measurement matrix.
-
-        Returns:
-            numpy.array: L * K dim array, allele to measurement transform
-
-        """
-
-        q = np.array([[1, 0, 1], [0, 1, 1]])
-
-        return q
-
     def expected_read_count(self, l, cn):
         """ Calculate expected major, minor and total read counts.
         
@@ -217,26 +240,7 @@ class ReadCountLikelihood(object):
         h = self.h
         phi = self.phi
 
-        p = proportion_measureable_matrix(phi)
-        q = self.allele_measurement_matrix()
-
-        gamma = np.sum(cn * np.vstack([h, h]).T, axis=-2)
-
-        x1 = np.dot(q.T, gamma.T).T
-
-        x2 = x1 * p
-        
-        x3 = (x2.T * l.T).T
-
-        x3 += 1e-16
-
-        for n, ell in zip(*np.where(x3 <= 0)):
-            raise ProbabilityError('mu <= 0', n=n, cn=cn[n], l=l[n], h=h, p=p[n], mu=x3[n])
-
-        for n, ell in zip(*np.where(np.isnan(x3))):
-            raise ProbabilityError('mu is nan', n=n, cn=cn[n], l=l[n], h=h, p=p[n], mu=x3[n])
-
-        return x3
+        return expected_read_count(l, cn, h, phi)
 
     def expected_total_read_count(self, l, cn):
         """ Calculate expected total read count.
@@ -376,7 +380,7 @@ class IndepAlleleLikelihood(ReadCountLikelihood):
         partial_mu = self._log_likelihood_partial_mu(x, l, cn)
         
         p = proportion_measureable_matrix(self.phi)
-        q = self.allele_measurement_matrix()
+        q = allele_measurement_matrix
 
         partial_h = np.einsum('...l,...jk,...kl,...l,...->...j', partial_mu, cn, q, p, l)
         
@@ -1208,14 +1212,16 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
         remixt.paramlearn.learn_negbin_r_adjacent(self.negbin, x[:,2], l)
         remixt.paramlearn.learn_betabin_M_adjacent(self.betabin, x[:,1], x[:,:2].sum(axis=1))
 
-    def log_likelihood(self, cn):
-        """ Calculate negative binomial read count log likelihood.
-        
+    def log_likelihood_total(self, cn):
+        """ Calculate likelihood of total read counts
+
         Args:
             cn (numpy.array): copy number state
         
         Returns:
             float: log likelihood per segment
+
+        Copy number has shape (N, M, L) for N segments, M clones, L alleles.
 
         """
 
@@ -1223,10 +1229,8 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
         l = self.l
 
         mu = self.expected_total_read_count(l, cn)
-        p = self.expected_allele_ratio(cn)
 
         is_hdel = np.all(cn == 0, axis=(1, 2))
-        is_loh = np.all(np.any(cn == 0, axis=(2,)), axis=(1,))
 
         negbin_ll = np.where(
             is_hdel,
@@ -1234,24 +1238,59 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
             self.negbin.log_likelihood(x[:, 2], mu)
         )
 
+        for n, idx in zip(*np.where(np.isnan(negbin_ll))):
+            raise ProbabilityError('negative binomial ll derivative is nan', n=n, x=self.x[n], l=self.l[n], cn=cn[n])
+
+        negbin_ll = self._log_likelihood_post(negbin_ll, cn)
+
+        return negbin_ll
+
+    def log_likelihood_alleles(self, cn):
+        """ Calculate log likelihood of total and allelic read counts
+        
+        Args:
+            cn (numpy.array): copy number state
+        
+        Returns:
+            float: log likelihood per segment
+
+        Copy number has shape (N, M, L) for N segments, M clones, L alleles.
+        
+        """
+
+        x = self.x
+
+        p = self.expected_allele_ratio(cn)
+
+        is_loh = np.all(np.any(cn == 0, axis=(2,)), axis=(1,))
+
         betabin_ll = np.where(
             is_loh,
             self.betabin_loh.log_likelihood(x[:, 1], x[:, :2].sum(axis=1), self.loh_p),
             self.betabin.log_likelihood(x[:, 1], x[:, :2].sum(axis=1), p)
         )
 
-        for n, idx in zip(*np.where(np.isnan(negbin_ll))):
-            raise ProbabilityError('ll derivative is nan', n=n, x=self.x[n], l=self.l[n], cn=cn[n])
-
         for n in zip(*np.where(np.isnan(betabin_ll))):
-            print self.betabin.__dict__
-            raise ProbabilityError('ll derivative is nan', n=n, x=self.x[n], l=self.l[n], cn=cn[n], is_loh=is_loh[n], p=p[n])
+            raise ProbabilityError('beta binomial ll derivative is nan', n=n, x=self.x[n], l=self.l[n], cn=cn[n], is_loh=is_loh[n], p=p[n])
 
-        ll = negbin_ll + betabin_ll
+        betabin_ll = self._log_likelihood_post(betabin_ll, cn)
 
-        ll = self._log_likelihood_post(ll, cn)
+        return betabin_ll
 
-        return ll
+    def log_likelihood(self, cn):
+        """ Calculate log likelihood of total and allelic read counts
+        
+        Args:
+            cn (numpy.array): copy number state
+        
+        Returns:
+            float: log likelihood per segment
+
+        Copy number has shape (N, M, L) for N segments, M clones, L alleles.
+        
+        """
+
+        return self.log_likelihood_total(cn) + self.log_likelihood_alleles(cn)
 
     def _mu_partial_h(self, l, cn):
         """ Calculate partial derivative of expected total read count

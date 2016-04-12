@@ -6,6 +6,7 @@ import itertools
 import pickle
 import numpy as np
 import pandas as pd
+import random
 import scipy
 import scipy.optimize
 
@@ -21,120 +22,116 @@ import remixt.tests.utils
 np.random.seed(2014)
 
 
+def generate_simple_data(N=100, M=3):
+
+    r = np.array([75, 75, 75])
+
+    l = np.random.uniform(low=100000, high=1000000, size=N)
+    phi = np.random.uniform(low=0.2, high=0.4, size=N)
+
+    cn = sim_simple.generate_cn(N, M, 2.0, 0.5, 0.5, 1)
+    h = np.random.uniform(low=0.5, high=2.0, size=M)
+
+    likelihood_model = likelihood.ReadCountLikelihood(None, l)
+    likelihood_model.h = h
+    likelihood_model.phi = phi
+
+    mu = likelihood_model.expected_read_count(l, cn)
+
+    nb_p = mu / (r + mu)
+
+    x = np.array([np.random.negative_binomial(r, 1.-a) for a in nb_p])
+    x = x.reshape(nb_p.shape)
+    x[:,0:2].sort(axis=1)
+    x[:,0:2] = x[:,2:0:-1]
+
+    return cn, h, l, phi, r, x
+
+
+def load_test_experiment():
+
+    script_directory = os.path.realpath(os.path.dirname(__file__))
+    experiment_filename = os.path.join(script_directory, 'test_experiment.pickle')
+
+    with open(experiment_filename) as experiment_file:
+        experiment = pickle.load(experiment_file)
+
+    return experiment
+
+
+def uniform_cn_prior():
+
+    cn_max = 4
+
+    num_haploid_states = cn_max + 1
+    num_cn_states = num_haploid_states * (num_haploid_states + 1) / 2
+    num_total_states = num_cn_states + 1
+
+    cn_prior = np.ones((cn_max + 2, cn_max + 2)) / float(num_total_states)
+
+    return cn_prior
+
+
+def perfect_cn_prior(cn):
+
+    cn_max = 4
+
+    cn_prior = np.zeros((cn_max + 2, cn_max + 2))
+
+    for n in xrange(cn.shape[0]):
+        for m in xrange(1, cn.shape[1]):
+            cn_1 = int(cn[n,m,0])
+            cn_2 = int(cn[n,m,1])
+            if cn_1 > cn_max or cn_2 > cn_max:
+                cn_prior[cn_max+1, :] += 1.0
+                cn_prior[:, cn_max+1] += 1.0
+                cn_prior[cn_max+1, cn_max+1] -= 1.0
+            elif cn_1 != cn_2:
+                cn_prior[cn_1, cn_2] += 1.0
+                cn_prior[cn_2, cn_1] += 1.0
+            else:
+                cn_prior[cn_1, cn_2] += 1.0
+
+    cn_prior[:] += 1.0
+
+    cn_prior /= cn.shape[0] * cn.shape[1]
+
+    return cn_prior
+
+
+def generate_tiny_data():
+
+    cn = np.array([[[1, 1],
+                    [2, 2],
+                    [2, 2]],
+                   [[1, 1],
+                    [2, 1],
+                    [2, 2]],
+                   [[1, 1],
+                    [2, 2],
+                    [2, 2]]])
+
+    h = np.array([0.2, 0.3, 0.1])
+
+    l = np.array([10000, 20000, 10000])
+
+    phi = np.array([0.2, 0.2, 0.2])
+
+    p = np.vstack([phi, phi, np.ones(phi.shape)]).T
+
+    mu = likelihood.expected_read_count(l, cn, h, phi)
+
+    x = np.array([np.random.poisson(a) for a in mu])
+    x = x.reshape(mu.shape)
+
+    return x, cn, h, l, phi
+
+
 class remixt_unittest(unittest.TestCase):
 
-    def generate_simple_data(self, N=100, M=3):
-
-        r = np.array([75, 75, 75])
-
-        l = np.random.uniform(low=100000, high=1000000, size=N)
-        phi = np.random.uniform(low=0.2, high=0.4, size=N)
-
-        cn = sim_simple.generate_cn(N, M, 2.0, 0.5, 0.5, 1)
-        h = np.random.uniform(low=0.5, high=2.0, size=M)
-
-        likelihood_model = likelihood.ReadCountLikelihood(None, l)
-        likelihood_model.h = h
-        likelihood_model.phi = phi
-
-        mu = likelihood_model.expected_read_count(l, cn)
-
-        nb_p = mu / (r + mu)
-
-        x = np.array([np.random.negative_binomial(r, 1.-a) for a in nb_p])
-        x = x.reshape(nb_p.shape)
-        x[:,0:2].sort(axis=1)
-        x[:,0:2] = x[:,2:0:-1]
-
-        return cn, h, l, phi, r, x
-
-
-    def load_test_experiment(self):
-
-        script_directory = os.path.realpath(os.path.dirname(__file__))
-        experiment_filename = os.path.join(script_directory, 'test_experiment.pickle')
-
-        with open(experiment_filename) as experiment_file:
-            experiment = pickle.load(experiment_file)
-
-        return experiment
-
-
-    def uniform_cn_prior(self):
-
-        cn_max = 4
-
-        num_haploid_states = cn_max + 1
-        num_cn_states = num_haploid_states * (num_haploid_states + 1) / 2
-        num_total_states = num_cn_states + 1
-
-        cn_prior = np.ones((cn_max + 2, cn_max + 2)) / float(num_total_states)
-
-        return cn_prior
-
-
-    def perfect_cn_prior(self, cn):
-
-        cn_max = 4
-
-        cn_prior = np.zeros((cn_max + 2, cn_max + 2))
-
-        for n in xrange(cn.shape[0]):
-            for m in xrange(1, cn.shape[1]):
-                cn_1 = int(cn[n,m,0])
-                cn_2 = int(cn[n,m,1])
-                if cn_1 > cn_max or cn_2 > cn_max:
-                    cn_prior[cn_max+1, :] += 1.0
-                    cn_prior[:, cn_max+1] += 1.0
-                    cn_prior[cn_max+1, cn_max+1] -= 1.0
-                elif cn_1 != cn_2:
-                    cn_prior[cn_1, cn_2] += 1.0
-                    cn_prior[cn_2, cn_1] += 1.0
-                else:
-                    cn_prior[cn_1, cn_2] += 1.0
-
-        cn_prior[:] += 1.0
-
-        cn_prior /= cn.shape[0] * cn.shape[1]
-
-        return cn_prior
-
-
-    def generate_tiny_data(self):
-
-        cn = np.array([[[1, 1],
-                        [2, 2],
-                        [2, 2]],
-                       [[1, 1],
-                        [2, 1],
-                        [2, 2]],
-                       [[1, 1],
-                        [2, 2],
-                        [2, 2]]])
-
-        h = np.array([0.2, 0.3, 0.1])
-
-        l = np.array([10000, 20000, 10000])
-
-        phi = np.array([0.2, 0.2, 0.2])
-
-        p = np.vstack([phi, phi, np.ones(phi.shape)]).T
-
-        likelihood_model = likelihood.ReadCountLikelihood()
-        likelihood_model.h = h
-        likelihood_model.phi = phi
-
-        mu = likelihood_model.expected_read_count(l, cn)
-
-        x = np.array([np.random.poisson(a) for a in mu])
-        x = x.reshape(mu.shape)
-
-        return x, cn, h, l, phi
-
-        
     def test_evaluate_q_derivative(self):
 
-        cn, h, l, phi, r, x = self.generate_simple_data()
+        cn, h, l, phi, r, x = generate_simple_data()
 
         emission = likelihood.NegBinBetaBinLikelihood(x, l)
         emission.h = h
@@ -142,7 +139,7 @@ class remixt_unittest(unittest.TestCase):
         N = l.shape[0]
         M = h.shape[0]
 
-        prior = cn_model.CopyNumberPrior(self.perfect_cn_prior(cn))
+        prior = cn_model.CopyNumberPrior(perfect_cn_prior(cn))
         prior.set_lengths(l)
         
         model = cn_model.HiddenMarkovModel(N, M, emission, prior, [(0, N)])
@@ -162,7 +159,7 @@ class remixt_unittest(unittest.TestCase):
 
     def test_build_cn(self):
 
-        prior = cn_model.CopyNumberPrior(1, 3, self.uniform_cn_prior())
+        prior = cn_model.CopyNumberPrior(1, 3, uniform_cn_prior())
         model = cn_model.HiddenMarkovModel(1, 3, None, prior)
 
         cn_max = 6
@@ -201,49 +198,53 @@ class remixt_unittest(unittest.TestCase):
 
     def test_simple_genome_graph(self):
 
-        x, cn, h, l, phi = self.generate_tiny_data()
+        x, cn, h, l, phi = generate_tiny_data()
 
-        cn_true = cn.copy()
-
-        emission = likelihood.NegBinBetaBinLikelihood()
+        emission = likelihood.NegBinBetaBinLikelihood(x, l)
         emission.h = h
         emission.phi = phi
 
         N = l.shape[0]
         M = h.shape[0]
 
-        prior = cn_model.CopyNumberPrior(N, M, self.uniform_cn_prior())
-        prior.set_lengths(l)
+        prior = cn_model.CopyNumberPrior(l)
         
         adjacencies = [(0, 1), (1, 2)]
         breakpoints = [frozenset([(0, 1), (2, 0)])]
 
-        # Modify copy number from known true
-        cn[1,1,1] = 2
+        for i in xrange(1000):
+            print i
+            random.seed(i)
+            np.random.seed(i)
 
-        graph = genome_graph.GenomeGraph(emission, prior, adjacencies, breakpoints)
-        graph.init_copy_number(cn)
+            # Modify copy number from known true
+            cn_init = cn.copy()
+            for n in xrange(N):
+                m = np.random.randint(low=1, high=M)
+                for allele in xrange(2):
+                    cn_init[n, m, allele] += np.random.randint(low=-1, high=1)
 
-        graph.optimize()
+            # print np.random.randint(low=-1, high=1, size=cn_init[:, 1:, :].shape)
+            # cn_init[:, 1:, :] += np.random.randint(low=-1, high=1, size=cn_init[:, 1:, :].shape)
 
-        self.assertTrue(np.all(graph.cn == cn_true))
+            graph = genome_graph.GenomeGraphModel(N, M, emission, prior, adjacencies, breakpoints)
+            graph.init_copy_number(cn_init, init_breakpoints=True)
 
-        bond_cn = graph.bond_cn.set_index(['n_1', 'ell_1', 'side_1', 'n_2', 'ell_2', 'side_2'])
-        bond_cn = bond_cn[['cn_1', 'cn_2']]
+            graph.optimize()
 
-        # Check reference edges
-        self.assertTrue(np.all(bond_cn.loc[0,0,1,1,0,0].values == np.array([2, 2])))
-        self.assertTrue(np.all(bond_cn.loc[0,1,1,1,1,0].values == np.array([1, 2])))
-        self.assertTrue(np.all(bond_cn.loc[1,0,1,2,0,0].values == np.array([2, 2])))
-        self.assertTrue(np.all(bond_cn.loc[1,1,1,2,1,0].values == np.array([1, 2])))
+            if not np.all(graph.breakpoint_copy_number[['cn_1', 'cn_2']].values == np.array([1, 0])):
+                print cn
+                print cn_init
+                print graph.segment_cn
+                print graph.breakpoint_copy_number
+                import IPython; IPython.embed(); raise
 
-        # Check variant edge
-        self.assertTrue(np.all(bond_cn.loc[0,1,1,2,1,0].values == np.array([1, 0])))
+            self.assertTrue(np.all(graph.breakpoint_copy_number[['cn_1', 'cn_2']].values == np.array([1, 0])))
 
 
     def test_learn_h_graph(self):
 
-        experiment = self.load_test_experiment()
+        experiment = load_test_experiment()
 
         emission = likelihood.NegBinBetaBinLikelihood()
         emission.h = experiment.h
@@ -252,7 +253,7 @@ class remixt_unittest(unittest.TestCase):
         N = experiment.l.shape[0]
         M = experiment.h.shape[0]
 
-        prior = cn_model.CopyNumberPrior(N, M, self.perfect_cn_prior(experiment.cn))
+        prior = cn_model.CopyNumberPrior(N, M, perfect_cn_prior(experiment.cn))
         prior.set_lengths(experiment.l)
 
         model = cn_model.HiddenMarkovModel(N, M, emission, prior)
@@ -270,7 +271,7 @@ class remixt_unittest(unittest.TestCase):
 
     def test_learn_h(self):
 
-        experiment = self.load_test_experiment()
+        experiment = load_test_experiment()
 
         h_init = experiment.h * (1. + 0.05 * np.random.randn(*experiment.h.shape))
 
@@ -282,7 +283,7 @@ class remixt_unittest(unittest.TestCase):
         N = experiment.l.shape[0]
         M = experiment.h.shape[0]
 
-        prior = cn_model.CopyNumberPrior(self.perfect_cn_prior(experiment.cn))
+        prior = cn_model.CopyNumberPrior(perfect_cn_prior(experiment.cn))
         prior.set_lengths(experiment.l)
 
         model = cn_model.HiddenMarkovModel(N, M, emission, prior, experiment.chains, normal_contamination=False)
@@ -293,7 +294,7 @@ class remixt_unittest(unittest.TestCase):
 
     def test_learn_r(self):
 
-        experiment = self.load_test_experiment()
+        experiment = load_test_experiment()
 
         emission = likelihood.NegBinLikelihood()
         emission.h = experiment.h
@@ -303,7 +304,7 @@ class remixt_unittest(unittest.TestCase):
         N = experiment.l.shape[0]
         M = experiment.h.shape[0]
 
-        prior = cn_model.CopyNumberPrior(N, M, self.perfect_cn_prior(experiment.cn))
+        prior = cn_model.CopyNumberPrior(N, M, perfect_cn_prior(experiment.cn))
         prior.set_lengths(experiment.l)
 
         model = cn_model.HiddenMarkovModel(N, M, emission, prior)
@@ -316,7 +317,7 @@ class remixt_unittest(unittest.TestCase):
 
     def test_learn_phi(self):
 
-        experiment = self.load_test_experiment()
+        experiment = load_test_experiment()
 
         emission = likelihood.NegBinLikelihood()
         emission.h = experiment.h
@@ -326,7 +327,7 @@ class remixt_unittest(unittest.TestCase):
         N = experiment.l.shape[0]
         M = experiment.h.shape[0]
 
-        prior = cn_model.CopyNumberPrior(N, M, self.perfect_cn_prior(experiment.cn))
+        prior = cn_model.CopyNumberPrior(N, M, perfect_cn_prior(experiment.cn))
         prior.set_lengths(experiment.l)
 
         model = cn_model.HiddenMarkovModel(N, M, emission, prior)

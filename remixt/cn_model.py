@@ -104,7 +104,7 @@ class HiddenMarkovModel(object):
         self.cn_max = max_copy_number
 
         self.transition_log_prob = -10.
-        self.transition_model = 'step_allele'
+        self.transition_model = 'geometric_total'
 
         self.cn_dev_max = 1
 
@@ -146,6 +146,9 @@ class HiddenMarkovModel(object):
 
             cn = np.array([normal_cn] + [base_cn] + list(subclone_cn))
 
+            # Check for the situation in which not all alleles are the same
+            # across all clones, but all of the major alleles have less or
+            # equal copy number than the minor alleles
             if np.any(cn[1:,0] != cn[1:,1]) and np.all(cn[1:,0] <= cn[1:,1]):
                 continue
 
@@ -183,37 +186,40 @@ class HiddenMarkovModel(object):
 
         self.log_trans_mat = np.zeros((num_states, num_states))
 
+        def _transition_cost_step(cn_1, cn_2):
+            return np.any(cn_1 != cn_2) * 1.
+
+        def _transition_cost_step_total(cn_1, cn_2):
+            return np.sum(cn_1.sum(axis=-1) != cn_2.sum(axis=-1), axis=-1)
+
+        def _transition_cost_step_allele(cn_1, cn_2):
+            return np.any(cn_1 != cn_2).sum(axis=(-1, -2))
+
+        def _transition_cost_geometric_total(cn_1, cn_2):
+            return np.sum(np.absolute(cn_1.sum(axis=-1) - cn_2.sum(axis=-1)), axis=-1)
+
+        def _transition_cost_geometric_allele(cn_1, cn_2):
+            return np.absolute(cn_1 - cn_2).sum(axis=(-1, -2))
+
+        f_cost = None
         if self.transition_model == 'step':
-
-            self.log_trans_mat[:,:] = self.transition_log_prob
-            self.log_trans_mat[xrange(num_states), xrange(num_states)] = 0.
-
+            f_cost = _transition_cost_step
+        elif self.transition_model == 'step_total':
+            f_cost = _transition_cost_step_total
         elif self.transition_model == 'step_allele':
-
-            for idx_1 in xrange(num_states):
-                cn_1 = cn_states[idx_1]
-
-                for idx_2 in xrange(num_states):
-                    cn_2 = cn_states[idx_2]
-
-                    for ell in xrange(2):
-                        cn_is_diff = np.any(cn_1[0,1:,ell] != cn_2[0,1:,ell]) * 1.
-                        self.log_trans_mat[idx_1, idx_2] += self.transition_log_prob * cn_is_diff
-
-        elif self.transition_model == 'geometric':
-
-            for idx_1 in xrange(num_states):
-                cn_1 = cn_states[idx_1]
-
-                for idx_2 in xrange(num_states):
-                    cn_2 = cn_states[idx_2]
-
-                    for ell in xrange(2):
-                        cn_diff = np.absolute(cn_1[0,1:,ell] - cn_2[0,1:,ell]).sum()
-                        self.log_trans_mat[idx_1, idx_2] += self.transition_log_prob * cn_diff
-
+            f_cost = _transition_cost_step_allele
+        elif self.transition_model == 'geometric_total':
+            f_cost = _transition_cost_geometric_total
+        elif self.transition_model == 'geometric_allele':
+            f_cost = _transition_cost_geometric_allele
         else:
             raise ValueError('Unknown transition model {0}'.format(self.transition_model))
+
+        for idx_1 in xrange(num_states):
+            cn_1 = cn_states[idx_1, 0, :, :]
+            for idx_2 in xrange(num_states):
+                cn_2 = cn_states[idx_2, 0, :, :]
+                self.log_trans_mat[idx_1, idx_2] = self.transition_log_prob * f_cost(cn_1, cn_2)
 
         self.log_trans_mat -= scipy.misc.logsumexp(self.log_trans_mat, axis=0)
 

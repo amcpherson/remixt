@@ -180,17 +180,18 @@ def fit_hmm_graph(
     _, cn_init = model.optimal_state()
 
     # Create genome graph initializing from viterbi
-    graph = remixt.genome_graph.GenomeGraph(emission, prior, experiment.adjacencies, experiment.breakpoints)
-    graph.set_observed_data(experiment.x, experiment.l)
+    graph = remixt.genome_graph.GenomeGraphModel(N, M, emission, prior, experiment.adjacencies, experiment.breakpoints)
     graph.init_copy_number(cn_init)
 
     # Infer copy number
-    log_likelihood_graph, cn = graph.optimize()
+    log_likelihood_graph = graph.optimize()
+    cn = graph.segment_cn
+
     results['cn'] = cn
     results['brk_cn'] = graph.breakpoint_copy_number
     results['stats']['graph_opt_iter'] = graph.opt_iter
     results['stats']['graph_log_likelihood'] = log_likelihood_graph
-    results['stats']['graph_decreased_log_posterior'] = graph.decreased_log_posterior
+    results['stats']['graph_decreased_log_prob'] = graph.decreased_log_prob
     results['stats']['log_likelihood'] = log_likelihood_graph
     results['stats']['log_prior'] = prior.log_prior(cn).sum()
 
@@ -299,7 +300,7 @@ def fit(
         emission.h_param,
         emission.r_param,
         emission.M_param,
-        emission.z_param,
+        # emission.z_param,
         emission.hdel_mu_param,
         emission.loh_p_param,
     ]
