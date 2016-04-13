@@ -362,7 +362,7 @@ def collate(collate_filename, experiment_filename, init_results_filename, fit_re
         for init_id, results_filename in fit_results_filenames.iteritems():
             with pd.HDFStore(results_filename, 'r') as results:
                 for key, value in results.iteritems():
-                    collated['solutions/solution_{1}/{2}'.format(init_id, key)] = results[key]
+                    collated['solutions/solution_{0}/{1}'.format(init_id, key)] = results[key]
 
         with open(experiment_filename, 'r') as f:
             experiment = pickle.load(f)
