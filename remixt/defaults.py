@@ -86,6 +86,9 @@ gc_position_offset                          = 4
 # Method to use for fitting segment/breakpoint copy number model
 fit_method                                  = 'hmm_graph'
 
+# Maximum copy number in state space for HMM
+max_copy_number                             = 6
+
 # Tumour mixture fractions for initialization of haploid depth
 # parameter optimization
 tumour_mix_fractions                        = [[0.5, 0.5], [0.6, 0.4], [0.75, 0.25], [0.9, 0.1]]

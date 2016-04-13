@@ -42,6 +42,8 @@ class CopyNumberPrior(object):
 
         """
         
+        self.l = l
+
         self.max_divergence = max_divergence
         self.divergence_weight = divergence_weight
 
@@ -70,7 +72,7 @@ class CopyNumberPrior(object):
 
 class HiddenMarkovModel(object):
 
-    def __init__(self, N, M, emission, prior, chains, normal_contamination=True):
+    def __init__(self, N, M, emission, prior, chains, max_copy_number=6, normal_contamination=True):
         """ Create a copy number model.
 
         Args:
@@ -81,6 +83,7 @@ class HiddenMarkovModel(object):
             chains (list of tuple): start end indices of chromosome chains
 
         KwArgs:
+            max_copy_number (int): maximum copy number of HMM state space
             normal_contamination (bool): whether the sample is contaminated by normal
 
         """
@@ -95,7 +98,7 @@ class HiddenMarkovModel(object):
 
         self.normal_contamination = normal_contamination
 
-        self.cn_max = prior.cn_max
+        self.cn_max = max_copy_number
 
         self.transition_log_prob = -10.
         self.transition_model = 'step'
