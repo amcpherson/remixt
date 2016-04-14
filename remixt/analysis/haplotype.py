@@ -70,7 +70,7 @@ def read_snp_counts(seqdata_filename, chromosome, num_rows=1000000):
             alleles_chunk
             .groupby(['position', 'is_alt'])
             .size()
-            .unstack()
+            .unstack(fill_value=0)
             .reindex(columns=[0, 1])
             .fillna(0)
             .astype(int)
