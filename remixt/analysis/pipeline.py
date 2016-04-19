@@ -62,12 +62,14 @@ def init(
     # Calculate candidate haploid depths for normal contamination and multiple clones
     # Filter candidates with inappropriate ploidy
     init_h_params = []
+    ploidy_estimates = []
     for mode_idx, h_mono in enumerate(init_h_mono):
         for mix_frac in tumour_mix_fractions:
             mix_frac = np.array(mix_frac)
             h_poly = np.array([h_mono[0]] + list(h_mono[1] * mix_frac))
 
             estimated_ploidy = remixt.analysis.readdepth.estimate_ploidy(h_poly, experiment)
+            ploidy_estimates.append(estimated_ploidy)
 
             if min_ploidy is not None and estimated_ploidy < min_ploidy:
                 continue
@@ -77,6 +79,11 @@ def init(
 
             params = {'mode_idx': mode_idx, 'h_init': tuple(h_poly)}
             init_h_params.append(params)
+
+    # Check if min and max ploidy was too strict
+    if len(init_h_params) == 0:
+        raise Exception('no valid ploidy estimates in range {}-{}, candidates are {}'.format(
+            min_ploidy, max_ploidy, repr(ploidy_estimates)))
 
     # Attempt several divergence parameters
     init_params = []
