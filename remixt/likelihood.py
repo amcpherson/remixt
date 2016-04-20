@@ -101,18 +101,14 @@ def calculate_mean_cn(h, x, l):
 
     """
 
-    minor = x[:,1]
-    total = x[:,0:2].sum(axis=1)
-    ratio = minor.astype(float) / total.astype(float)
-    ratio[total == 0] = 0.5
+    phi = remixt.likelihood.estimate_phi(x)
 
-    total_depth = (x[:,2] / l)
-    total_depth[l == 0.] = 0.
-    total_cn = (total_depth - h[0]) / h[1:].sum()
+    depth = x[:,0:2] / (phi * l)[:, np.newaxis]
 
-    dom_cn = np.array([total_cn * (1. - ratio), total_cn * ratio]).T
+    mean_cn = (depth - h[0]) / h[1:].sum()
+    mean_cn[np.isnan(mean_cn)] = 0.
 
-    return dom_cn
+    return mean_cn
 
 
 
