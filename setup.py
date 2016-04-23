@@ -4,6 +4,7 @@ import sys
 import numpy
 import tarfile
 import urllib
+import versioneer
 from setuptools import setup, find_packages, Extension
 from Cython.Build import cythonize
 
@@ -78,7 +79,15 @@ extensions = [
 
 setup(
     name='remixt',
-    version='1.0',
     packages=find_packages(),
+    version=versioneer.get_version(),
+    cmdclass=versioneer.get_cmdclass(),
+    description='ReMixT is a tool for joint inference of clone specific segment and breakpoint copy number',
+    author='Andrew McPherson',
+    author_email='andrew.mcpherson@gmail.com',
+    url='http://bitbucket.org/dranew/remixt',
+    download_url='https://bitbucket.org/dranew/remixt/get/v{}.tar.gz'.format(versioneer.get_version()),
+    keywords=['scientific', 'sequence analysis', 'cancer'],
+    classifiers=[],
     ext_modules=cythonize(extensions),
 )
