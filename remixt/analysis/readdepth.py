@@ -19,24 +19,32 @@ def calculate_depth(experiment):
         pandas.DataFrame: read depth table with columns, 'major', 'minor', 'total', 'length'
 
     """
-    x = experiment.x.copy()
-    l = experiment.l.copy()
 
-    phi = remixt.likelihood.estimate_phi(x)
+    data = experiment.create_segment_table()
+
+    phi = remixt.likelihood.estimate_phi(experiment.x)
     p = remixt.likelihood.proportion_measureable_matrix(phi)
 
-    is_filtered = (l > 0) & np.all(p > 0, axis=1)
-    x = x[is_filtered,:]
-    l = l[is_filtered]
-    p = p[is_filtered,:]
+    # Filter segments for which read depth calculation will be nan/inf
+    data = data[(data['length'] > 0) & np.all(p > 0, axis=1)]
 
-    rd = ((x.T / p.T) / l.T).T
-    rd.sort(axis=1)
+    data.rename(columns={
+        'major_depth': 'major',
+        'minor_depth': 'minor',
+        'total_depth': 'total',
+    }, inplace=True)
 
-    rd = pd.DataFrame(rd, columns=['minor', 'major', 'total'])
-    rd['length'] = l
+    data = data[[
+        'chromosome',
+        'start',
+        'end',
+        'length',
+        'major',
+        'minor',
+        'total',
+    ]]
 
-    return rd
+    return data
 
 
 def calculate_minor_modes(read_depth):

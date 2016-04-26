@@ -1,6 +1,7 @@
 import sys
 import os
 import itertools
+import pickle
 import pandas as pd
 import numpy as np
 import matplotlib
@@ -9,8 +10,10 @@ from matplotlib.colors import colorConverter
 from matplotlib.path import Path
 import matplotlib.patches as patches
 from matplotlib.patches import Rectangle
+import matplotlib.backends.backend_pdf
 
 import remixt.analysis.experiment
+import remixt.analysis.readdepth
 
 
 def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor'):
@@ -77,16 +80,17 @@ def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor'):
     ax.add_collection(matplotlib.collections.PolyCollection(minor_quads, facecolors=quad_color_minor, edgecolors=quad_color_minor, lw=0))
 
 
-def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', minor_col='minor', 
+def plot_cnv_genome(ax, cnv, mincopies=-0.4, maxcopies=4, minlength=1000, major_col='major', minor_col='minor', 
                     chromosome=None, start=None, end=None):
     """ Plot major/minor copy number across the genome
 
     Args:
         ax (matplotlib.axes.Axes): plot axes
-        cnv (pandas.DataFrame): 'cnv_site' table
+        cnv (pandas.DataFrame): copy number table
 
     KwArgs:
-        maxcopies (int): maximum number of copies for setting y limits
+        mincopies (float): minimum number of copies for setting y limits
+        maxcopies (float): maximum number of copies for setting y limits
         minlength (int): minimum length of segments to be drawn
         major_col (str): name of major copies column
         minor_col (str): name of minor copies column
@@ -132,8 +136,7 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', min
 
     plot_cnv_segments(ax, cnv, major_col=major_col, minor_col=minor_col)
 
-    ax.set_ylim((-0.4, maxcopies+.6))
-    ax.set_yticks(range(0, maxcopies+1))
+    ax.set_ylim((mincopies, maxcopies))
     ax.set_yticklabels(ax.get_yticks(), ha='left')
     ax.yaxis.tick_left()
 
@@ -177,6 +180,45 @@ def plot_cnv_genome(ax, cnv, maxcopies=4, minlength=1000, major_col='major', min
     return chromosome_info
 
 
+def plot_cnv_genome_density(fig, transform, cnv):
+    """ Plot major/minor copy number across the genome and as a density
+
+    Args:
+        fig (matplotlib.figure.Figure): figure to which plots are added
+        transform (matplotlib.transform.Transform): transform for locating axes
+        cnv (pandas.DataFrame): copy number table
+
+    """
+
+    box = matplotlib.transforms.Bbox([[0.05, 0.05], [0.65, 0.95]])
+    ax = fig.add_axes(transform.transform_bbox(box))
+
+    remixt.cn_plot.plot_cnv_genome(ax, cnv, mincopies=-1, maxcopies=6, major_col='major_raw', minor_col='minor_raw')
+    ax.set_ylabel('Raw copy number')
+    ylim = ax.get_ylim()
+
+    box = matplotlib.transforms.Bbox([[0.7, 0.05], [0.95, 0.95]])
+    ax = fig.add_axes(transform.transform_bbox(box))
+
+    cov = 0.001
+    data = cnv[['minor_raw', 'major_raw', 'length']].replace(np.inf, np.nan).dropna()
+    remixt.utils.filled_density_weighted(
+        ax, data['minor_raw'].values, data['length'].values,
+        'blue', 0.5, ylim[0], ylim[1], cov, rotate=True)
+    remixt.utils.filled_density_weighted(
+        ax, data['major_raw'].values, data['length'].values,
+        'red', 0.5, ylim[0], ylim[1], cov, rotate=True)
+    ax.set_ylim(ylim)
+    ax.set_xlabel('Density')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.xaxis.tick_bottom()
+    ax.yaxis.tick_left()
+    ax.yaxis.grid(True)
+
+    return fig
+
+
 def create_chromosome_color_map(chromosomes):
     """ Create a map of colors per chromosome.
 
@@ -206,7 +248,7 @@ def plot_cnv_scatter(ax, cnv, major_col='major', minor_col='minor', highlight_co
 
     Args:
         ax (matplotlib.axes.Axes): plot axes
-        cnv (pandas.DataFrame): 'cnv_site' table
+        cnv (pandas.DataFrame): copy number table
 
     KwArgs:
         major_col (str): name of major copies column
@@ -232,27 +274,33 @@ def plot_cnv_scatter(ax, cnv, major_col='major', minor_col='minor', highlight_co
     if highlight_col is not None:
         cnv_greyed = cnv[~cnv[highlight_col]]
         cnv = cnv[cnv[highlight_col]]
-        points = ax.scatter(cnv_greyed['major_raw'], cnv_greyed['minor_raw'],
+        points = ax.scatter(cnv_greyed[major_col], cnv_greyed[minor_col],
             s=cnv_greyed['scatter_size'], facecolor='#d0d0e0', edgecolor='#d0d0e0',
             linewidth=0.0, zorder=2)
 
-    points = ax.scatter(cnv['major_raw'], cnv['minor_raw'],
+    points = ax.scatter(cnv[major_col], cnv[minor_col],
         s=cnv['scatter_size'], facecolor=cnv['color'], edgecolor=cnv['color'],
         linewidth=0.0, zorder=2)
     
-    ax.set_xlim((-0.5, 4.5))
-    ax.set_xticks(xrange(5))
+    major_samples = remixt.utils.weighted_resample(cnv[major_col].values, cnv['length'].values)
+    major_min = np.percentile(major_samples, 5)
+    major_max = np.percentile(major_samples, 95)
+    major_margin = 0.25 * (major_max - major_min)
+    xlim = (major_min - major_margin, major_max + major_margin)
+
+    minor_samples = remixt.utils.weighted_resample(cnv[minor_col].values, cnv['length'].values)
+    minor_min = np.percentile(minor_samples, 5)
+    minor_max = np.percentile(minor_samples, 95)
+    minor_margin = 0.25 * (minor_max - minor_min)
+    ylim = (minor_min - minor_margin, minor_max + minor_margin)
+
+    ax.set_xlim(xlim)
     ax.set_xlabel('major')
-    ax.set_ylim((-0.5, 3.5))
-    ax.set_yticks(xrange(4))
+    ax.set_ylim(ylim)
     ax.set_ylabel('minor')
     
-    ax.spines['left'].set_position(('outward', 5))
-    ax.spines['bottom'].set_position(('outward', 5))
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_bounds(0, 3)
-    ax.spines['bottom'].set_bounds(0, 4)
     ax.xaxis.tick_bottom()
     ax.yaxis.tick_left()
 
@@ -260,9 +308,78 @@ def plot_cnv_scatter(ax, cnv, major_col='major', minor_col='minor', highlight_co
 
     lgnd_artists = [plt.Circle((0, 0), color=c) for c in chromosome_colors['color']]
     lgnd = ax.legend(lgnd_artists, chromosomes,
-        loc=2, markerscale=0.5, fontsize=6,
-        bbox_to_anchor=(1.1, 0.95), ncol=2,
-        title='Chromosome', frameon=False)
+        loc=2, markerscale=0.5, fontsize=6, ncol=2,
+        title='Chromosome', frameon=True)
+    lgnd.get_frame().set_edgecolor('w')
+
+
+def plot_cnv_scatter_density(fig, transform, data, major_col='major', minor_col='minor', annotate=(), info=''):
+    """ Plot CNV Scatter with major minor densities on axes.
+
+    Args:
+        fig (matplotlib.figure.Figure): figure to which plots are added
+        transform (matplotlib.transform.Transform): transform for locating axes
+        data (pandas.DataFrame): copy number data
+
+    KwArgs:
+        major_col (str): name of major copies column
+        minor_col (str): name of minor copies column
+        annotate (iterable): copy values to annotate with dashed line
+        info (str): information to add to empty axis
+
+    Returns:
+    """
+
+    box = matplotlib.transforms.Bbox([[0.05, 0.05], [0.65, 0.65]])
+    ax = fig.add_axes(transform.transform_bbox(box))
+
+    remixt.cn_plot.plot_cnv_scatter(ax, data)
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+
+    for a in annotate:
+        ax.plot(xlim, [a, a], '--k')
+        ax.plot([a, a], ylim, '--k')
+
+    box = matplotlib.transforms.Bbox([[0.05, 0.7], [0.65, 0.95]])
+    ax = fig.add_axes(transform.transform_bbox(box))
+
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.xaxis.tick_bottom()
+    ax.yaxis.tick_left()
+    ax.xaxis.grid(True)
+    remixt.utils.filled_density_weighted(
+        ax, data[major_col].values, data['length'].values,
+        '0.75', 0.5, xlim[0], xlim[1], 1e-7)
+    ax.set_xlim(xlim)
+
+    for a in annotate:
+        ax.plot([a, a], ax.get_ylim(), '--k')
+
+    box = matplotlib.transforms.Bbox([[0.7, 0.05], [0.95, 0.65]])
+    ax = fig.add_axes(transform.transform_bbox(box))
+
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.xaxis.tick_bottom()
+    ax.yaxis.tick_left()
+    ax.yaxis.grid(True)
+    remixt.utils.filled_density_weighted(
+        ax, data[minor_col].values, data['length'].values,
+        '0.75', 0.5, ylim[0], ylim[1], 1e-7, rotate=True)
+    ax.set_ylim(ylim)
+
+    for a in annotate:
+        ax.plot(ax.get_xlim(), [a, a], '--k')
+
+    box = matplotlib.transforms.Bbox([[0.7, 0.7], [0.95, 0.95]])
+    ax = fig.add_axes(transform.transform_bbox(box))
+
+    ax.axis('off')
+    ax.text(0.0, 0.0, info)
+
+    return fig
 
 
 def plot_breakpoints_genome(ax, breakpoint, chromosome_info, scale_height=1.0):
@@ -542,4 +659,53 @@ def plot_mixture(mixture_plot_filename, mixture_filename):
 
     fig.savefig(mixture_plot_filename, format='pdf', bbox_inches='tight', dpi=300)
 
+
+def ploidy_analysis_plots(experiment_filename, plots_filename):
+    """ Generate ploidy analysis plots
+
+    Args:
+        experiment_filename (str): experiment pickle filename
+        plots_filename (str): ploidy analysis plots filename
+
+    """
+
+    with open(experiment_filename, 'r') as experiment_file:
+        experiment = pickle.load(experiment_file)
+
+    read_depth = remixt.analysis.readdepth.calculate_depth(experiment)
+    minor_modes = remixt.analysis.readdepth.calculate_minor_modes(read_depth)
+    init_h_mono = remixt.analysis.readdepth.calculate_candidate_h_monoclonal(minor_modes)
+
+    pdf = matplotlib.backends.backend_pdf.PdfPages(plots_filename)
+
+    for h in init_h_mono:
+        cn_modes = h[0] + np.arange(0, 5) * h[1]
+
+        read_depth['major_raw'] = (read_depth['major'] - h[0]) / h[1]
+        read_depth['minor_raw'] = (read_depth['minor'] - h[0]) / h[1]
+
+        f = h / h.sum()
+
+        major, minor, length = read_depth.replace(np.inf, np.nan).dropna()[['major_raw', 'minor_raw', 'length']].values.T
+        ploidy = ((major + minor) * length).sum() / length.sum()
+
+        info = 'Statistics:\n\n'
+        info += ' normal = {:.3f}\n\n'.format(f[0])
+        info += ' tumour = {:.3f}\n\n'.format(f[1])
+        info += ' ploidy = {:.3f}'.format(ploidy)
+
+        fig = plt.figure(figsize=(12,12))
+
+        box = matplotlib.transforms.Bbox([[0., 0.25], [1., 1.]])
+        transform = matplotlib.transforms.BboxTransformTo(box)
+        remixt.cn_plot.plot_cnv_scatter_density(fig, transform, read_depth, annotate=cn_modes, info=info)
+
+        box = matplotlib.transforms.Bbox([[0., 0.0], [1., 0.25]])
+        transform = matplotlib.transforms.BboxTransformTo(box)
+        remixt.cn_plot.plot_cnv_genome_density(fig, transform, read_depth)
+
+        pdf.savefig(bbox_inches='tight')
+        plt.close()
+
+    pdf.close()
 

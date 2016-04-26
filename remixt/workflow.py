@@ -8,6 +8,7 @@ import remixt.analysis.haplotype
 import remixt.analysis.pipeline
 import remixt.analysis.readcount
 import remixt.analysis.stats
+import remixt.cn_plot
 import remixt.seqdataio
 import remixt.utils
 
@@ -324,6 +325,7 @@ def create_remixt_seqdata_workflow(
     haplotypes_filename = os.path.join(raw_data_directory, 'haplotypes.tsv')
     counts_table_template = os.path.join(raw_data_directory, 'counts', 'sample_{tumour_id}.tsv')
     experiment_template = os.path.join(raw_data_directory, 'experiment', 'sample_{tumour_id}.pickle')
+    ploidy_plots_template = os.path.join(raw_data_directory, 'ploidy_plots', 'sample_{tumour_id}.pdf')
 
     workflow = pypeliner.workflow.Workflow()
 
@@ -395,29 +397,41 @@ def create_remixt_seqdata_workflow(
         ),
     )
 
-    fit_model_config = {}
-    for sample_id in sample_ids:
-        fit_model_config[sample_id] = config.get('fit_model', {}).get(sample_id, {})
-        
-    workflow.setobj(
-        obj=mgd.TempOutputObj('fit_model_config', 'tumour_id', axes_origin=[]),
-        value=fit_model_config,
-    )
-
-    workflow.subworkflow(
-        name='fit_model',
+    workflow.transform(
+        name='ploidy_analysis_plots',
         axes=('tumour_id',),
-        func=remixt.workflow.create_fit_model_workflow,
+        ctx={'mem': 8},
+        func=remixt.cn_plot.ploidy_analysis_plots,
         args=(
             mgd.InputFile('experiment', 'tumour_id', template=experiment_template),
-            mgd.OutputFile('results', 'tumour_id', fnames=results_filenames),
-            mgd.TempInputObj('fit_model_config', 'tumour_id'),
-            ref_data_dir,
+            mgd.OutputFile('plots', 'tumour_id', template=ploidy_plots_template),
         ),
     )
 
+    if not config.get('skip_model_fit', False):
+        fit_model_config = {}
+        for sample_id in sample_ids:
+            fit_model_config[sample_id] = config.get('fit_model', {}).get(sample_id, {})
+            
+        workflow.setobj(
+            obj=mgd.TempOutputObj('fit_model_config', 'tumour_id', axes_origin=[]),
+            value=fit_model_config,
+        )
+
+        workflow.subworkflow(
+            name='fit_model',
+            axes=('tumour_id',),
+            func=remixt.workflow.create_fit_model_workflow,
+            args=(
+                mgd.InputFile('experiment', 'tumour_id', template=experiment_template),
+                mgd.OutputFile('results', 'tumour_id', fnames=results_filenames),
+                mgd.TempInputObj('fit_model_config', 'tumour_id'),
+                ref_data_dir,
+            ),
+        )
+
     return workflow
-    
+
 
 def create_remixt_bam_workflow(
     segment_filename,

@@ -236,10 +236,22 @@ def create_experiment(count_filename, breakpoint_filename, experiment_filename, 
 
 class Experiment(object):
 
-    def __init__(self, count_data, breakpoint_data, max_brk_dist=2000, max_seg_gap=int(3e6)):
+    def __init__(self, count_data, breakpoint_data=None, max_brk_dist=2000, max_seg_gap=int(3e6)):
 
         self.count_data = count_data
-        self.breakpoint_data = breakpoint_data
+
+        if breakpoint_data is not None:
+            self.breakpoint_data = breakpoint_data
+        else:
+            self.breakpoint_data = pd.DataFrame(columns=[
+                'prediction_id',
+                'chromosome_1',
+                'strand_1',
+                'position_1',
+                'chromosome_2',
+                'strand_2',
+                'position_2',
+            ])
 
         chromosomes = self.count_data['chromosome'].unique()
 
@@ -299,11 +311,36 @@ class Experiment(object):
                 chain_start.append(idx+1)
         return zip(sorted(chain_start), sorted(chain_end))
     
+    def create_segment_table(self):
+        """ Create a table of segment data
+
+        Returns:
+            pandas.DataFrame: table of copy number information
+
+        """
+        data = pd.DataFrame({
+            'chromosome': self.segment_chromosome_id,
+            'start': self.segment_start,
+            'end': self.segment_end,
+            'major_is_allele_a': self.segment_major_is_allele_a,
+            'length': self.l,
+            'major_readcount': self.x[:, 0],
+            'minor_readcount': self.x[:, 1],
+            'readcount': self.x[:, 2],
+        })
+
+        phi = remixt.likelihood.estimate_phi(self.x)
+
+        data['major_depth'] = data['major_readcount'] / (phi * data['length'])
+        data['minor_depth'] = data['minor_readcount'] / (phi * data['length'])
+        data['total_depth'] = data['readcount'] / (phi * data['length'])
+
+        return data
+
     def create_cn_table(self, likelihood, cn, h):
         """ Create a table of relevant copy number data
 
         Args:
-            experiment (Experiment): experiment object containing simulation information
             likelihood (ReadCountLikelihood): likelihood model
             cn (numpy.array): segment copy number
             h (numpy.array): haploid depths
@@ -313,34 +350,22 @@ class Experiment(object):
 
         """
 
-        data = pd.DataFrame({
-                'chromosome': self.segment_chromosome_id,
-                'start': self.segment_start,
-                'end': self.segment_end,
-                'major_is_allele_a': self.segment_major_is_allele_a,
-                'length': self.l,
-                'major_readcount': self.x[:, 0],
-                'minor_readcount': self.x[:, 1],
-                'readcount': self.x[:, 2],
-            })
+        data = self.create_segment_table()
 
         likelihood.phi = remixt.likelihood.estimate_phi(self.x)
 
-        data['major_cov'] = data['major_readcount'] / (likelihood.phi * data['length'])
-        data['minor_cov'] = data['minor_readcount'] / (likelihood.phi * data['length'])
-
-        data['major_raw'] = (data['major_cov'] - h[0]) / h[1:].sum()
-        data['minor_raw'] = (data['minor_cov'] - h[0]) / h[1:].sum()
+        data['major_raw'] = (data['major_depth'] - h[0]) / h[1:].sum()
+        data['minor_raw'] = (data['minor_depth'] - h[0]) / h[1:].sum()
         
         data['ratio_raw'] = self.x[:, 1].astype(float) / self.x[:, :2].sum(axis=1).astype(float)
 
         x_e = likelihood.expected_read_count(self.l, cn)
 
-        major_cov_e = x_e[:, 0] / (likelihood.phi * self.l)
-        minor_cov_e = x_e[:, 1] / (likelihood.phi * self.l)
+        major_depth_e = x_e[:, 0] / (likelihood.phi * self.l)
+        minor_depth_e = x_e[:, 1] / (likelihood.phi * self.l)
 
-        major_raw_e = (major_cov_e - h[0]) / h[1:].sum()
-        minor_raw_e = (minor_cov_e - h[0]) / h[1:].sum()
+        major_raw_e = (major_depth_e - h[0]) / h[1:].sum()
+        minor_raw_e = (minor_depth_e - h[0]) / h[1:].sum()
 
         data['major_raw_e'] = major_raw_e
         data['minor_raw_e'] = minor_raw_e
