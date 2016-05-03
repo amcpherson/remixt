@@ -22,6 +22,8 @@ requirements:
     - statsmodels
     - scikit-learn
     - pyyaml
+    - matplotlib
+    - seaborn
 
 about:
   home: http://bitbucket.org/dranew/remixt
