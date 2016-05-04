@@ -1,3 +1,4 @@
+import argparse
 import logging
 import warnings
 
@@ -17,142 +18,7 @@ from bokeh.models import *
 from bokeh.plotting import Figure, curdoc
 from bokeh.core.properties import value
 
-
-chromosomes = [str(a) for a in range(1, 23)] + ['X']
-
-color_map = matplotlib.pyplot.get_cmap('Set1')
-chromosome_colors = list()
-for i in xrange(len(chromosomes)):
-    rgb_color = color_map(float(i)/float(len(chromosomes)))
-    hex_color = matplotlib.colors.rgb2hex(rgb_color)
-    chromosome_colors.append(hex_color)
-chromosome_colors = pd.DataFrame({'chromosome':chromosomes, 'scatter_color':chromosome_colors})
-
-chromosome_indices = dict([(chromosome, idx) for idx, chromosome in enumerate(chromosomes)])
-del chromosome
-
-patient_samples = collections.defaultdict(list)
-sample_stores = dict()
-
-
-for data_filename in glob.glob('./patient_*/sample_*.h5'):
-    patient = data_filename.split('/')[-2][len('patient_'):]
-    sample = data_filename.split('/')[-1][len('sample_'):-len('.h5')]
-
-    patient_samples[patient].append(sample)
-    sample_stores[(patient, sample)] = pd.HDFStore(data_filename, 'r')
-
-
-def major_minor_scatter_plot(source):
-    """
-    """
-    p = Figure(
-        title='raw major vs minor',
-        plot_width=1000, plot_height=500,
-        tools='pan,wheel_zoom,box_select,reset,lasso_select',
-        logo=None,
-        title_text_font_size=value('10pt'),
-        x_range=[-0.5, 6.5],
-        y_range=[-0.5, 4.5],
-    )
-
-    p.circle(x='major_raw', y='minor_raw',
-        size='scatter_size', color='scatter_color', alpha=0.5,
-        source=source,
-    )
-
-    return p
-
-
-def major_minor_segment_plot(source, major_column, minor_column, x_range, name, width=1000):
-    """
-    """
-    hover = HoverTool(
-        tooltips=[
-            ('segment_idx', '@segment_idx'),
-            ('chromosome', '@chromosome'),
-            ('start', '@start'),
-            ('end', '@end'),
-            ('major_raw', '@major_raw'),
-            ('minor_raw', '@minor_raw'),
-        ]
-    )
-
-    tools = [
-        PanTool(dimensions=['x']),
-        WheelZoomTool(dimensions=['x']),
-        BoxZoomTool(),
-        BoxSelectTool(),
-        ResetTool(),
-        TapTool(),
-        hover,
-    ]
-
-    p = Figure(
-        title=name+' chromosome major/minor',
-        plot_width=width, plot_height=200,
-        tools=tools,
-        logo=None,
-        title_text_font_size=value('10pt'),
-        x_range=x_range,
-        y_range=[-0.5, 6.5],
-    )
-
-    p.quad(top=major_column, bottom=0, left='plot_start', right='plot_end',
-        source=source, color='red', alpha=0.05, line_width=0)
-
-    p.quad(top=minor_column, bottom=0, left='plot_start', right='plot_end',
-        source=source, color='blue', alpha=0.05, line_width=0)
-
-    p.segment(y0=major_column, y1=major_column, x0='plot_start', x1='plot_end',
-        source=source, color='red', alpha=1.0, line_width=4)
-
-    p.segment(y0=minor_column, y1=minor_column, x0='plot_start', x1='plot_end',
-        source=source, color='blue', alpha=1.0, line_width=2)
-
-    return p
-
-
-def breakpoints_plot(source, x_range, width=1000):
-    """
-    """
-    hover = HoverTool(
-        tooltips=[
-            ('prediction_id', '@prediction_id'),
-            ('chromosome', '@chromosome'),
-            ('position', '@position'),
-            ('strand', '@strand'),
-            ('other_chromosome', '@other_chromosome'),
-            ('other_position', '@other_position'),
-            ('other_strand', '@other_strand'),
-            ('type', '@type'),
-        ]
-    )
-
-    tools = [
-        PanTool(dimensions=['x']),
-        WheelZoomTool(dimensions=['x']),
-        BoxSelectTool(),
-        ResetTool(),
-        TapTool(),
-        hover,
-    ]
-
-    p = Figure(
-        title='break ends',
-        plot_width=width, plot_height=150,
-        tools=tools,
-        logo=None,
-        title_text_font_size=value('10pt'),
-        x_range=x_range,
-        y_range=['+', '-'],
-    )
-
-    p.triangle(x='plot_position', y='strand', size=10, angle='strand_angle',
-        line_color='grey', fill_color='clonality_color', alpha=1.0,
-        source=source)
-
-    return p
+import remixt.visualize
 
 
 def setup_chromosome_plot_axes(p):
@@ -161,34 +27,15 @@ def setup_chromosome_plot_axes(p):
     p.xaxis[0].formatter = NumeralTickFormatter(format='0.00a')
 
 
-def setup_genome_plot_axes(p, chromosome_plot_info):
+def retrieve_solution_data(store):
     """
     """
-    chromosomes = list(chromosome_plot_info['chromosome'].values)
-    chromosome_bounds = [0] + list(chromosome_plot_info['chromosome_plot_end'].values)
-    chromosome_mids = list(chromosome_plot_info['chromosome_plot_mid'].values)
-
-    p.xgrid.ticker = FixedTicker(ticks=[-1] + chromosome_bounds + [chromosome_bounds[-1] + 1])
-    p.xgrid.band_fill_alpha = 0.1
-    p.xgrid.band_fill_color = "navy"
-
-    p.xaxis[0].ticker = FixedTicker(ticks=chromosome_bounds)
-    p.xaxis[0].major_label_text_font_size = value('0pt')
-
-    p.text(x=chromosome_mids, y=-0.5, text=chromosomes, text_font_size=value('0.5em'), text_align='center')
-
-
-def retrieve_solution_data(patient, sample):
-    """
-    """
-    store = sample_stores[(patient, sample)]
-
     solutions_df = store['stats']
 
     for idx, row in solutions_df.iterrows():
 
         # Calculate ploidy
-        cnv = retrieve_cnv_data(patient, sample, row['init_id'])
+        cnv = retrieve_cnv_data(store, row['init_id'])
         cnv = cnv.replace([np.inf, -np.inf], np.nan).dropna()
         ploidy = (cnv['length'] * (cnv['major_raw_e'] + cnv['minor_raw_e'])).sum() / cnv['length'].sum()
         solutions_df.loc[idx, 'ploidy'] = ploidy
@@ -211,19 +58,15 @@ def retrieve_solution_data(patient, sample):
     return solutions_df
 
 
-def retrieve_solutions(patient, sample):
+def retrieve_solutions(store):
     """
     """
-    store = sample_stores[(patient, sample)]
-
     return list(store['stats']['init_id'].astype(str).values)
 
 
-def retrieve_cnv_data(patient, sample, solution, chromosome=''):
+def retrieve_cnv_data(store, solution, chromosome=''):
     """
     """
-    store = sample_stores[(patient, sample)]
-
     cnv = store['solutions/solution_{0}/cn'.format(solution)]
 
     if chromosome != '':
@@ -234,158 +77,21 @@ def retrieve_cnv_data(patient, sample, solution, chromosome=''):
     return cnv
 
 
-def retrieve_chromosome_plot_info(patient, sample, solution, chromosome=''):
+def retrieve_chromosome_plot_info(store, solution, chromosome=''):
     """
     """
-    cnv = retrieve_cnv_data(patient, sample, solution, chromosome)
+    cnv = retrieve_cnv_data(store, solution, chromosome)
 
-    cnv['chromosome_index'] = cnv['chromosome'].apply(lambda a: chromosome_indices[a])
-    cnv.sort_values(['chromosome_index', 'start'], inplace=True)
-
-    info = (
-        cnv.groupby('chromosome', sort=False)['end']
-        .max().reset_index().rename(columns={'end':'chromosome_length'}))
-
-    info['chromosome_plot_end'] = np.cumsum(info['chromosome_length'])
-    info['chromosome_plot_start'] = info['chromosome_plot_end'].shift(1)
-    info.loc[info.index[0], 'chromosome_plot_start'] = 0
-    info['chromosome_plot_mid'] = 0.5 * (info['chromosome_plot_start'] + info['chromosome_plot_end'])
-
-    return info
+    return remixt.visualize.create_chromosome_plot_info(cnv, chromosome=chromosome)
 
 
-def prepare_cnv_data(cnv, chromosome_plot_info, smooth_segments=False):
+def retrieve_brk_data(store, solution, chromosome_plot_info):
     """
     """
-    # Group segments with same state
-    if smooth_segments:
-        cnv['chromosome_index'] = cnv['chromosome'].apply(lambda a: chromosome_indices[a])
-        cnv['diff'] = cnv[['chromosome_index', 'major_1', 'major_2', 'minor_1', 'minor_2']].diff().abs().sum(axis=1)
-        cnv['is_diff'] = (cnv['diff'] != 0)
-        cnv['cn_group'] = cnv['is_diff'].cumsum()
-
-        def agg_segments(df):
-
-            stable_cols = [
-                'chromosome',
-                'major_1',
-                'major_2',
-                'minor_1',
-                'minor_2',
-                'major_raw_e',
-                'minor_raw_e',
-            ]
-
-            a = df[stable_cols].iloc[0]
-
-            a['start'] = df['start'].min()
-            a['end'] = df['end'].max()
-            a['length'] = df['length'].sum()
-
-            length_normalized_cols = [
-                'major_raw',
-                'minor_raw',
-            ]
-
-            for col in length_normalized_cols:
-                a[col] = (df[col] * df['length']).sum() / (df['length'].sum() + 1e-16)
-
-            return a
-
-        cnv = cnv.groupby('cn_group').apply(agg_segments)
-
-    # Scatter size scaled by segment length
-    cnv['scatter_size'] = 2. * np.sqrt(cnv['length'] / 1e6)
-
-    # Scatter color by chromosome
-    cnv = cnv.merge(chromosome_colors)
-
-    # Calculate plot start and end
-    cnv = cnv.merge(chromosome_plot_info[['chromosome', 'chromosome_plot_start']])
-    cnv['plot_start'] = cnv['start'] + cnv['chromosome_plot_start']
-    cnv['plot_end'] = cnv['end'] + cnv['chromosome_plot_start']
-
-    # Drop nan values
-    cnv = cnv.replace(np.inf, np.nan).fillna(0)
-
-    return cnv
-
-
-def retrieve_brk_data(patient, sample, solution, chromosome_plot_info):
-    """
-    """
-    store = sample_stores[(patient, sample)]
-
     brk = store['breakpoints']
-
-    def calculate_breakpoint_type(row):
-        if row['chromosome_1'] != row['chromosome_2']:
-            return 'translocation'
-        if row['strand_1'] == row['strand_2']:
-            return 'inversion'
-        positions = sorted([(row['position_{0}'.format(side)], row['strand_{0}'.format(side)]) for side in (1, 2)])
-        if positions[0][1] == '+':
-            return 'deletion'
-        else:
-            return 'duplication'
-    brk['type'] = brk.apply(calculate_breakpoint_type, axis=1)
-
-    # Duplicate required columns before stack
-    brk['type_1'] = brk['type']
-    brk['type_2'] = brk['type']
-
-    # Stack break ends
-    brk.set_index(['prediction_id'], inplace=True)
-    brk = brk.filter(regex='(_1|_2)')
-    def split_col_name(col):
-        parts = col.split('_')
-        return '_'.join(parts[:-1]), parts[-1]
-    brk.columns = pd.MultiIndex.from_tuples([split_col_name(col) for col in brk.columns])
-    brk.columns.names = 'value', 'side'
-    brk = brk.stack()
-    brk.reset_index(inplace=True)
-
-    # Add columns for other side
-    brk2 = brk[['prediction_id', 'side', 'chromosome', 'strand', 'position']].copy()
-    def swap_side(side):
-        if side == '1':
-            return '2'
-        elif side == '2':
-            return '1'
-        else:
-            raise ValueError()
-    brk2['side'] = brk2['side'].apply(swap_side)
-    brk2.rename(
-        columns={
-            'chromosome':'other_chromosome',
-            'strand':'other_strand',
-            'position':'other_position',
-        },
-        inplace=True
-    )
-    brk = brk.merge(brk2)
-
-    # Annotate with copy number
     brk_cn = store['/solutions/solution_{0}/brk_cn'.format(solution)]
-    brk_cn = brk_cn.groupby('prediction_id')[['cn_1', 'cn_2']].sum().reset_index()
-    brk = brk.merge(brk_cn, on='prediction_id', how='left').fillna(0.0)
 
-    # Annotate with strand related appearance    
-    strand_angle = pd.DataFrame({'strand':['+', '-'], 'strand_angle':[math.pi/6., -math.pi/6.]})
-    brk = brk.merge(strand_angle)
-
-    # Calculate plot start and end
-    brk = brk.merge(chromosome_plot_info[['chromosome', 'chromosome_plot_start']])
-    brk['plot_position'] = brk['position'] + brk['chromosome_plot_start']
-
-    # Annotate with clonal information
-    brk['clone_1_color'] = np.where(brk['cn_1'] > 0, '00', 'ff')
-    brk['clone_2_color'] = np.where(brk['cn_2'] > 0, '00', 'ff')
-    brk['clonality_color'] = '#ff' + brk['clone_1_color'] + brk['clone_2_color']
-
-    brk.sort_values(['prediction_id', 'side'], inplace=True)
-
-    return brk
+    return remixt.visualize.prepare_brk_data(brk, brk_cn, chromosome_plot_info)
 
 
 class gaussian_kde_set_covariance(scipy.stats.gaussian_kde):
@@ -408,11 +114,9 @@ def weighted_density(xs, data, weights, cov):
     return ys
 
 
-def prepare_read_depth_data(patient, sample, solution):
+def prepare_read_depth_data(store, solution):
     """
     """
-    store = sample_stores[(patient, sample)]
-
     # Create read depth plot
     read_depth_df = store['read_depth']
 
@@ -434,34 +138,6 @@ def prepare_read_depth_data(patient, sample, solution):
     })
 
     return data
-
-
-def build_genome_panel(cnv_source, brk_source, chromosome_plot_info, width=1000):
-    """
-    """
-    init_x_range = [0, chromosome_plot_info['chromosome_plot_end'].max()]
-
-    scatter_plot = major_minor_scatter_plot(cnv_source)
-    line_plot1 = major_minor_segment_plot(cnv_source, 'major_raw', 'minor_raw', init_x_range, 'raw', width)
-    line_plot2 = major_minor_segment_plot(cnv_source, 'major_raw_e', 'minor_raw_e', line_plot1.x_range, 'expected', width)
-    line_plot3 = major_minor_segment_plot(cnv_source, 'major_1', 'minor_1', line_plot1.x_range, 'clone 1', width)
-    line_plot4 = major_minor_segment_plot(cnv_source, 'major_2', 'minor_2', line_plot1.x_range, 'clone 2', width)
-    line_plot5 = major_minor_segment_plot(cnv_source, 'major_diff', 'minor_diff', line_plot1.x_range, 'clone diff', width)
-    brk_plot = breakpoints_plot(brk_source, line_plot1.x_range, width)
-
-    for p in [line_plot1, line_plot2, line_plot3, line_plot4, line_plot5, brk_plot]:
-        setup_genome_plot_axes(p, chromosome_plot_info)
-
-    columns = ['prediction_id',
-        'chromosome', 'position', 'strand',
-        'cn_1', 'cn_2']
-    columns = [TableColumn(field=a, title=a, width=10) for a in columns]
-    data_table = DataTable(source=brk_source, columns=columns, width=1000, height=1000)
-
-    panel = Panel(title='Genome View', closable=False)
-    panel.child = VBox(scatter_plot, line_plot1, line_plot2, line_plot3, line_plot4, line_plot5, brk_plot, data_table)
-
-    return panel
 
 
 def build_split_plots(cnv_source, brk_source, chromosome_plot_info, brk_view, width=500):
@@ -503,7 +179,7 @@ def build_split_panel(cnv_source_left, cnv_source_right, brk_source, chromosome_
     return panel
 
 
-def build_solutions_panel(patient, sample, solutions_source, read_depth_source):
+def build_solutions_panel(solutions_source, read_depth_source):
     # Create solutions table
     solutions_columns = [
         ('init_id', NumberFormatter(format='0')),
@@ -540,116 +216,111 @@ def build_solutions_panel(patient, sample, solutions_source, read_depth_source):
     return panel
 
 
-# Make inputs
-patient_select = Select(
-    title="Patient:",
-    name='patients',
-)
+def create_source_select(sources, title, name):
+    names = sources[0][1].keys()
+    initial_value = names[0]
+    
+    callback_code = "var t = cb_obj.get('value');\n"
+    callback_args = {}
 
-patient_select.options = patient_samples.keys()
-patient_select.value = patient_select.options[0]
-patient = patient_select.value
+    for idx, (to_source, from_sources) in enumerate(sources):
+        to_source.data = from_sources[initial_value].data
 
-sample_select = Select(
-    title="Sample:",
-    name='patients',
-)
+        for s_name in names:
+            callback_code += "if (t == '{}') {{\n".format(s_name)
+            callback_code += "  var d = source_{}_{}.get('data');\n".format(idx, s_name)
+            callback_code += "}\n"
 
-sample_select.options = patient_samples[patient]
-sample_select.value = sample_select.options[0]
-sample = sample_select.value
+        callback_code += "source_{}.set('data', d);\n".format(idx)
+        callback_code += "source_{}.trigger('change');\n".format(idx)
 
-solution_select = Select(
-    title="Solution:",
-    name='solutions',
-)
+        callback_args["source_{}".format(idx)] = to_source
+        for s_name, s_data in from_sources.iteritems():
+            callback_args['source_{}_{}'.format(idx, s_name)] = s_data
 
-solution_select.options = retrieve_solutions(patient, sample)
-solution_select.value = solution_select.options[0]
-solution = solution_select.value
+    callback = CustomJS(args=callback_args, code=callback_code)
 
-# Make data sources
-cnv_source = ColumnDataSource()
-brk_source = ColumnDataSource()
-solutions_source = ColumnDataSource()
-read_depth_source = ColumnDataSource()
-
-
-def reset_sample():
-    global sample
-    sample_select.options = patient_samples[patient]
-    sample_select.value = sample_select.options[0]
-    sample = sample_select.value
+    source_select = Select(
+        title=title,
+        name=name,
+    )
+    
+    source_select.options = from_sources.keys()
+    source_select.value = initial_value
+    source_select.callback = callback
+    
+    return source_select
 
 
-def reset_solution():
-    global solution
-    solution_select.options = retrieve_solutions(patient, sample)
-    solution_select.value = solution_select.options[0]
-    solution = solution_select.value
-
-
-# Chromosome plot info will be based on first sample loaded
-chromosome_plot_info = retrieve_chromosome_plot_info(patient, sample, solution)
-
-
-def update_data():
-    cnv = retrieve_cnv_data(patient, sample, solution)
-    cnv_data = prepare_cnv_data(cnv, chromosome_plot_info)
-
-    brk_data = retrieve_brk_data(patient, sample, solution, chromosome_plot_info)
-
-    solutions_data = retrieve_solution_data(patient, sample)
-
-    read_depth_data = prepare_read_depth_data(patient, sample, solution)
+def create_cnv_brk_sources(store, solution, chromosome_plot_info):
+    cnv = retrieve_cnv_data(store, solution)
+    cnv_data = remixt.visualize.prepare_cnv_data(cnv, chromosome_plot_info)
+    brk_data = retrieve_brk_data(store, solution, chromosome_plot_info)
 
     assert cnv_data.notnull().all().all()
     assert brk_data.notnull().all().all()
-    assert solutions_data.notnull().all().all()
-    assert read_depth_data.notnull().all().all()
 
-    cnv_source.data = cnv_data.to_dict(orient='list')
-    brk_source.data = brk_data.to_dict(orient='list')
-    solutions_source.data = solutions_data.to_dict(orient='list')
-    read_depth_source.data = read_depth_data.to_dict(orient='list')
-    
+    cnv_source = ColumnDataSource(cnv_data)
+    brk_source = ColumnDataSource(brk_data)
 
-def update_patient(attr, old, new):
-    global patient
-    patient = new
-    reset_sample()
-    reset_solution()
-    update_data()
+    return cnv_source, brk_source
 
 
-def update_sample(attr, old, new):
-    global sample
-    sample = new
-    reset_solution()
-    update_data()
+from bokeh.plotting import hplot, figure, output_file, show
 
+if __name__ == '__main__':
+    argparser = argparse.ArgumentParser()
 
-def update_solution(attr, old, new):
-    global solution
-    solution = new
-    update_data()
+    argparser.add_argument('results',
+        help='Results to visualize')
 
+    argparser.add_argument('html',
+        help='HTML output visualization')
 
-# Add callbacks
-patient_select.on_change('value', update_patient)
-sample_select.on_change('value', update_sample)
-solution_select.on_change('value', update_solution)
+    args = vars(argparser.parse_args())
 
-# Create main interface
-tabs = Tabs()
-tabs.tabs.append(build_solutions_panel(patient, sample, solutions_source, read_depth_source))
-tabs.tabs.append(build_genome_panel(cnv_source, brk_source, chromosome_plot_info))
-# self.tabs.tabs.append(build_split_panel(self.cnv_source_left, self.cnv_source_right, self.brk_source, self._chromosome_plot_info))
+    with pd.HDFStore(args['results'], 'r') as store:
 
-input_box = VBoxForm(patient_select, sample_select, solution_select)
-main_box = HBox(input_box, tabs)
+        output_file(args['html'])
 
-update_data()
+        solutions = list(retrieve_solutions(store))
 
-curdoc().add_root(main_box)
+        chromosome_plot_info = retrieve_chromosome_plot_info(store, solutions[0])
+        cnv_selected_source, brk_selected_source = create_cnv_brk_sources(store, solutions[0], chromosome_plot_info)
+
+        cnv_solution_sources = {}
+        brk_solution_sources = {}
+        for solution in solutions:
+            cnv_source, brk_source = create_cnv_brk_sources(store, solution, chromosome_plot_info)
+
+            cnv_solution_sources[solution] = cnv_source
+            brk_solution_sources[solution] = brk_source
+
+        solutions_data = retrieve_solution_data(store)
+        read_depth_data = prepare_read_depth_data(store, solution)
+
+        assert solutions_data.notnull().all().all()
+        assert read_depth_data.notnull().all().all()
+
+        solutions_source = ColumnDataSource(solutions_data)
+        read_depth_source = ColumnDataSource(read_depth_data)
+
+        solution_select = create_source_select(
+            [
+                (cnv_selected_source, cnv_solution_sources),
+                (brk_selected_source, brk_solution_sources),
+            ],
+            "Solution:",
+            'solutions',
+        )
+
+        # Create main interface
+        tabs = Tabs()
+        tabs.tabs.append(build_solutions_panel(solutions_source, read_depth_source))
+        tabs.tabs.append(remixt.visualize.build_genome_panel(cnv_selected_source, brk_selected_source, chromosome_plot_info))
+        input_box = VBoxForm(solution_select)
+        main_box = HBox(input_box, tabs)
+
+        show(main_box)
+
 

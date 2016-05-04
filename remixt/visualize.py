@@ -1,0 +1,367 @@
+import os
+import numpy as np
+import pandas as pd
+import math
+import matplotlib.colors
+import matplotlib.pyplot
+import bokeh.models
+import bokeh.plotting
+import bokeh.core.properties
+
+
+chromosomes = [str(a) for a in range(1, 23)] + ['X']
+
+
+def _create_chromosome_colors(chromosomes):
+    color_map = matplotlib.pyplot.get_cmap('Set1')
+    chromosome_colors = list()
+    for i in xrange(len(chromosomes)):
+        rgb_color = color_map(float(i) / float(len(chromosomes)))
+        hex_color = matplotlib.colors.rgb2hex(rgb_color)
+        chromosome_colors.append(hex_color)
+    chromosome_colors = pd.DataFrame({'chromosome': chromosomes, 'scatter_color': chromosome_colors})
+    return chromosome_colors
+
+chromosome_colors = _create_chromosome_colors(chromosomes)
+
+
+def _create_chromosome_indices(chromosomes):
+    chromosome_indices = dict([(chromosome, idx) for idx, chromosome in enumerate(chromosomes)])
+    return chromosome_indices
+
+chromosome_indices = _create_chromosome_indices(chromosomes)
+
+
+def major_minor_scatter_plot(source):
+    """ Plot a major / minor scatter plot from a copy number data source
+    """
+    p = bokeh.plotting.Figure(
+        title='raw major vs minor',
+        plot_width=1000, plot_height=500,
+        tools='pan,wheel_zoom,box_select,reset,lasso_select',
+        logo=None,
+        title_text_font_size=bokeh.core.properties.value('10pt'),
+        x_range=[-0.5, 6.5],
+        y_range=[-0.5, 4.5],
+    )
+
+    p.circle(
+        x='major_raw', y='minor_raw',
+        size='scatter_size', color='scatter_color', alpha=0.5,
+        source=source,
+    )
+
+    return p
+
+
+def major_minor_segment_plot(source, major_column, minor_column, x_range, name, width=1000):
+    """ Plot a major / minor line plot from a copy number data source
+    """
+    hover = bokeh.models.HoverTool(
+        tooltips=[
+            ('segment_idx', '@segment_idx'),
+            ('chromosome', '@chromosome'),
+            ('start', '@start'),
+            ('end', '@end'),
+            ('major_raw', '@major_raw'),
+            ('minor_raw', '@minor_raw'),
+        ]
+    )
+
+    tools = [
+        bokeh.models.PanTool(dimensions=['x']),
+        bokeh.models.WheelZoomTool(dimensions=['x']),
+        bokeh.models.BoxZoomTool(),
+        bokeh.models.BoxSelectTool(),
+        bokeh.models.ResetTool(),
+        bokeh.models.TapTool(),
+        hover,
+    ]
+
+    p = bokeh.plotting.Figure(
+        title=name + ' chromosome major/minor',
+        plot_width=width, plot_height=200,
+        tools=tools,
+        logo=None,
+        title_text_font_size=bokeh.core.properties.value('10pt'),
+        x_range=x_range,
+        y_range=[-0.5, 6.5],
+    )
+
+    p.quad(
+        top=major_column, bottom=0, left='plot_start', right='plot_end',
+        source=source, color='red', alpha=0.05, line_width=0)
+
+    p.quad(
+        top=minor_column, bottom=0, left='plot_start', right='plot_end',
+        source=source, color='blue', alpha=0.05, line_width=0)
+
+    p.segment(
+        y0=major_column, y1=major_column, x0='plot_start', x1='plot_end',
+        source=source, color='red', alpha=1.0, line_width=4)
+
+    p.segment(
+        y0=minor_column, y1=minor_column, x0='plot_start', x1='plot_end',
+        source=source, color='blue', alpha=1.0, line_width=2)
+
+    return p
+
+
+def breakpoints_plot(source, x_range, width=1000):
+    """ Plot break ends from a breakpoint source
+    """
+    hover = bokeh.models.HoverTool(
+        tooltips=[
+            ('prediction_id', '@prediction_id'),
+            ('chromosome', '@chromosome'),
+            ('position', '@position'),
+            ('strand', '@strand'),
+            ('other_chromosome', '@other_chromosome'),
+            ('other_position', '@other_position'),
+            ('other_strand', '@other_strand'),
+            ('type', '@type'),
+        ]
+    )
+
+    tools = [
+        bokeh.models.PanTool(dimensions=['x']),
+        bokeh.models.WheelZoomTool(dimensions=['x']),
+        bokeh.models.BoxSelectTool(),
+        bokeh.models.ResetTool(),
+        bokeh.models.TapTool(),
+        hover,
+    ]
+
+    p = bokeh.plotting.Figure(
+        title='break ends',
+        plot_width=width, plot_height=150,
+        tools=tools,
+        logo=None,
+        title_text_font_size=bokeh.core.properties.value('10pt'),
+        x_range=x_range,
+        y_range=['+', '-'],
+    )
+
+    p.triangle(
+        x='plot_position', y='strand', size=10, angle='strand_angle',
+        line_color='grey', fill_color='clonality_color', alpha=1.0,
+        source=source)
+
+    return p
+
+
+def setup_genome_plot_axes(p, chromosome_plot_info):
+    """ Configure axes of a genome view
+    """
+    chromosomes = list(chromosome_plot_info['chromosome'].values)
+    chromosome_bounds = [0] + list(chromosome_plot_info['chromosome_plot_end'].values)
+    chromosome_mids = list(chromosome_plot_info['chromosome_plot_mid'].values)
+
+    p.xgrid.ticker = bokeh.models.FixedTicker(ticks=[-1] + chromosome_bounds + [chromosome_bounds[-1] + 1])
+    p.xgrid.band_fill_alpha = 0.1
+    p.xgrid.band_fill_color = "navy"
+
+    p.xaxis[0].ticker = bokeh.models.FixedTicker(ticks=chromosome_bounds)
+    p.xaxis[0].major_label_text_font_size = bokeh.core.properties.value('0pt')
+
+    p.text(x=chromosome_mids, y=-0.5, text=chromosomes, text_font_size=bokeh.core.properties.value('0.5em'), text_align='center')
+
+
+def create_chromosome_plot_info(cnv, chromosome=''):
+    """ Create information about chromosome start ends for genome view
+    """
+    cnv['chromosome_index'] = cnv['chromosome'].apply(lambda a: chromosome_indices[a])
+    cnv.sort_values(['chromosome_index', 'start'], inplace=True)
+
+    info = (
+        cnv.groupby('chromosome', sort=False)['end']
+        .max().reset_index().rename(columns={'end': 'chromosome_length'}))
+
+    info['chromosome_plot_end'] = np.cumsum(info['chromosome_length'])
+    info['chromosome_plot_start'] = info['chromosome_plot_end'].shift(1)
+    info.loc[info.index[0], 'chromosome_plot_start'] = 0
+    info['chromosome_plot_mid'] = 0.5 * (info['chromosome_plot_start'] + info['chromosome_plot_end'])
+
+    return info
+
+
+def prepare_cnv_data(cnv, chromosome_plot_info, smooth_segments=False):
+    """ Prepare copy number data for loading in the a data source
+    """
+    # Group segments with same state
+    if smooth_segments:
+        cnv['chromosome_index'] = cnv['chromosome'].apply(lambda a: chromosome_indices[a])
+        cnv['diff'] = cnv[['chromosome_index', 'major_1', 'major_2', 'minor_1', 'minor_2']].diff().abs().sum(axis=1)
+        cnv['is_diff'] = (cnv['diff'] != 0)
+        cnv['cn_group'] = cnv['is_diff'].cumsum()
+
+        def agg_segments(df):
+
+            stable_cols = [
+                'chromosome',
+                'major_1',
+                'major_2',
+                'minor_1',
+                'minor_2',
+                'major_raw_e',
+                'minor_raw_e',
+            ]
+
+            a = df[stable_cols].iloc[0]
+
+            a['start'] = df['start'].min()
+            a['end'] = df['end'].max()
+            a['length'] = df['length'].sum()
+
+            length_normalized_cols = [
+                'major_raw',
+                'minor_raw',
+            ]
+
+            for col in length_normalized_cols:
+                a[col] = (df[col] * df['length']).sum() / (df['length'].sum() + 1e-16)
+
+            return a
+
+        cnv = cnv.groupby('cn_group').apply(agg_segments)
+
+    # Scatter size scaled by segment length
+    cnv['scatter_size'] = 2. * np.sqrt(cnv['length'] / 1e6)
+
+    # Scatter color by chromosome
+    cnv = cnv.merge(chromosome_colors)
+
+    # Calculate plot start and end
+    cnv = cnv.merge(chromosome_plot_info[['chromosome', 'chromosome_plot_start']])
+    cnv['plot_start'] = cnv['start'] + cnv['chromosome_plot_start']
+    cnv['plot_end'] = cnv['end'] + cnv['chromosome_plot_start']
+
+    # Drop nan values
+    cnv = cnv.replace(np.inf, np.nan).fillna(0)
+
+    return cnv
+
+
+def prepare_brk_data(brk, brk_cn, chromosome_plot_info):
+    """ Prepare breakpoint data for loading into a breakpoint source
+    """
+    def calculate_breakpoint_type(row):
+        if row['chromosome_1'] != row['chromosome_2']:
+            return 'translocation'
+        if row['strand_1'] == row['strand_2']:
+            return 'inversion'
+        positions = sorted([(row['position_{0}'.format(side)], row['strand_{0}'.format(side)]) for side in (1, 2)])
+        if positions[0][1] == '+':
+            return 'deletion'
+        else:
+            return 'duplication'
+    brk['type'] = brk.apply(calculate_breakpoint_type, axis=1)
+
+    # Duplicate required columns before stack
+    brk['type_1'] = brk['type']
+    brk['type_2'] = brk['type']
+
+    # Stack break ends
+    brk.set_index(['prediction_id'], inplace=True)
+    brk = brk.filter(regex='(_1|_2)')
+    def split_col_name(col):
+        parts = col.split('_')
+        return '_'.join(parts[:-1]), parts[-1]
+    brk.columns = pd.MultiIndex.from_tuples([split_col_name(col) for col in brk.columns])
+    brk.columns.names = 'value', 'side'
+    brk = brk.stack()
+    brk.reset_index(inplace=True)
+
+    # Add columns for other side
+    brk2 = brk[['prediction_id', 'side', 'chromosome', 'strand', 'position']].copy()
+    def swap_side(side):
+        if side == '1':
+            return '2'
+        elif side == '2':
+            return '1'
+        else:
+            raise ValueError()
+    brk2['side'] = brk2['side'].apply(swap_side)
+    brk2.rename(
+        columns={
+            'chromosome': 'other_chromosome',
+            'strand': 'other_strand',
+            'position': 'other_position',
+        },
+        inplace=True
+    )
+    brk = brk.merge(brk2)
+
+    # Annotate with copy number
+    brk_cn = brk_cn.groupby('prediction_id')[['cn_1', 'cn_2']].sum().reset_index()
+    brk = brk.merge(brk_cn, on='prediction_id', how='left').fillna(0.0)
+
+    # Annotate with strand related appearance
+    strand_angle = pd.DataFrame({'strand': ['+', '-'], 'strand_angle': [math.pi / 6., -math.pi / 6.]})
+    brk = brk.merge(strand_angle)
+
+    # Calculate plot start and end
+    brk = brk.merge(chromosome_plot_info[['chromosome', 'chromosome_plot_start']])
+    brk['plot_position'] = brk['position'] + brk['chromosome_plot_start']
+
+    # Annotate with clonal information
+    brk['clone_1_color'] = np.where(brk['cn_1'] > 0, '00', 'ff')
+    brk['clone_2_color'] = np.where(brk['cn_2'] > 0, '00', 'ff')
+    brk['clonality_color'] = '#ff' + brk['clone_1_color'] + brk['clone_2_color']
+
+    brk.sort_values(['prediction_id', 'side'], inplace=True)
+
+    return brk
+
+
+def build_genome_panel(cnv_source, brk_source, chromosome_plot_info, width=1000):
+    """ Build the genome pannel with scatter, line and break end plots and breakpoint table
+    """
+    init_x_range = [0, chromosome_plot_info['chromosome_plot_end'].max()]
+
+    scatter_plot = major_minor_scatter_plot(cnv_source)
+    line_plot1 = major_minor_segment_plot(cnv_source, 'major_raw', 'minor_raw', init_x_range, 'raw', width)
+    line_plot2 = major_minor_segment_plot(cnv_source, 'major_raw_e', 'minor_raw_e', line_plot1.x_range, 'expected', width)
+    line_plot3 = major_minor_segment_plot(cnv_source, 'major_1', 'minor_1', line_plot1.x_range, 'clone 1', width)
+    line_plot4 = major_minor_segment_plot(cnv_source, 'major_2', 'minor_2', line_plot1.x_range, 'clone 2', width)
+    line_plot5 = major_minor_segment_plot(cnv_source, 'major_diff', 'minor_diff', line_plot1.x_range, 'clone diff', width)
+    brk_plot = breakpoints_plot(brk_source, line_plot1.x_range, width)
+
+    for p in [line_plot1, line_plot2, line_plot3, line_plot4, line_plot5, brk_plot]:
+        setup_genome_plot_axes(p, chromosome_plot_info)
+
+    columns = [
+        'prediction_id',
+        'chromosome', 'position', 'strand',
+        'cn_1', 'cn_2']
+    columns = [bokeh.models.TableColumn(field=a, title=a, width=10) for a in columns]
+    data_table = bokeh.models.DataTable(source=brk_source, columns=columns, width=1000, height=1000)
+
+    panel = bokeh.models.Panel(title='Genome View', closable=False)
+    panel.child = bokeh.models.VBox(scatter_plot, line_plot1, line_plot2, line_plot3, line_plot4, line_plot5, brk_plot, data_table)
+
+    return panel
+
+
+def create_genome_visualization(cn, brk_cn, breakpoints, html_filename):
+    """ Create a genome visualization and output to an html file
+    """
+    try:
+        os.remove(html_filename)
+    except OSError:
+        pass
+    bokeh.plotting.output_file(html_filename)
+
+    chromosome_plot_info = create_chromosome_plot_info(cn)
+    cnv_data = prepare_cnv_data(cn, chromosome_plot_info)
+    brk_data = prepare_brk_data(breakpoints, brk_cn, chromosome_plot_info)
+
+    cnv_source = bokeh.models.ColumnDataSource(cnv_data)
+    brk_source = bokeh.models.ColumnDataSource(brk_data)
+
+    tabs = bokeh.models.Tabs()
+    tabs.tabs.append(build_genome_panel(cnv_source, brk_source, chromosome_plot_info))
+    main_box = bokeh.models.HBox(tabs)
+
+    bokeh.plotting.save(main_box)
+
