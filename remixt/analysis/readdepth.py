@@ -112,7 +112,12 @@ def estimate_ploidy(h, experiment):
 
     """
 
-    mean_cn = remixt.likelihood.calculate_mean_cn(h, experiment.x, experiment.l)
-    mean_cn[np.isnan(mean_cn) | np.isinf(mean_cn)] = 0.
-    return (mean_cn * experiment.l[:, np.newaxis]).sum() / experiment.l.sum()
+    read_depth = calculate_depth(experiment)
 
+    read_depth['major_raw'] = (read_depth['major'] - h[0]) / h[1:].sum()
+    read_depth['minor_raw'] = (read_depth['minor'] - h[0]) / h[1:].sum()
+
+    major, minor, length = read_depth.replace(np.inf, np.nan).dropna()[['major_raw', 'minor_raw', 'length']].values.T
+    ploidy = ((major + minor) * length).sum() / length.sum()
+
+    return ploidy
