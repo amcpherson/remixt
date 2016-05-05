@@ -70,6 +70,7 @@ def init(
 
             estimated_ploidy = remixt.analysis.readdepth.estimate_ploidy(h_poly, experiment)
             assert not np.isinf(estimated_ploidy) and not np.isnan(estimated_ploidy)
+            ploidy_estimates.append(estimated_ploidy)
 
             if min_ploidy is not None and estimated_ploidy < min_ploidy:
                 continue
@@ -79,7 +80,6 @@ def init(
 
             params = {'mode_idx': mode_idx, 'h_init': tuple(h_poly)}
             init_h_params.append(params)
-            ploidy_estimates.append(estimated_ploidy)
 
     # Check if min and max ploidy was too strict
     if len(init_h_params) == 0:
