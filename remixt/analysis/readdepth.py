@@ -113,5 +113,6 @@ def estimate_ploidy(h, experiment):
     """
 
     mean_cn = remixt.likelihood.calculate_mean_cn(h, experiment.x, experiment.l)
-    return (mean_cn.T * experiment.l).sum() / experiment.l.sum()
+    mean_cn[np.isnan(mean_cn) | np.isinf(mean_cn)] = 0.
+    return (mean_cn * experiment.l[:, np.newaxis]).sum() / experiment.l.sum()
 

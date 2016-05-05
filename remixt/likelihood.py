@@ -141,7 +141,6 @@ def calculate_mean_cn(h, x, l):
     depth = x[:,0:2] / (phi * l)[:, np.newaxis]
 
     mean_cn = (depth - h[0]) / h[1:].sum()
-    mean_cn[np.isnan(mean_cn)] = 0.
 
     return mean_cn
 
@@ -180,6 +179,7 @@ class ReadCountLikelihood(object):
         """
 
         dom_cn = calculate_mean_cn(self.h, self.x, self.l)
+        dom_cn[np.isnan(dom_cn)] = np.inf
         dom_cn = np.clip(dom_cn.round().astype(int), 0, int(1e6))
 
         self.mask &= np.all(dom_cn <= cn_max, axis=1)
