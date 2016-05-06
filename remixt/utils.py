@@ -1,4 +1,5 @@
 import csv
+import os
 import string
 import shutil
 import scipy
@@ -8,6 +9,7 @@ import collections
 import bisect
 import numpy as np
 import pandas as pd
+import pypeliner.commandline
 
 
 class gaussian_kde_set_covariance(scipy.stats.gaussian_kde):
@@ -200,4 +202,30 @@ class BreakpointDatabase(object):
         if len(matched_ids_bypos) == 0:
             return None
         return sorted(matched_ids_bypos)[0][1]
+
+
+def wget_gunzip(url, filename):
+    temp_filename = filename + '.tmp'
+    pypeliner.commandline.execute('wget', url, '-c', '-O', temp_filename + '.gz')
+    pypeliner.commandline.execute('gunzip', temp_filename + '.gz')
+    os.rename(temp_filename, filename)
+
+
+def wget(url, filename):
+    temp_filename = filename + '.tmp'
+    pypeliner.commandline.execute('wget', url, '-c', '-O', temp_filename)
+    os.rename(temp_filename, filename)
+
+
+class AutoSentinal(object):
+    def __init__(self, sentinal_prefix):
+        self.sentinal_prefix = sentinal_prefix
+
+    def run(self, func):
+        sentinal_filename = self.sentinal_prefix + func.__name__
+        if os.path.exists(sentinal_filename):
+            return
+        func()
+        with open(sentinal_filename, 'w'):
+            pass
 
