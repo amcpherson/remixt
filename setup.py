@@ -16,11 +16,13 @@ blossom5_tar_gz = os.path.join(external_dir, 'blossom5-v2.04.src.tar.gz')
 blossom5_dir = os.path.join(external_dir, 'blossom5-v2.04.src')
 blossom5_bin = os.path.join(blossom5_dir, 'blossom5')
 
-urllib.urlretrieve(blossom5_url, blossom5_tar_gz)
+if not os.path.exists(blossom5_tar_gz):
+    urllib.urlretrieve(blossom5_url, blossom5_tar_gz)
 
-tar = tarfile.open(blossom5_tar_gz)
-tar.extractall(path=external_dir)
-tar.close()
+if not os.path.exists(os.path.join(blossom5_dir, 'README.TXT')):
+    tar = tarfile.open(blossom5_tar_gz)
+    tar.extractall(path=external_dir)
+    tar.close()
 
 bamtools_dir = os.path.join(external_dir, 'bamtools', 'src')
 bamtools_api_dir = os.path.join(bamtools_dir, 'api')
@@ -90,4 +92,14 @@ setup(
     keywords=['scientific', 'sequence analysis', 'cancer'],
     classifiers=[],
     ext_modules=cythonize(extensions),
+    scripts=[
+        'remixt/setup/create_ref_data.py',
+        'remixt/setup/mappability_bwa.py',
+        'remixt/run/calc_bias.py',
+        'remixt/run/extract_seqdata.py',
+        'remixt/run/fit_model.py',
+        'remixt/run/infer_haps.py',
+        'remixt/run/prepare_counts.py',
+        'remixt/run/run_remixt.py',
+    ],
 )
