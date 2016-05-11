@@ -6,7 +6,7 @@ import remixt.config
 import remixt.utils
 
 
-def create_ref_data(ref_data_dir, config):
+def create_ref_data(config, ref_data_dir):
     try:
         os.makedirs(ref_data_dir)
     except OSError:

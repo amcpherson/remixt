@@ -28,7 +28,7 @@ if __name__ == '__main__':
 
     pyp = pypeliner.app.Pypeline(config=config)
 
-    workflow = remixt.mappability.bwa.workflow.create_bwa_mappability_workflow(ref_data_dir, config)
+    workflow = remixt.mappability.bwa.workflow.create_bwa_mappability_workflow(config, ref_data_dir)
 
     pyp.run(workflow)
     

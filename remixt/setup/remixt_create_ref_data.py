@@ -22,5 +22,5 @@ if __name__ == '__main__':
     if args['config'] is not None:
         execfile(args['config'], {}, config)
 
-    remixt.ref_data.create_ref_data(ref_data_dir, config)
-
+    remixt.ref_data.create_ref_data(config, ref_data_dir)
+    

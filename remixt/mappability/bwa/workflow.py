@@ -9,7 +9,7 @@ import remixt.mappability.tasks
 import remixt.mappability.bwa.tasks
 
 
-def create_bwa_mappability_workflow(ref_data_dir, config):
+def create_bwa_mappability_workflow(config, ref_data_dir):
     workflow = pypeliner.workflow.Workflow(default_ctx={'mem': 8})
 
     mappability_length = remixt.config.get_param(config, 'mappability_length')
