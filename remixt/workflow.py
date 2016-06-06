@@ -303,6 +303,7 @@ def create_fit_model_workflow(
             mgd.InputFile(experiment_filename),
             mgd.TempInputFile('init_results'),
             mgd.TempInputFile('fit_results', 'init_id'),
+            mgd.TempInputObj('config'),
         ),
     )
 

@@ -4,14 +4,16 @@ import pandas as pd
 import numpy as np
 import gzip
 
+import remixt.config
 
-def create_sim_alleles(haplotypes_template, legend_template, chromosomes, recomb_rate=20.0/1.e8):
+
+def create_sim_alleles(chromosomes, config, ref_data_dir, recomb_rate=20.0/1.e8):
     """ Create simulated alleles from 1000 genomes SNPs
 
     Args:
-        haplotypes_template (str): template for 1000 genomes haplotypes filename
-        legend_template (str): template for 1000 genomes legend filename
         chromosomes (str): chromosomes to simulate
+        config (dict): relavent shapeit parameters including thousand genomes paths
+        ref_data_dir (str): reference dataset directory
 
     KwArgs:
         recomb_rate (float): recombination rate per nt
@@ -24,8 +26,8 @@ def create_sim_alleles(haplotypes_template, legend_template, chromosomes, recomb
 
     for chromosome in chromosomes:
 
-        hap_filename = haplotypes_template.format(chromosome)
-        legend_filename = legend_template.format(chromosome)
+        hap_filename = remixt.config.get_filename(config, ref_data_dir, 'haplotypes', chromosome=chromosome)
+        legend_filename = remixt.config.get_filename(config, ref_data_dir, 'legend', chromosome=chromosome)
 
         data = pd.read_csv(gzip.open(legend_filename, 'r'), sep=' ', usecols=['position', 'a0', 'a1'])
 

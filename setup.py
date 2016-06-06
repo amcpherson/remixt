@@ -77,6 +77,26 @@ extensions = [
         sources=['remixt/hmm.pyx'],
         include_dirs=[numpy.get_include()],
     ),
+    Extension(
+        name='remixt.vhmm',
+        sources=['remixt/vhmm.pyx'],
+        include_dirs=[numpy.get_include()],
+    ),
+    Extension(
+        name='remixt.model1',
+        sources=['remixt/model1.pyx'],
+        include_dirs=[numpy.get_include()],
+    ),
+    Extension(
+        name='remixt.model2',
+        sources=['remixt/model2.pyx'],
+        include_dirs=[numpy.get_include()],
+    ),
+    Extension(
+        name='remixt.model3',
+        sources=['remixt/model3.pyx'],
+        include_dirs=[numpy.get_include()],
+    ),
 ]
 
 setup(

@@ -3,7 +3,9 @@ import argparse
 import pypeliner
 import pypeliner.managed as mgd
 
-import remixt.simulations
+import remixt.simulations.pipeline
+import remixt.simulations.workflow
+import remixt.workflow
 
 if __name__ == '__main__':
 
@@ -31,20 +33,24 @@ if __name__ == '__main__':
 
     pyp = pypeliner.app.Pypeline(config=args)
 
-    workflow = pypeliner.workflow.Workflow()
+    workflow = pypeliner.workflow.Workflow(default_ctx={'mem': 4})
 
     workflow.transform(
         name='read_sim_defs',
-        ctx={'mem': 1, 'local': True},
-        func=remixt.simulations.read_sim_defs,
+        ctx={'local': True},
+        func=remixt.simulations.pipeline.create_simulations,
         ret=mgd.TempOutputObj('sim_defs', 'sim_id'),
-        args=(mgd.InputFile(args['sim_defs']),),
+        args=(
+            mgd.InputFile(args['sim_defs']),
+            config,
+            args['ref_data_dir'],
+        ),
     )
 
     workflow.subworkflow(
-        name='simulate_experiment',
+        name='simulate_read_data',
         axes=('sim_id',),
-        func=remixt.simulations.workflow.create_simulate_experiment_workflow,
+        func=remixt.simulations.workflow.create_segment_simulation_workflow,
         args=(
             mgd.TempInputObj('sim_defs', 'sim_id'),
             mgd.TempOutputFile('experiment', 'sim_id'),
@@ -52,7 +58,8 @@ if __name__ == '__main__':
     )
 
     workflow.subworkflow(
-        name='run_remixt',
+        name='create_tool_workflow',
+        axes=('sim_id',),
         func=remixt.workflow.create_fit_model_workflow,
         args=(
             mgd.TempInputFile('experiment', 'sim_id'),
@@ -63,14 +70,26 @@ if __name__ == '__main__':
     )
 
     workflow.transform(
-        name='tabulate_results',
-        ctx={'mem': 1},
-        func=remixt.simulations.pipeline.tabulate_results,
+        name='evaluate_results',
+        axes=('sim_id',),
+        func=remixt.simulations.pipeline.evaluate_results_task,
+        args=(
+            mgd.TempOutputFile('evaluation', 'sim_id'),
+            mgd.TempInputFile('results', 'sim_id'),
+        ),
+        kwargs={
+            'experiment_filename': mgd.TempInputFile('experiment', 'sim_id'),
+        },
+    )
+
+    workflow.transform(
+        name='merge_evaluations',
+        func=remixt.simulations.pipeline.merge_evaluations,
         args=(
             mgd.OutputFile(args['table']),
             mgd.TempInputObj('sim_defs', 'sim_id'),
-            mgd.TempInputFile('experiment', 'sim_id'),
-            mgd.TempInputFile('results', 'sim_id'),
+            mgd.TempInputFile('evaluation', 'sim_id'),
+            ['sim_id'],
         ),
     )
 

@@ -9,6 +9,8 @@ import bokeh.plotting
 import bokeh.core.properties
 import scipy.stats
 
+import remixt.utils
+
 
 chromosomes = [str(a) for a in range(1, 23)] + ['X']
 
@@ -243,7 +245,7 @@ def prepare_cnv_data(cnv, chromosome_plot_info, smooth_segments=False):
     return cnv
 
 
-def prepare_brk_data(brk, brk_cn, chromosome_plot_info):
+def prepare_brk_data(brk_cn, chromosome_plot_info):
     """ Prepare breakpoint data for loading into a breakpoint source
     """
     def calculate_breakpoint_type(row):
@@ -256,25 +258,30 @@ def prepare_brk_data(brk, brk_cn, chromosome_plot_info):
             return 'deletion'
         else:
             return 'duplication'
-    brk['type'] = brk.apply(calculate_breakpoint_type, axis=1)
+    brk_cn['type'] = brk_cn.apply(calculate_breakpoint_type, axis=1)
 
     # Duplicate required columns before stack
-    brk['type_1'] = brk['type']
-    brk['type_2'] = brk['type']
+    brk_cn['type_1'] = brk_cn['type']
+    brk_cn['type_2'] = brk_cn['type']
 
     # Stack break ends
-    brk.set_index(['prediction_id'], inplace=True)
-    brk = brk.filter(regex='(_1|_2)')
+    brk_ends = brk_cn[[
+        'prediction_id',
+        'chromosome_1', 'strand_1', 'position_1',
+        'chromosome_2', 'strand_2', 'position_2',
+    ]]
+    brk_ends.set_index(['prediction_id'], inplace=True)
+    brk_ends = brk_ends.filter(regex='(_1|_2)')
     def split_col_name(col):
         parts = col.split('_')
         return '_'.join(parts[:-1]), parts[-1]
-    brk.columns = pd.MultiIndex.from_tuples([split_col_name(col) for col in brk.columns])
-    brk.columns.names = 'value', 'side'
-    brk = brk.stack()
-    brk.reset_index(inplace=True)
+    brk_ends.columns = pd.MultiIndex.from_tuples([split_col_name(col) for col in brk_ends.columns])
+    brk_ends.columns.names = 'value', 'side'
+    brk_ends = brk_ends.stack()
+    brk_ends.reset_index(inplace=True)
 
     # Add columns for other side
-    brk2 = brk[['prediction_id', 'side', 'chromosome', 'strand', 'position']].copy()
+    brk_ends_2 = brk_ends[['prediction_id', 'side', 'chromosome', 'strand', 'position']].copy()
     def swap_side(side):
         if side == '1':
             return '2'
@@ -282,8 +289,8 @@ def prepare_brk_data(brk, brk_cn, chromosome_plot_info):
             return '1'
         else:
             raise ValueError()
-    brk2['side'] = brk2['side'].apply(swap_side)
-    brk2.rename(
+    brk_ends_2['side'] = brk_ends_2['side'].apply(swap_side)
+    brk_ends_2.rename(
         columns={
             'chromosome': 'other_chromosome',
             'strand': 'other_strand',
@@ -291,28 +298,27 @@ def prepare_brk_data(brk, brk_cn, chromosome_plot_info):
         },
         inplace=True
     )
-    brk = brk.merge(brk2)
+    brk_ends = brk_ends.merge(brk_ends_2)
 
     # Annotate with copy number
-    brk_cn = brk_cn.groupby('prediction_id')[['cn_1', 'cn_2']].sum().reset_index()
-    brk = brk.merge(brk_cn, on='prediction_id', how='left').fillna(0.0)
+    brk_ends = brk_ends.merge(brk_cn[['prediction_id', 'cn_1', 'cn_2']], on='prediction_id')
 
     # Annotate with strand related appearance
     strand_angle = pd.DataFrame({'strand': ['+', '-'], 'strand_angle': [math.pi / 6., -math.pi / 6.]})
-    brk = brk.merge(strand_angle)
+    brk_ends = brk_ends.merge(strand_angle)
 
     # Calculate plot start and end
-    brk = brk.merge(chromosome_plot_info[['chromosome', 'chromosome_plot_start']])
-    brk['plot_position'] = brk['position'] + brk['chromosome_plot_start']
+    brk_ends = brk_ends.merge(chromosome_plot_info[['chromosome', 'chromosome_plot_start']])
+    brk_ends['plot_position'] = brk_ends['position'] + brk_ends['chromosome_plot_start']
 
     # Annotate with clonal information
-    brk['clone_1_color'] = np.where(brk['cn_1'] > 0, '00', 'ff')
-    brk['clone_2_color'] = np.where(brk['cn_2'] > 0, '00', 'ff')
-    brk['clonality_color'] = '#ff' + brk['clone_1_color'] + brk['clone_2_color']
+    brk_ends['clone_1_color'] = np.where(brk_ends['cn_1'] > 0, '00', 'ff')
+    brk_ends['clone_2_color'] = np.where(brk_ends['cn_2'] > 0, '00', 'ff')
+    brk_ends['clonality_color'] = '#ff' + brk_ends['clone_1_color'] + brk_ends['clone_2_color']
 
-    brk.sort_values(['prediction_id', 'side'], inplace=True)
+    brk_ends.sort_values(['prediction_id', 'side'], inplace=True)
 
-    return brk
+    return brk_ends
 
 
 def build_genome_panel(cnv_source, brk_source, chromosome_plot_info, width=1000):
@@ -344,7 +350,7 @@ def build_genome_panel(cnv_source, brk_source, chromosome_plot_info, width=1000)
     return panel
 
 
-def create_genome_visualization(cn, brk_cn, breakpoints, html_filename):
+def create_genome_visualization(cn, brk_cn, html_filename):
     """ Create a genome visualization and output to an html file
     """
     try:
@@ -355,7 +361,7 @@ def create_genome_visualization(cn, brk_cn, breakpoints, html_filename):
 
     chromosome_plot_info = create_chromosome_plot_info(cn)
     cnv_data = prepare_cnv_data(cn, chromosome_plot_info)
-    brk_data = prepare_brk_data(breakpoints, brk_cn, chromosome_plot_info)
+    brk_data = prepare_brk_data(brk_cn, chromosome_plot_info)
 
     cnv_source = bokeh.models.ColumnDataSource(cnv_data)
     brk_source = bokeh.models.ColumnDataSource(brk_data)
@@ -389,10 +395,9 @@ def retrieve_cnv_data(store, solution, chromosome=''):
 def retrieve_brk_data(store, solution, chromosome_plot_info):
     """ Retrieve breakpoint copy number data for a specific solution
     """
-    brk = store['breakpoints']
     brk_cn = store['/solutions/solution_{0}/brk_cn'.format(solution)]
 
-    return prepare_brk_data(brk, brk_cn, chromosome_plot_info)
+    return prepare_brk_data(brk_cn, chromosome_plot_info)
 
 
 def retrieve_chromosome_plot_info(store, solution, chromosome=''):
@@ -479,7 +484,7 @@ def prepare_read_depth_data(store, solution):
     cov = 0.0000001
 
     read_depth_min = 0.0
-    read_depth_max = np.percentile(read_depth_df['total'], 95)
+    read_depth_max = remixt.utils.weighted_percentile(read_depth_df['total'].values, read_depth_df['length'].values, 95)
     read_depths = [read_depth_min] + list(np.linspace(read_depth_min, read_depth_max, 2000)) + [read_depth_max]
 
     minor_density = _weighted_density(read_depths, read_depth_df['minor'], read_depth_df['length'], cov)

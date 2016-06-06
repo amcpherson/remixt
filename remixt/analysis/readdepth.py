@@ -20,7 +20,7 @@ def calculate_depth(experiment):
 
     """
 
-    data = experiment.create_segment_table()
+    data = remixt.analysis.experiment.create_segment_table(experiment)
 
     phi = remixt.likelihood.estimate_phi(experiment.x)
     p = remixt.likelihood.proportion_measureable_matrix(phi)

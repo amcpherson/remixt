@@ -1,13 +1,13 @@
-import sys
-import copy
 import math
 import collections
 import numpy as np
+import pandas as pd
 import scipy
 import scipy.stats
 
 import remixt.utils
 import remixt.likelihood
+import remixt.analysis.experiment
 
 
 MAX_SEED = 2**32
@@ -38,10 +38,11 @@ class RearrangedGenome(object):
         'num_chromosomes':20,
         'chrom_length_concentration':5.,
         'chromosome_lengths':None,
-        'event_type':['dcj', 'dup', 'del'],
-        'event_prob':[0.2, 0.4, 0.4],
+        'event_type':['dcj', 'dup', 'del', 'wgd'],
+        'event_prob':[0.19, 0.4, 0.4, 0.01],
         'del_prop_len':0.5,
         'dup_prop_len':0.5,
+        'wgd_prop_dup':0.8,
     }
 
     def __init__(self, N):
@@ -60,6 +61,32 @@ class RearrangedGenome(object):
         self.event_seeds = list()
 
 
+    def copy(self):
+        """ Create a copy of the genome.
+
+        Creates a copy such that rearrangement of the copy will not
+        affect the original.
+        """
+
+        genome = RearrangedGenome(self.N)
+
+        # References to fixed attributes of each genome
+        genome.init_params = self.init_params
+        genome.init_seed = self.init_seed
+        genome.segment_start = self.segment_start
+        genome.segment_end = self.segment_end
+        genome.segment_chromosome_id = self.segment_chromosome_id
+        genome.l = self.l
+        genome.wt_adj = self.wt_adj
+
+        # Copies of mutable attributes of each genome
+        genome.event_params = list(self.event_params)
+        genome.event_seeds = list(self.event_seeds)
+        genome.chromosomes = list(self.chromosomes)
+
+        return genome
+
+
     def create(self, params):
         """ Create a new non-rearranged genome.
 
@@ -75,7 +102,7 @@ class RearrangedGenome(object):
 
         self.random_chromosomes(params)
 
-        self.init_params = copy.deepcopy(params)
+        self.init_params = params
         self.init_seed = seed
 
 
@@ -124,7 +151,7 @@ class RearrangedGenome(object):
             genome_length = params['genome_length']
             chrom_length_concentration = params['chrom_length_concentration']
 
-            chromosome_ids = [str(a) for a in xrange(num_chroms)]
+            chromosome_ids = [str(a) for a in xrange(1, num_chroms + 1)]
             chromosome_lengths = np.random.dirichlet([chrom_length_concentration] * num_chroms) * genome_length
             chromosome_lengths.sort()
             chromosome_lengths = chromosome_lengths[::-1]
@@ -171,7 +198,7 @@ class RearrangedGenome(object):
                 chrom_alleles = [allele]*num_seg
                 chrom_orient = [1]*num_seg
 
-                self.chromosomes.append(list(zip(zip(chrom_segs, chrom_alleles), chrom_orient)))
+                self.chromosomes.append(tuple(zip(zip(chrom_segs, chrom_alleles), chrom_orient)))
 
             segment_idx += num_seg
 
@@ -217,7 +244,7 @@ class RearrangedGenome(object):
     def reverse_chromosome(self, chromosome):
         """ Reverse the order of segments in a chromosome, and the sign of each segment.
         """
-        return [self.reverse_segment(a) for a in reversed(chromosome)]
+        return tuple([self.reverse_segment(a) for a in reversed(chromosome)])
 
 
     def rearrange(self, params):
@@ -235,7 +262,7 @@ class RearrangedGenome(object):
 
         self.random_event(params)
 
-        self.event_params.append(copy.deepcopy(params))
+        self.event_params.append(params)
         self.event_seeds.append(seed)
 
 
@@ -254,6 +281,8 @@ class RearrangedGenome(object):
             self.random_duplication(params)
         elif event == 'del':
             self.random_deletion(params)
+        elif event == 'wgd':
+            self.random_whole_genome_doubling(params)
 
 
     def random_double_cut_join(self, params):
@@ -406,13 +435,29 @@ class RearrangedGenome(object):
     
             self.chromosomes.append(new_chromosome)
 
-    
+
+    def random_whole_genome_doubling(self, params):
+        """ Randomly select chromosomes to be duplicated.
+
+        Args:
+            params (dict): dictionary of modification params
+
+        """
+
+        duplicated_chromosomes = []
+        for chromosome in self.chromosomes:
+            if np.random.rand() < params['wgd_prop_dup']:
+                duplicated_chromosomes.append(chromosome)
+
+        self.chromosomes.extend(duplicated_chromosomes)
+
+
     @property
     def segment_copy_number(self):
         """ Segment copy number matrix (numpy.array).
         """
         cn_matrix = np.zeros((self.N, 2))
-        
+
         for chromosome in self.chromosomes:
             for segment in chromosome:
                 cn_matrix[segment[0][0], segment[0][1]] += 1.0
@@ -454,53 +499,47 @@ class RearrangedGenome(object):
         """ Breakpoint list.
         """
         return list(self.breakpoint_copy_number.keys())
-    
-    
-    def proportion_loh(self):
+
+
+    def length_loh(self):
         """ Proportion of the genome with LOH.
         """
         cn = self.segment_copy_number
-        return np.sum(cn.min(axis=1) == 0) / float(cn.shape[0])
-    
+        loh = (cn.min(axis=1) == 0) * 1
+        return (loh * self.l).sum()
 
-    def proportion_hdel(self):
+
+    def length_hdel(self):
         """ Proportion of the genome homozygously deleted.
         """
         cn = self.segment_copy_number
-        return np.sum(cn.max(axis=1) == 0) / float(cn.shape[0])
+        hdel = (cn.max(axis=1) == 0) * 1
+        return (hdel * self.l).sum()
 
-    
-    def proportion_hlamp(self, hlamp_min=6):
+
+    def length_hlamp(self, hlamp_min=6):
         """ Proportion of the genome with high level amplification.
         """
         cn = self.segment_copy_number
-        return np.sum(cn.max(axis=1) >= hlamp_min) / float(cn.shape[0])
+        hlamp = (cn.max(axis=1) >= hlamp_min) * 1
+        return (hlamp * self.l).sum()
 
 
-    def proportion_minor_state(self, cn_max=6):
-        """ Proportion of the genome with minor in each cn state.
-        """
-        minor = self.segment_copy_number.min(axis=1)
-        minor[minor > cn_max] = cn_max
-        return np.bincount(minor.flatten().astype(int), minlength=cn_max+1)
-
-
-    def proportion_major_state(self, cn_max=6):
-        """ Proportion of the genome with major in each cn state.
-        """
-        major = self.segment_copy_number.max(axis=1)
-        major[major > cn_max] = cn_max
-        return np.bincount(major.flatten().astype(int), minlength=cn_max+1)
-
-
-    def proportion_divergent(self, other, cn_max=6):
+    def length_divergent(self, other):
         """ Proportion of the genome with high level amplification.
         """
         cn = self.segment_copy_number
         other_cn = other.segment_copy_number
-        divergence = np.absolute(cn - other_cn)
-        divergence[divergence > cn_max] = cn_max
-        return np.bincount(divergence.flatten().astype(int), minlength=cn_max+1)
+        divergent = ((cn - other_cn > 0) * 1).sum(axis=1)
+        return (divergent * self.l).sum()
+
+
+    def ploidy(self):
+        """ Average number of copies of each nucleotide.
+        """
+        cn = self.segment_copy_number
+        cn = cn.sum(axis=1)
+        return (cn * self.l).sum() / self.l.sum()
 
 
     def create_chromosome_sequences(self, germline_genome):
@@ -545,26 +584,6 @@ class RearrangementHistorySampler(object):
     """ Simulate a random rearrangement history, accounting for relative fitness
     """
 
-    hgs_major_cn_proportions = [
-        0.0009,
-        0.3749,
-        0.4091,
-        0.1246,
-        0.0291,
-        0.0161,
-        0.0453,
-    ]
-
-    hgs_minor_cn_proportions = [
-        0.2587,
-        0.5460,
-        0.1586,
-        0.0097,
-        0.0054,
-        0.0029,
-        0.0187,
-    ]
-
     def __init__(self, params):
 
         self.N = params.get('N', 1000)
@@ -575,48 +594,41 @@ class RearrangementHistorySampler(object):
             if key in params:
                 self.genome_params[key] = params[key]
 
-        self.major_cn_proportions = params.get('major_cn_proportions', self.hgs_major_cn_proportions)
-        self.minor_cn_proportions = params.get('minor_cn_proportions', self.hgs_minor_cn_proportions)
-        
+        self.hdel_exponential_mean = params.get('hdel_exponential_mean', 3e6)
+
+        self.ploidy_gaussian_mean = params.get('ploidy_gaussian_mean', 3.5)
+        self.ploidy_gaussian_stddev = params.get('ploidy_gaussian_stddev', 0.5)
+
         self.num_swarm = 100
 
 
-    def genome_fitness(self, genome, fitness_callback=None):
-        """ Calculate fitness of a genome based on loh, hdel and hlamp proportions.
+    def genome_fitness(self, genome):
+        """ Calculate fitness of a genome based on genome properties.
 
         Args:
             genome (RearrangedGenome): Genome to calculate fitness
 
-        Kwargs:
-            fitness_callback (callable): modify fitness callback 
-
         """
-        
-        log_minor_p = log_multinomial_likelihood(genome.proportion_minor_state(), self.minor_cn_proportions)
-        log_major_p = log_multinomial_likelihood(genome.proportion_major_state(), self.major_cn_proportions)
 
-        fitness = log_minor_p + log_major_p
-        
-        if fitness_callback is not None:
-            fitness = fitness_callback(genome, fitness)
+        hdel_log_p = scipy.stats.expon.logpdf(genome.length_hdel(), scale=self.hdel_exponential_mean)
+        ploidy_log_p = scipy.stats.norm.logpdf(genome.ploidy(), loc=self.ploidy_gaussian_mean, scale=self.ploidy_gaussian_stddev)
+
+        fitness = hdel_log_p + ploidy_log_p
 
         return fitness
 
 
-    def resample_probs(self, genomes, fitness_callback=None):
+    def resample_probs(self, genomes):
         """ Calculate resampling probabilities.
 
         Args:
             genomes (list of RearrangedGenome): list of rearranged genomes to calculate prob from fitnesses
 
-        Kwargs:
-            fitness_callback (callable): modify fitness callback 
-
         """
 
         fitnesses = list()
         for genome in genomes:
-            fitnesses.append(self.genome_fitness(genome, fitness_callback))
+            fitnesses.append(self.genome_fitness(genome))
 
         fitnesses = np.array(fitnesses)
 
@@ -639,44 +651,37 @@ class RearrangementHistorySampler(object):
         return wt_genome
 
 
-    def sample_rearrangement_history(self, genome_init, num_events, fitness_callback=None):
+    def sample_rearrangement_history(self, genome_init, num_events):
         """ Sample a rearrangement history specified by a random seed, and select based on fitness.
 
         Args:
             genome_init (RearrangedGenome): initial genome to which rearrangements will be applied
             num_events (int): number of rearrangement events
 
-        Kwargs:
-            fitness_callback (callable): modify fitness callback 
-
         Returns:
-            RearrangedGenome: a genome evolved through a series of rearrangements
+            list of RearrangedGenome: a list genome evolved through a series of rearrangements,
+                                      sorted by the resample probablity of those genomes
 
         """
 
         swarm = [genome_init] * self.num_swarm
 
         for _ in xrange(num_events):
-
-            print '.',
-
             new_swarm = list()
             for genome in swarm:
-                genome = copy.deepcopy(genome)
+                genome = genome.copy()
                 genome.rearrange(self.genome_params)
                 new_swarm.append(genome)
 
-            resample_p = self.resample_probs(new_swarm, fitness_callback=fitness_callback)
+            resample_p = self.resample_probs(new_swarm)
             resampled_swarm = np.random.choice(new_swarm, size=self.num_swarm, p=resample_p)
 
             swarm = list(resampled_swarm)
 
-        print
-
         prob = self.resample_probs(swarm)
-        result = np.random.choice(swarm, size=1, p=prob)[0]
+        swarm = list(np.array(swarm)[np.argsort(prob)[::-1]])
 
-        return result
+        return swarm
 
 
 class GenomeCollection(object):
@@ -747,18 +752,17 @@ class GenomeCollection(object):
     def segment_end(self):
         return self.genomes[0].segment_end
 
-    def proportion_divergent(self):
-        diver = self.genomes[1].proportion_divergent(self.genomes[2])
-        return float(sum(diver[1:])) / float(sum(diver))
+    def length_divergent(self):
+        return self.genomes[1].length_divergent(self.genomes[2])
 
-    def proportion_loh(self):
-        return [g.proportion_loh() for g in self.genomes]
+    def length_loh(self):
+        return [g.length_loh() for g in self.genomes]
 
-    def proportion_hdel(self):
-        return [g.proportion_hdel() for g in self.genomes]
+    def length_hdel(self):
+        return [g.length_hdel() for g in self.genomes]
 
-    def proportion_hlamp(self, hlamp_min=6):
-        return [g.proportion_hlamp() for g in self.genomes]
+    def length_hlamp(self, hlamp_min=6):
+        return [g.length_hlamp() for g in self.genomes]
 
 
 class GenomeCollectionSampler(object):
@@ -775,18 +779,6 @@ class GenomeCollectionSampler(object):
 
         self.proportion_subclonal = params.get('proportion_subclonal', 0.3)
 
-        self.divergence_proportions = [
-                                       1.0 - self.proportion_subclonal,
-                                       self.proportion_subclonal,
-                                       1e-9,
-                                       1e-9,
-                                       1e-9,
-                                       1e-9,
-                                       1e-9,
-                                      ]
-        self.divergence_proportions = np.array(self.divergence_proportions)
-        self.divergence_proportions /= self.divergence_proportions.sum()
-
     def sample_genome_collection(self):
         """ Sample a collection of genomes.
 
@@ -797,15 +789,16 @@ class GenomeCollectionSampler(object):
 
         wt_genome = self.rh_sampler.sample_wild_type()
 
-        ancestral_genome = self.rh_sampler.sample_rearrangement_history(wt_genome, self.num_ancestral_events)
+        ancestral_genome = self.rh_sampler.sample_rearrangement_history(wt_genome, self.num_ancestral_events)[0]
 
-        def descendent_genome_fitness(genome, fitness):
+        descendent_genomes = self.rh_sampler.sample_rearrangement_history(ancestral_genome, self.num_descendent_events)
 
-            log_diverg_p = log_multinomial_likelihood(ancestral_genome.proportion_divergent(genome), self.divergence_proportions)
-
-            return log_diverg_p + fitness
-        
-        descendent_genome = self.rh_sampler.sample_rearrangement_history(ancestral_genome, self.num_descendent_events, fitness_callback=descendent_genome_fitness)
+        # Select the descendant genome with closest requested proportion
+        # of the genome subclonal
+        subclonal_lengths = np.array([genome.length_divergent(ancestral_genome) for genome in descendent_genomes])
+        subclonal_proportions = subclonal_lengths / ancestral_genome.l.sum()
+        subclonal_diff = np.absolute(subclonal_proportions - self.proportion_subclonal)
+        descendent_genome = descendent_genomes[np.argmin(subclonal_diff)]
 
         return GenomeCollection([wt_genome, ancestral_genome, descendent_genome])
 
@@ -814,10 +807,11 @@ class GenomeMixture(object):
     """
     Mixture of normal and tumour clone genomes.
     """
-    def __init__(self, genome_collection, frac):
+    def __init__(self, genome_collection, frac, detected_breakpoints):
 
         self.genome_collection = genome_collection
         self.frac = frac
+        self.detected_breakpoints = detected_breakpoints
 
     @property
     def N(self):
@@ -856,6 +850,37 @@ class GenomeMixture(object):
         return self.genome_collection.breakpoints
 
 
+def sample_random_breakpoints(N, num_breakpoints, adjacencies, excluded_breakpoints=None):
+    breakpoints = set()
+    while len(breakpoints) < num_breakpoints:
+
+        n_1 = np.random.randint(N)
+        n_2 = np.random.randint(N)
+
+        side_1 = np.random.randint(2)
+        side_2 = np.random.randint(2)
+
+        # Do not add wild type adjacencies
+        if (n_1, n_2) in adjacencies and side_1 == 1 and side_2 == 0:
+            continue
+        if (n_2, n_1) in adjacencies and side_2 == 1 and side_1 == 0:
+            continue
+
+        # TODO: fold back inversions
+        if (n_1, side_1) == (n_2, side_2):
+            continue
+
+        breakpoint = frozenset([(n_1, side_1), (n_2, side_2)])
+
+        # Do not add excluded breakpoints
+        if excluded_breakpoints is not None and breakpoint in excluded_breakpoints:
+            continue
+
+        breakpoints.add(breakpoint)
+
+    return breakpoints
+
+
 class GenomeMixtureSampler(object):
     """ Sampler for genome mixtures.
     """
@@ -866,6 +891,9 @@ class GenomeMixtureSampler(object):
         self.frac_clone_concentration = params.get('frac_clone_concentration', 1.)
 
         self.frac_clone = params.get('frac_clone', None)
+
+        self.num_false_breakpoints = params.get('num_false_breakpoints', 50)
+        self.proportion_breakpoints_detected = params.get('proportion_breakpoints_detected', 0.9)
 
     def sample_genome_mixture(self, genome_collection):
         """ Sample a genome mixture.
@@ -891,7 +919,21 @@ class GenomeMixtureSampler(object):
 
         frac[1:] = np.sort(frac[1:])[::-1]
 
-        return GenomeMixture(genome_collection, frac)
+        num_breakpoints_detected = int(self.proportion_breakpoints_detected * len(genome_collection.breakpoints))
+        detected_breakpoints = list(genome_collection.breakpoints)
+        np.random.shuffle(detected_breakpoints)
+        detected_breakpoints = detected_breakpoints[:num_breakpoints_detected]
+
+        false_breakpoints = sample_random_breakpoints(
+            genome_collection.N,
+            self.num_false_breakpoints,
+            genome_collection.adjacencies,
+            excluded_breakpoints=genome_collection.breakpoints,
+        )
+
+        detected_breakpoints.extend(false_breakpoints)
+
+        return GenomeMixture(genome_collection, frac, detected_breakpoints)
 
 
 class Experiment(object):
@@ -908,6 +950,29 @@ class Experiment(object):
         self.h_pred = h_pred
 
         self.__dict__.update(kwargs)
+
+        # Table of breakpoint information including chromosome position
+        # info and prediction ids
+        breakpoint_segment_data = list()
+        for prediction_id, breakpoint in enumerate(sorted(self.breakpoints)):
+            breakpoint_info = {'prediction_id': prediction_id}
+            for breakend_idx, breakend in enumerate(breakpoint):
+                n, side = breakend
+                if side == 0:
+                    strand = '-'
+                    position = self.segment_start[n]
+                elif side == 1:
+                    strand = '+'
+                    position = self.segment_end[n]
+                else:
+                    raise Exception('unexpected side value')
+                breakpoint_info['n_{}'.format(breakend_idx + 1)] = n
+                breakpoint_info['side_{}'.format(breakend_idx + 1)] = side
+                breakpoint_info['chromosome_{}'.format(breakend_idx + 1)] = self.segment_chromosome_id[n]
+                breakpoint_info['position_{}'.format(breakend_idx + 1)] = position
+                breakpoint_info['strand_{}'.format(breakend_idx + 1)] = strand
+            breakpoint_segment_data.append(breakpoint_info)
+        self.breakpoint_segment_data = pd.DataFrame(breakpoint_segment_data)
 
     @property
     def N(self):
@@ -965,13 +1030,15 @@ class ExperimentSampler(object):
 
         self.emission_model = params.get('emission_model', 'negbin')
 
-        if self.emission_model not in ('poisson', 'negbin'):
-            raise ValueError('emission_model must be one of "poisson", "negbin"')
+        if self.emission_model not in ('poisson', 'negbin', 'normal'):
+            raise ValueError('emission_model must be one of "poisson", "negbin", "normal"')
+
+        self.noise_prior = params.get('noise_prior', 0.01)
 
         self.negbin_r = np.array([
-            params.get('negbin_r_allele', 200.0),
-            params.get('negbin_r_allele', 200.0),
-            params.get('negbin_r_total', 200.0)])
+            params.get('negbin_r_allele', 500.0),
+            params.get('negbin_r_allele', 500.0),
+            params.get('negbin_r_total', 500.0)])
 
         self.num_false_breakpoints = params.get('num_false_breakpoints', 50)
 
@@ -997,11 +1064,7 @@ class ExperimentSampler(object):
 
         phi = np.random.uniform(low=self.phi_min, high=self.phi_max, size=N)
 
-        model = remixt.likelihood.ReadCountLikelihood()
-        model.h = h
-        model.phi = phi
-
-        mu = model.expected_read_count(l, cn)
+        mu = remixt.likelihood.expected_read_count(l, cn, h, phi)
 
         extra_params = dict()
 
@@ -1017,9 +1080,50 @@ class ExperimentSampler(object):
 
             extra_params['negbin_r'] = self.negbin_r
 
-        # Reorder x as segment * major/minor/total
-        x[:,0:2].sort(axis=1)
-        x[:,0:2] = x[:,2:0:-1]
+        elif self.emission_model == 'normal':
+
+            x = np.zeros(mu.shape)
+
+            a, b = 0.18751413009612153, 1.3460546185667863
+
+            x[:, 2] = np.array([np.random.normal(loc=_mu, scale=(a * _mu**b)**0.5) for _mu in mu[:, 2]]).reshape(mu[:, 2].shape)
+
+            a, b = 0.053728057000299798, 1.4633092477154768
+
+            x[:, 0:2] = np.array([np.random.normal(loc=_mu, scale=(a * _mu**b)**0.5) for _mu in mu[:, 0:2]]).reshape(mu[:, 0:2].shape)
+
+            x[x < 0] = 0
+            x = x.round().astype(int)
+
+        if self.noise_prior is not None:
+
+            noise_range_total = mu[:, 2].max()
+            noise_range_total *= 1.25
+
+            is_outlier_total = np.random.choice(
+                [True, False], size=mu[:, 2].shape,
+                p=[self.noise_prior, 1. - self.noise_prior])
+
+            x[is_outlier_total, 2] = (np.random.randint(noise_range_total, size=mu[:, 2].shape))[is_outlier_total]
+
+            is_outlier_allele = np.random.choice(
+                [True, False], size=mu[:, 0].shape,
+                p=[self.noise_prior, 1. - self.noise_prior])
+
+            outlier_allele_ratio = np.random.beta(2, 2, size=mu[:, 0].shape)
+
+            x[is_outlier_allele, 0] = (outlier_allele_ratio * x[:, 0:2].sum(axis=1))[is_outlier_allele]
+            x[is_outlier_allele, 1] = ((1. - outlier_allele_ratio) * x[:, 0:2].sum(axis=1))[is_outlier_allele]
+
+        # Reorder x as segment * major/minor/total and record
+        # whether the major allele refers to the first (a) allele
+        # TODO: perhaps easiers to just do minor/major/total
+        major_is_allele_a = x[:, 0] > x[:, 1]
+        for n in xrange(N):
+            if not major_is_allele_a[n]:
+                x[n, 0], x[n, 1] = x[n, 1], x[n, 0]
+
+        extra_params['segment_major_is_allele_a'] = major_is_allele_a * 1
 
         breakpoints = genome_mixture.breakpoints.copy()
 
@@ -1061,60 +1165,5 @@ class ExperimentSampler(object):
         h_pred = frac * self.h_total
 
         return Experiment(genome_mixture, h, phi, x, breakpoints, h_pred, **extra_params)
-
-
-def compare_segment_copy_number(true_cn, pred_cn):
-
-    true_cn = true_cn[:,1:,:].copy()
-    pred_cn = pred_cn[:,1:,:].copy()
-
-    stats = dict()
-
-    true_is_clonal = (np.array([true_cn[:,0,:]] * true_cn.shape[1]).swapaxes(0, 1) == true_cn).all(axis=(1,2))
-    pred_is_clonal = (np.array([pred_cn[:,0,:]] * pred_cn.shape[1]).swapaxes(0, 1) == pred_cn).all(axis=(1,2))
-    stats['num_seg_is_clonal_incorrect'] = (true_is_clonal != pred_is_clonal).sum()
-
-    print true_is_clonal
-    print pred_is_clonal
-
-    return stats
-
-
-def compare_brk_copy_number(true_brk_cn, pred_brk_cn):
-
-    stats = dict()
-    stats['num_brk_dominant_correct'] = 0
-    stats['num_brk_subclonal_correct'] = 0
-
-    for bp, true_cn in true_brk_cn.iteritems():
-
-        try:
-            pred_cn = pred_brk_cn[bp]
-        except KeyError:
-            continue
-            
-        true_dominant = False
-        true_subclonal = False
-        
-        if np.all(true_cn[1:] > 0):
-            true_dominant = True
-        elif np.any(true_cn[1:] > 0):
-            true_subclonal = True
-
-        pred_dominant = False
-        pred_subclonal = False
-
-        if np.all(pred_cn[1:] > 0):
-            pred_dominant = True
-        elif np.any(pred_cn[1:] > 0):
-            pred_subclonal = True
-
-        if true_dominant and pred_dominant:
-            stats['num_brk_dominant_correct'] += 1
-
-        if true_subclonal and pred_subclonal:
-            stats['num_brk_subclonal_correct'] += 1
-
-    return stats
 
 

@@ -12,12 +12,16 @@ import scipy.optimize
 
 import remixt.simulations.simple as sim_simple
 import remixt.simulations.experiment
+import remixt.simulations.pipeline
 import remixt.cn_model as cn_model
 import remixt.em as em
 import remixt.likelihood as likelihood
 import remixt.genome_graph as genome_graph
 import remixt.seqdataio
 import remixt.tests.utils
+import remixt.cn_plot
+import remixt.analysis.pipeline
+import remixt.visualize
 
 np.random.seed(2014)
 
@@ -283,13 +287,42 @@ class remixt_unittest(unittest.TestCase):
         N = experiment.l.shape[0]
         M = experiment.h.shape[0]
 
-        prior = cn_model.CopyNumberPrior(perfect_cn_prior(experiment.cn))
-        prior.set_lengths(experiment.l)
+        prior = cn_model.CopyNumberPrior(experiment.l)
 
         model = cn_model.HiddenMarkovModel(N, M, emission, prior, experiment.chains, normal_contamination=False)
         
         estimator = em.ExpectationMaximizationEstimator()
-        estimator.learn_param(model, emission.h_param, emission.r_param, emission.M_param)
+        estimator.learn_param(model, emission.h_param)
+
+
+    def test_learn_h_variational(self):
+
+        experiment = load_test_experiment()
+
+        h_init = experiment.h * (1. + 0.05 * np.random.randn(*experiment.h.shape))
+        print experiment.h, h_init
+        print (experiment.phi * experiment.l)[:1]
+
+        model = cn_model.BreakpointModel(experiment.x, experiment.l, experiment.adjacencies, experiment.breakpoints,
+            normal_contamination=False, prior_variance=1e7)
+        model.optimize(h_init, max_iter=10)
+
+        h = np.asarray(model.model.h)
+        cn = model.optimal_cn()
+        brk_cn = model.optimal_brk_cn()
+
+        cn_table = remixt.analysis.experiment.create_cn_table(experiment, cn, h)
+        brk_cn_table = remixt.analysis.experiment.create_brk_cn_table(experiment, brk_cn)
+
+        results_table = remixt.simulations.pipeline.evaluate_results(experiment.genome_mixture, cn_table, brk_cn_table, h / h.sum())
+        print results_table
+
+        print 'creating visualization'
+        remixt.visualize.create_genome_visualization(cn_table, brk_cn_table, 'test.html')
+
+        print 'plotting result'
+        fig = remixt.cn_plot.experiment_plot(experiment, cn, h, maxcopies=8)
+        fig.savefig('test_result.pdf')
 
 
     def test_learn_r(self):

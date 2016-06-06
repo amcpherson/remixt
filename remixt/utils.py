@@ -52,6 +52,11 @@ def filled_density_weighted(ax, data, weights, c, a, xmim, xmax, cov, rotate=Fal
     filled_density(ax, samples, c, a, xmim, xmax, cov, rotate=rotate)
 
 
+def weighted_percentile(data, weights, percentile, num_samples=10000, randomize=False):
+    data = weighted_resample(data, weights, num_samples=num_samples, randomize=randomize)
+    return np.percentile(data, percentile)
+
+
 def read_sequences(fasta_filename):
     with open(fasta_filename, 'r') as fasta_file:
         seq_id = None

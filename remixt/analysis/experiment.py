@@ -269,6 +269,7 @@ class Experiment(object):
 
         # Create mapping between breakpoints and segment extremeties
         self.breakpoint_segment_data = create_breakpoint_segment_table(self.count_data, self.breakpoint_data, self.adjacencies, max_brk_dist=max_brk_dist)
+        self.breakpoint_segment_data = self.breakpoint_segment_data.merge(self.breakpoint_data, on='prediction_id')
 
     @property
     def segment_chromosome_id(self):
@@ -310,73 +311,124 @@ class Experiment(object):
                 chain_end.append(idx+1)  # Half-open interval indexing [start, end)
                 chain_start.append(idx+1)
         return zip(sorted(chain_start), sorted(chain_end))
+
+
+def create_segment_table(experiment):
+    """ Create a table of segment data
+
+    Args:
+        experiment (Experiment): remixt experiment data
+
+    Returns:
+        pandas.DataFrame: table of copy number information
+
+    """
+    data = pd.DataFrame({
+        'chromosome': experiment.segment_chromosome_id,
+        'start': experiment.segment_start,
+        'end': experiment.segment_end,
+        'major_is_allele_a': experiment.segment_major_is_allele_a,
+        'length': experiment.l,
+        'major_readcount': experiment.x[:, 0],
+        'minor_readcount': experiment.x[:, 1],
+        'readcount': experiment.x[:, 2],
+    })
+
+    phi = remixt.likelihood.estimate_phi(experiment.x)
+
+    data['major_depth'] = data['major_readcount'] / (phi * data['length'])
+    data['minor_depth'] = data['minor_readcount'] / (phi * data['length'])
+    data['total_depth'] = data['readcount'] / data['length']
+
+    return data
+
+
+def create_cn_table(experiment, cn, h):
+    """ Create a table of relevant copy number data
+
+    Args:
+        experiment (Experiment): remixt experiment data
+        cn (numpy.array): segment copy number
+        h (numpy.array): haploid depths
+
+    Returns:
+        pandas.DataFrame: table of copy number information
+
+    """
+
+    data = create_segment_table(experiment)
+
+    phi = remixt.likelihood.estimate_phi(experiment.x)
+
+    data['major_raw'] = (data['major_depth'] - h[0]) / h[1:].sum()
+    data['minor_raw'] = (data['minor_depth'] - h[0]) / h[1:].sum()
     
-    def create_segment_table(self):
-        """ Create a table of segment data
+    data['ratio_raw'] = experiment.x[:, 1].astype(float) / experiment.x[:, :2].sum(axis=1).astype(float)
 
-        Returns:
-            pandas.DataFrame: table of copy number information
+    x_e = remixt.likelihood.expected_read_count(experiment.l, cn, h, phi)
 
-        """
-        data = pd.DataFrame({
-            'chromosome': self.segment_chromosome_id,
-            'start': self.segment_start,
-            'end': self.segment_end,
-            'major_is_allele_a': self.segment_major_is_allele_a,
-            'length': self.l,
-            'major_readcount': self.x[:, 0],
-            'minor_readcount': self.x[:, 1],
-            'readcount': self.x[:, 2],
-        })
+    major_depth_e = x_e[:, 0] / (phi * experiment.l)
+    minor_depth_e = x_e[:, 1] / (phi * experiment.l)
 
-        phi = remixt.likelihood.estimate_phi(self.x)
+    major_raw_e = (major_depth_e - h[0]) / h[1:].sum()
+    minor_raw_e = (minor_depth_e - h[0]) / h[1:].sum()
 
-        data['major_depth'] = data['major_readcount'] / (phi * data['length'])
-        data['minor_depth'] = data['minor_readcount'] / (phi * data['length'])
-        data['total_depth'] = data['readcount'] / (phi * data['length'])
+    data['major_raw_e'] = major_raw_e
+    data['minor_raw_e'] = minor_raw_e
 
-        return data
+    for m in xrange(1, cn.shape[1]):
+        data['major_{0}'.format(m)] = cn[:, m, 0]
+        data['minor_{0}'.format(m)] = cn[:, m, 1]
 
-    def create_cn_table(self, likelihood, cn, h):
-        """ Create a table of relevant copy number data
+    if 'major_2' in data:
+        data['major_diff'] = np.absolute(data['major_1'] - data['major_2'])
+        data['minor_diff'] = np.absolute(data['minor_1'] - data['minor_2'])
 
-        Args:
-            likelihood (ReadCountLikelihood): likelihood model
-            cn (numpy.array): segment copy number
-            h (numpy.array): haploid depths
+    return data
 
-        Returns:
-            pandas.DataFrame: table of copy number information
 
-        """
+def create_brk_cn_table(experiment, brk_cn):
+    """ Create a table of relevant breakpoint copy number data
 
-        data = self.create_segment_table()
+    Args:
+        experiment (Experiment): experiment object
+        brk_cn (numpy.array): breakpoint copy number
 
-        likelihood.phi = remixt.likelihood.estimate_phi(self.x)
+    Returns:
+        pandas.DataFrame: table of breakpoint copy number information
 
-        data['major_raw'] = (data['major_depth'] - h[0]) / h[1:].sum()
-        data['minor_raw'] = (data['minor_depth'] - h[0]) / h[1:].sum()
-        
-        data['ratio_raw'] = self.x[:, 1].astype(float) / self.x[:, :2].sum(axis=1).astype(float)
+    The experiment.breakpoint_segment_data dataframe must have columns
+    'n_1', 'side_1', 'n_2', 'side_2'
 
-        x_e = likelihood.expected_read_count(self.l, cn)
+    """
 
-        major_depth_e = x_e[:, 0] / (likelihood.phi * self.l)
-        minor_depth_e = x_e[:, 1] / (likelihood.phi * self.l)
+    cn_cols = []
+    for m in xrange(brk_cn.items()[0][1].shape[0]):
+        cn_cols.append('cn_{}'.format(m))
 
-        major_raw_e = (major_depth_e - h[0]) / h[1:].sum()
-        minor_raw_e = (minor_depth_e - h[0]) / h[1:].sum()
+    data = list()
+    for breakpoint, cn in brk_cn.iteritems():
+        (n_1, side_1), (n_2, side_2) = sorted(breakpoint)
+        data.append((n_1, side_1, n_2, side_2) + tuple(cn))
 
-        data['major_raw_e'] = major_raw_e
-        data['minor_raw_e'] = minor_raw_e
+    brk_cn_table = pd.DataFrame(
+        data,
+        columns=['n_1', 'side_1', 'n_2', 'side_2'] + cn_cols,
+    )
 
-        for m in xrange(1, cn.shape[1]):
-            data['major_{0}'.format(m)] = cn[:, m, 0]
-            data['minor_{0}'.format(m)] = cn[:, m, 1]
+    # Create copy number table
+    # Account for both orderings of the two breakends
+    column_swap = {
+        'n_1': 'n_2',
+        'side_1': 'side_2',
+        'n_2': 'n_1',
+        'side_2': 'side_1',
+    }
+    brk_cn_table_1 = brk_cn_table.merge(experiment.breakpoint_segment_data)
+    brk_cn_table_2 = brk_cn_table.merge(experiment.breakpoint_segment_data.rename(columns=column_swap))
+    brk_cn_table = pd.concat([brk_cn_table_1, brk_cn_table_2], ignore_index=True)
 
-        if 'major_2' in data:
-            data['major_diff'] = np.absolute(data['major_1'] - data['major_2'])
-            data['minor_diff'] = np.absolute(data['minor_1'] - data['minor_2'])
+    return brk_cn_table
 
-        return data
+
 

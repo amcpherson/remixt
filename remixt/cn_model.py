@@ -1,13 +1,18 @@
 import itertools
+import collections
 import numpy as np
 import pandas as pd
 import scipy
 import scipy.optimize
 import scipy.misc
+import pickle
 
 from remixt.hmm import _viterbi as hmm_viterbi
 from remixt.hmm import _forward as hmm_forward
 from remixt.hmm import _backward as hmm_backward
+import remixt.vhmm
+import remixt.model3
+import remixt.model1
 
 
 class ProbabilityError(ValueError):
@@ -30,7 +35,7 @@ class ProbabilityError(ValueError):
 
 class CopyNumberPrior(object):
 
-    def __init__(self, l, max_divergence=1, divergence_weight=1e-6):
+    def __init__(self, l, max_divergence=1, divergence_weight=1e-7):
         """ Create a copy number prior.
 
         Args:
@@ -67,8 +72,7 @@ class CopyNumberPrior(object):
 
         subclonal_divergence = (cn[:,1:,:].max(axis=1) - cn[:,1:,:].min(axis=1)) * 1
         invalid_divergence = (subclonal_divergence > self.max_divergence).any(axis=1)
-
-        lp[invalid_divergence] -= 1000.
+        lp -= np.where(invalid_divergence, 1000., 0.)
 
         return lp
 
@@ -350,6 +354,445 @@ class HiddenMarkovModel(object):
 
     def log_likelihood(self, state):
         return self.emission.log_likelihood(state) + self.prior.log_prior(state)
+
+
+def _get_brkend_seg_orient(breakend):
+    n, side = breakend
+    if side == 1:
+        n_left = n
+        orient = +1
+    elif side == 0:
+        n_left = n - 1
+        orient = -1
+    return n_left, orient
+
+
+class BreakpointModel(object):
+
+    def __init__(self, x, l, adjacencies, breakpoints, max_copy_number=6, normal_contamination=True, prior_variance=1e6):
+        """ Create a copy number model.
+
+        Args:
+            x (numpy.array): observed minor, major, total reads
+            l (numpy.array): observed segment lengths
+            adjacencies (list of tuple): pairs of adjacent segments
+            breakpoints (list of frozenset of tuples): breakpoints as segment extremity pairs
+
+        KwArgs:
+            max_copy_number (int): maximum copy number of HMM state space
+            normal_contamination (bool): whether the sample is contaminated by normal
+            prior_variance (float): variance parameter of clone segment divergence prior
+
+        """
+
+        self.N = x.shape[0]
+
+        self.breakpoints = list(breakpoints)
+
+        self.normal_contamination = normal_contamination
+
+        self.cn_max = max_copy_number
+
+        self.transition_log_prob = 10.
+
+        self.prior_variance = prior_variance
+
+        # The factor graph model for breakpoint copy number allows only a single breakend
+        # interposed between each pair of adjacent segments.  Where multiple breakends are
+        # involved, additional zero lenght dummy segments must be added between those
+        # breakends
+        breakpoint_segment = collections.defaultdict(set)
+        for bp_idx, breakpoint in enumerate(self.breakpoints):
+            for be_idx, breakend in enumerate(breakpoint):
+                n, orient = _get_brkend_seg_orient(breakend)
+                breakpoint_segment[n].add((bp_idx, be_idx, orient))
+
+        # Count the number of segments in the new segmentation
+        self.N1 = 0
+        for n in xrange(-1, self.N):
+            if n in breakpoint_segment:
+                self.N1 += len(breakpoint_segment[n])
+                if (n, n + 1) not in adjacencies:
+                    self.N1 += 1
+            elif n >= 0:
+                self.N1 += 1
+
+        # Mapping from old segment index to new segment index
+        self.seg_fwd_remap = np.zeros(self.N, dtype=int)
+
+        # New segment refers to an original segment
+        self.seg_is_original = np.zeros(self.N1, dtype=bool)
+
+        self.is_telomere = np.ones(self.N1, dtype=int)
+        self.breakpoint_idx = -np.ones(self.N1, dtype=int)
+        self.breakpoint_orient = np.zeros(self.N1, dtype=int)
+
+        # Index of new segmentation
+        n_new = 0
+
+        # There may be a breakend at the start of the first segment,
+        # in which case there will be a breakend with segment n=-1
+        for n in xrange(-1, self.N):
+            if n >= 0:
+                # Map old segment n to n_new
+                self.seg_fwd_remap[n] = n_new
+                self.seg_is_original[n_new] = True
+
+            if n in breakpoint_segment:
+                for bp_idx, be_idx, orient in breakpoint_segment[n]:
+                    # Breakpoint index and orientation based on n_new
+                    self.breakpoint_idx[n_new] = bp_idx
+                    self.breakpoint_orient[n_new] = orient
+
+                    # Breakpoint incident segments cannot be telomeres
+                    self.is_telomere[n_new] = 0
+
+                    # Next new segment, per introduced breakend
+                    n_new += 1
+
+                # If a breakend is at a telomere, create an additional new segment to be the telomere
+                if (n, n + 1) not in adjacencies:
+                    # Mark as a telomere
+                    self.is_telomere[n_new] = 1
+
+                    # Next new segment, after telomere
+                    n_new += 1
+
+            elif n >= 0:
+                # If n is not a telomere, n_new is not a telomere
+                if (n, n + 1) in adjacencies:
+                    self.is_telomere[n_new] = 0
+
+                # Next new segment
+                n_new += 1
+
+        assert not np.any((self.breakpoint_idx >= 0) & (self.is_telomere[n] == 1))
+        assert np.all(np.bincount(self.breakpoint_idx[self.breakpoint_idx >= 0]) == 2)
+
+        # These should be zero lengthed segments, and zero read counts
+        # for dummy segments, but setting lengths and counts to 1 to prevent
+        # NaNs should have little effect
+        self.x1 = np.ones((self.N1, x.shape[1]), dtype=x.dtype)
+        self.l1 = np.ones((self.N1,), dtype=l.dtype)
+
+        self.x1[self.seg_fwd_remap, :] = x
+        self.l1[self.seg_fwd_remap] = l
+
+    def _write_model(self, model_filename):
+        data = {}
+        for a in dir(self.model):
+            if a in ['__doc__', '__pyx_vtable__']:
+                continue
+            if callable(getattr(self.model, a)):
+                continue
+            data[a] = getattr(self.model, a)
+        pickle.dump(data, open(model_filename, 'w'))
+
+
+    def _read_model(self, model_filename):
+        data = pickle.load(open(model_filename, 'r'))
+        for a in dir(self.model):
+            if a in data:
+                setattr(self.model, a, data[a])
+
+
+    def initialize_1(self, h_normal, h_tumour, split_sequence=None):
+
+        self.model = remixt.model1.RemixtModel(
+            2, self.N1, len(self.breakpoints),
+            self.cn_max,
+            self.x1,
+            self.is_telomere,
+            self.breakpoint_idx,
+            self.breakpoint_orient,
+            self.l1, self.l1,
+            self.transition_log_prob,
+        )
+
+        self.model.prior_variance = self.prior_variance
+
+        self.model.h[0] = h_normal
+        self.model.h[1] = h_tumour
+
+        for _ in range(3):
+            for m in range(1, self.model.num_clones):
+                print _, m, '-----'
+                elbo_prev = self.model.calculate_elbo()
+                self.model.update_p_cn(m)
+                elbo = self.model.calculate_elbo()
+                print 'elbo diff:', elbo - elbo_prev
+
+        posterior_marginals = np.asarray(self.model.posterior_marginals)**0.1
+        posterior_marginals /= np.sum(posterior_marginals, axis=-1)[:, :, np.newaxis]
+        self.model.posterior_marginals = posterior_marginals
+
+        joint_posterior_marginals = np.asarray(self.model.joint_posterior_marginals)**0.1
+        joint_posterior_marginals /= np.sum(joint_posterior_marginals, axis=(-1, -2))[:, :, np.newaxis, np.newaxis]
+        self.model.joint_posterior_marginals = joint_posterior_marginals
+
+        for n in xrange(self.model.num_segments):
+            for m in xrange(1, self.model.num_clones):
+                if self.breakpoint_idx[n] == 10:
+                    pst = np.asarray(self.model.posterior_marginals[m, n, :])
+                    pr = pst.max()
+                    print m, pr, np.where(pst==pr), np.asarray(self.model.posterior_marginals[m, n, :])[[10, 18]]
+                    pst = np.asarray(self.model.posterior_marginals[m, n+1, :])
+                    pr = pst.max()
+                    print m, pr, np.where(pst==pr), np.asarray(self.model.posterior_marginals[m, n, :])[[10, 18]]
+
+        m, f = split_sequence[0]
+        self.model.split_clone(m, f)
+
+        print np.asarray(self.model.h)
+
+        for _ in range(2):
+            for m in range(1, self.model.num_clones):
+                print _, m, '-----'
+                elbo_prev = self.model.calculate_elbo()
+                self.model.update_p_cn(m)
+                elbo = self.model.calculate_elbo()
+                print 'elbo diff:', elbo - elbo_prev
+
+        # for m, f in itertools.chain([(None, None)], split_sequence):
+        #     print '-' * 100
+
+        #     if m is not None:
+        #         self.model.split_clone(m, f)
+        #         print np.asarray(self.model.h)
+
+        #     for _ in range(3):
+        #         for m in range(1, self.model.num_clones):
+        #             print _, m, '-----'
+        #             elbo_prev = self.model.calculate_elbo()
+        #             self.model.update_p_cn(m)
+        #             elbo = self.model.calculate_elbo()
+        #             print 'elbo diff:', elbo - elbo_prev
+
+        #         print _, 'breakpoint', '-----'
+        #         elbo_prev = self.model.calculate_elbo()
+        #         self.model.update_p_breakpoint()
+        #         elbo = self.model.calculate_elbo()
+        #         print 'elbo diff:', elbo - elbo_prev
+
+        #         print self.breakpoint_prob()[frozenset([(7324, 0), (7520, 1)])]
+        #         print np.asarray(self.model.p_allele)[7324]
+        #         print np.asarray(self.model.p_allele)[7521]
+
+        #         print _, 'allele', '-----'
+        #         elbo_prev = self.model.calculate_elbo()
+        #         self.model.update_p_allele()
+        #         elbo = self.model.calculate_elbo()
+        #         print 'elbo diff:', elbo - elbo_prev
+
+
+
+        # for m, f in itertools.chain([(None, None)], split_sequence):
+        #     print '-' * 100
+
+        #     if m is not None:
+        #         self.model.split_clone(m, f)
+
+        #         p_breakpoint = np.zeros((self.model.num_breakpoints, self.model.num_clones, self.model.cn_max + 1))
+        #         p_breakpoint[:, :, 0] = 0.25
+        #         p_breakpoint[:, :, 1] = 0.75
+        #         self.model.p_breakpoint = p_breakpoint
+
+        #         p_allele = np.ones((self.model.num_segments, 2, 2))
+        #         p_allele[:, 0, 0] = 0.25
+        #         p_allele[:, 0, 1] = 0.25
+        #         p_allele[:, 1, 0] = 0.25
+        #         p_allele[:, 1, 1] = 0.25
+        #         self.model.p_allele = p_allele
+
+        #         break
+
+        #     for _ in range(3):
+        #         for m in reversed(range(1, self.model.num_clones)):
+        #             print _, m, '-----'
+        #             elbo_prev = self.model.calculate_elbo()
+        #             self.model.update_p_cn(m)
+        #             elbo = self.model.calculate_elbo()
+        #             print 'elbo diff:', elbo - elbo_prev
+
+        #         print _, 'breakpoint', '-----'
+        #         elbo_prev = self.model.calculate_elbo()
+        #         self.model.update_p_breakpoint()
+        #         elbo = self.model.calculate_elbo()
+        #         print 'elbo diff:', elbo - elbo_prev
+
+        #         print self.breakpoint_prob()[frozenset([(7324, 0), (7520, 1)])]
+        #         print np.asarray(self.model.p_allele)[7324]
+        #         print np.asarray(self.model.p_allele)[7521]
+
+        #         print _, 'allele', '-----'
+        #         elbo_prev = self.model.calculate_elbo()
+        #         self.model.update_p_allele()
+        #         elbo = self.model.calculate_elbo()
+        #         print 'elbo diff:', elbo - elbo_prev
+
+    def initialize_2(self, ):
+
+        self.model = remixt.model1.RemixtModel(
+            3, self.N1, len(self.breakpoints),
+            self.cn_max,
+            self.x1,
+            self.is_telomere,
+            self.breakpoint_idx,
+            self.breakpoint_orient,
+            self.l1, self.l1,
+            self.transition_log_prob,
+        )
+
+        self.model.prior_variance = self.prior_variance
+
+        self.model.h[0] = 0.04
+        self.model.h[1] = 0.06
+        self.model.h[2] = 0.04
+
+        jointlogprob = np.ones((self.model.num_segments, self.model.num_cn_states, self.model.num_cn_states)) * -np.inf
+
+        s_0 = self.model.normal_state
+        for s_1, s_2 in itertools.product(range(len(self.model.cn_states)), repeat=2):
+            cn_1 = np.asarray(self.model.cn_states[s_1])
+            cn_2 = np.asarray(self.model.cn_states[s_2])
+            if np.any(np.absolute(cn_1 - cn_2) > 1):
+                continue
+            jointlogprob[:, s_1, s_2] = self.model.calculate_ll(np.array([s_0, s_1, s_2]))
+
+        posterior_marginals = np.zeros((self.model.num_clones, self.model.num_segments, self.model.num_cn_states))
+
+        print 'postmarg'
+        posterior_marginals[0, :, s_0] = 1.
+        for n in xrange(self.model.num_segments):
+            joint_posterior = np.exp(jointlogprob[n, :, :])
+            joint_posterior /= joint_posterior.sum()
+            posterior_marginals[1, n, :] = joint_posterior.sum(axis=1)
+            posterior_marginals[2, n, :] = joint_posterior.sum(axis=0)
+        print 'postmarg done'
+
+        posterior_marginals = np.asarray(posterior_marginals)**0.25
+        posterior_marginals /= np.sum(posterior_marginals, axis=-1)[:, :, np.newaxis]
+        self.model.posterior_marginals = posterior_marginals
+
+        for n in xrange(self.model.num_segments):
+            if self.breakpoint_idx[n] == self.print_breakpoint_idx:
+                pst = np.asarray(jointlogprob[n, :, :])
+                pr = pst.max()
+                print n, pr, np.where(pst==pr), np.asarray(self.model.effective_lengths)[n]
+                pst = np.asarray(jointlogprob[n+1, :, :])
+                pr = pst.max()
+                print n+1, pr, np.where(pst==pr), np.asarray(self.model.effective_lengths)[n+1]
+
+        for n in xrange(self.model.num_segments):
+            for m in xrange(1, self.model.num_clones):
+                if self.breakpoint_idx[n] == self.print_breakpoint_idx:
+                    pst = np.asarray(posterior_marginals[m, n, :])
+                    pr = pst.max()
+                    print n, m, pr, np.where(pst==pr)
+                    pst = np.asarray(posterior_marginals[m, n+1, :])
+                    pr = pst.max()
+                    print n+1, m, pr, np.where(pst==pr)
+
+        self.model.posterior_marginals = posterior_marginals
+
+        for _ in range(5):
+            for m in range(1, self.model.num_clones):
+                print _, m, '-----'
+                elbo_prev = self.model.calculate_elbo()
+                self.model.update_p_cn(m)
+                elbo = self.model.calculate_elbo()
+                print 'elbo diff:', elbo - elbo_prev
+
+
+    def initialize_3(self, ):
+
+        self.model = remixt.model1.RemixtModel(
+            3, self.N1, len(self.breakpoints),
+            self.cn_max,
+            1,
+            self.x1,
+            self.is_telomere,
+            self.breakpoint_idx,
+            self.breakpoint_orient,
+            self.l1, self.l1,
+            self.transition_log_prob,
+        )
+
+        self.model.prior_variance = self.prior_variance
+
+        self.model.h[0] = 0.04
+        self.model.h[1] = 0.06
+        self.model.h[2] = 0.04
+
+    def optimize(self, h_init, elbo_diff_threshold=1e-6, max_iter=5):
+
+        self.model = remixt.model1.RemixtModel(
+            3, self.N1, len(self.breakpoints),
+            self.cn_max,
+            1,
+            self.x1,
+            self.is_telomere,
+            self.breakpoint_idx,
+            self.breakpoint_orient,
+            self.l1, self.l1,
+            self.transition_log_prob,
+        )
+
+        self.model.prior_variance = self.prior_variance
+
+        self.model.h = h_init
+
+        elbo = self.model.calculate_elbo()
+
+        elbo_prev = None
+        self.num_iter = 0
+        self.converged = False
+        for self.num_iter in xrange(1, max_iter + 1):
+            # import pstats, cProfile
+            # cProfile.runctx("self.model.update()", globals(), locals(), "Profile.prof")
+            # s = pstats.Stats("Profile.prof")
+            # s.strip_dirs().sort_stats("cumtime").print_stats()
+            # raise
+            elbo = self.model.update()
+            print 'elbo', elbo
+            print 'h', np.asarray(self.model.h)
+            print self.model.calculate_elbo()
+            if elbo_prev is not None:
+                print 'diff:', elbo - elbo_prev
+                if elbo - elbo_prev < elbo_diff_threshold:
+                    self.converged = True
+                    break
+            elbo_prev = elbo
+
+        return elbo
+
+
+    def optimal_cn(self):
+
+        cn = np.zeros((self.model.num_segments, self.model.num_clones, self.model.num_alleles), dtype=int)
+        self.model.infer_cn(cn)
+
+        return cn[self.seg_fwd_remap]
+
+
+    def optimal_brk_cn(self):
+        brk_cn = np.argmax(self.model.p_breakpoint, axis=-1)
+        brk_cn = dict(zip(self.breakpoints, brk_cn))
+
+        return brk_cn
+
+
+    def breakpoint_prob(self):
+        p_breakpoint = np.asarray(self.model.p_breakpoint)
+        brk_prob = dict(zip(self.breakpoints, p_breakpoint))
+
+        return brk_prob
+
+
+    @property
+    def h(self):
+        return np.asarray(self.model.h)
+    
 
 
 def decode_breakpoints_naive(cn, adjacencies, breakpoints):

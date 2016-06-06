@@ -1,0 +1,32 @@
+
+defaults:
+  h_total: 0.1
+  N: 5000
+  M: 3
+  fragment_mean: 300.
+  fragment_stddev: 30.
+  read_length: 100
+  base_call_error: 0.005
+  frac_normal: 0.4
+  num_false_breakpoints: 50
+  proportion_breakpoints_detected: 0.9
+
+simulations:
+  test_proportion_subclonal:
+    num_simulations: 1
+    num_replicates: 1
+    random_seed_start: 999
+    proportion_subclonal: [0.3]
+    num_ancestral_events: [100]
+    num_descendent_events: [50]
+    frac_normal: [0.4]
+    frac_clone: [[0.4, 0.2]]
+
+# simulations:
+#   test_proportion_subclonal:
+#     num_simulations: 4
+#     num_replicates: 10
+#     random_seed_start: 999
+#     proportion_subclonal: [0.15, 0.3, 0.45, 0.6]
+#     num_descendent_events: [10, 10, 20, 30]
+

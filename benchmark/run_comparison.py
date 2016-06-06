@@ -1,10 +1,6 @@
 import os
-import itertools
 import argparse
-import pickle
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 
 import pypeliner
 import pypeliner.managed as mgd
@@ -13,10 +9,6 @@ import remixt.simulations.pipeline
 import remixt.analysis.haplotype
 import remixt.wrappers
 import remixt.utils
-
-
-remixt_directory = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir))
-default_config_filename = os.path.join(remixt_directory, 'defaultconfig.py')
 
 
 if __name__ == '__main__':
@@ -44,15 +36,11 @@ if __name__ == '__main__':
 
     args = vars(argparser.parse_args())
 
-    config = {'ref_data_directory':args['ref_data_dir']}
-    execfile(default_config_filename, {}, config)
-
+    config = {}
     if args['config'] is not None:
         execfile(args['config'], {}, config)
 
-    config.update(args)
-
-    pyp = pypeliner.app.Pypeline([remixt, run_comparison], config)
+    pyp = pypeliner.app.Pypeline(modules=[remixt, run_comparison], config=args)
 
     params = dict()
     execfile(args['sim_params'], {}, params)
@@ -87,21 +75,27 @@ if __name__ == '__main__':
     mixture_params = params['mixture_params']
     mixture_params = merge_params(mixture_params, defaults)
 
+    workflow = pypeliner.workflow.Workflow()
+
     # For each of n patients:
     #     * simulate germline alleles
 
     germline_axis = ('bygermline',)
 
-    pyp.sch.setobj(mgd.TempOutputObj('germline_params', *germline_axis), germline_params)
-    pyp.sch.setobj(mgd.TempOutputObj('chromosomes'), chromosomes)
+    workflow.setobj(mgd.TempOutputObj('germline_params', *germline_axis), germline_params)
+    workflow.setobj(mgd.TempOutputObj('chromosomes'), chromosomes)
 
-    pyp.sch.transform('simulate_germline_alleles', germline_axis, {'mem':8},
-        remixt.simulations.pipeline.simulate_germline_alleles,
-        None,
-        mgd.TempOutputFile('germline_alleles', *germline_axis),
-        mgd.TempInputObj('germline_params', *germline_axis),
-        mgd.TempInputObj('chromosomes'),
-        config,
+    workflow.transform(
+        name='simulate_germline_alleles',
+        axes=germline_axis,
+        ctx={'mem':8},
+        func=remixt.simulations.pipeline.simulate_germline_alleles,
+        args=(
+            mgd.TempOutputFile('germline_alleles', *germline_axis),
+            mgd.TempInputObj('germline_params', *germline_axis),
+            mgd.TempInputObj('chromosomes'),
+            config,
+        ),
     )
 
     # For each of n patients:
@@ -111,26 +105,34 @@ if __name__ == '__main__':
 
     genome_axis = germline_axis + ('bygenome',)
 
-    pyp.sch.setobj(mgd.TempOutputObj('genome_params', *genome_axis), genome_params, genome_axis[:-1])
+    workflow.setobj(mgd.TempOutputObj('genome_params', *genome_axis), genome_params, genome_axis[:-1])
 
-    pyp.sch.transform('simulate_genomes', genome_axis, {'mem':4},
-        run_comparison.simulate_genomes,
-        None,
-        mgd.TempOutputFile('genomes', *genome_axis),
-        mgd.TempOutputFile('segment.tsv', *genome_axis),
-        mgd.TempOutputFile('perfect_segment.tsv', *genome_axis),
-        mgd.TempOutputFile('breakpoint.tsv', *genome_axis),
-        mgd.TempInputObj('genome_params', *genome_axis),
+    workflow.transform(
+        name='simulate_genomes',
+        axes=genome_axis,
+        ctx={'mem':4},
+        func=run_comparison.simulate_genomes,
+        args=(
+            mgd.TempOutputFile('genomes', *genome_axis),
+            mgd.TempOutputFile('segment.tsv', *genome_axis),
+            mgd.TempOutputFile('perfect_segment.tsv', *genome_axis),
+            mgd.TempOutputFile('breakpoint.tsv', *genome_axis),
+            mgd.TempInputObj('genome_params', *genome_axis),
+        ),
     )
 
-    pyp.sch.transform('simulate_normal_data', genome_axis, {'mem':16},
-        remixt.simulations.pipeline.simulate_normal_data,
-        None,
-        mgd.TempOutputFile('normal', *genome_axis),
-        mgd.TempInputFile('genomes', *genome_axis),
-        mgd.TempInputFile('germline_alleles', *germline_axis),
-        mgd.TempFile('normal_tmp', *genome_axis),
-        mgd.TempInputObj('genome_params', *genome_axis),
+    workflow.transform(
+        name='simulate_normal_data',
+        axes=genome_axis,
+        ctx={'mem':16},
+        func=remixt.simulations.pipeline.simulate_normal_data,
+        args=(
+            mgd.TempOutputFile('normal', *genome_axis),
+            mgd.TempInputFile('genomes', *genome_axis),
+            mgd.TempInputFile('germline_alleles', *germline_axis),
+            mgd.TempFile('normal_tmp', *genome_axis),
+            mgd.TempInputObj('genome_params', *genome_axis),
+        ),
     )
 
     # For each of n patients:
@@ -140,135 +142,193 @@ if __name__ == '__main__':
 
     mixture_axis = genome_axis + ('bymixture',)
 
-    pyp.sch.setobj(mgd.TempOutputObj('mixture_params', *mixture_axis), mixture_params, mixture_axis[:-1])
+    workflow.setobj(mgd.TempOutputObj('mixture_params', *mixture_axis), mixture_params, mixture_axis[:-1])
 
-    pyp.sch.transform('simulate_mixture', mixture_axis, {'mem':2},
-        run_comparison.simulate_mixture,
-        None,
-        mgd.TempOutputFile('mixture', *mixture_axis),
-        mgd.TempOutputFile('mixture_plot.pdf', *mixture_axis),
-        mgd.TempInputFile('genomes', *genome_axis),
-        mgd.TempInputObj('mixture_params', *mixture_axis),
+    workflow.transform(
+        name='simulate_mixture',
+        axes=mixture_axis,
+        ctx={'mem':2},
+        func=run_comparison.simulate_mixture,
+        args=(
+            mgd.TempOutputFile('mixture', *mixture_axis),
+            mgd.TempOutputFile('mixture_plot.pdf', *mixture_axis),
+            mgd.TempInputFile('genomes', *genome_axis),
+            mgd.TempInputObj('mixture_params', *mixture_axis),
+        ),
     )
 
-    pyp.sch.transform('simulate_tumour_data', mixture_axis, {'mem':16},
-        remixt.simulations.pipeline.simulate_tumour_data,
-        None,
-        mgd.TempOutputFile('tumour', *mixture_axis),
-        mgd.TempInputFile('mixture', *mixture_axis),
-        mgd.TempInputFile('germline_alleles', *germline_axis),
-        mgd.TempFile('tumour_tmp', *mixture_axis),
-        mgd.TempInputObj('mixture_params', *mixture_axis),
+    workflow.transform(
+        name='simulate_tumour_data',
+        axes=mixture_axis,
+        ctx={'mem':16},
+        func=remixt.simulations.pipeline.simulate_tumour_data,
+        args=(
+            mgd.TempOutputFile('tumour', *mixture_axis),
+            mgd.TempInputFile('mixture', *mixture_axis),
+            mgd.TempInputFile('germline_alleles', *germline_axis),
+            mgd.TempFile('tumour_tmp', *mixture_axis),
+            mgd.TempInputObj('mixture_params', *mixture_axis),
+        ),
     )
 
     haps_axis = genome_axis + ('bychromosome',)
 
-    pyp.sch.setobj(mgd.OutputChunks(*haps_axis), chromosomes, haps_axis[:-1])
+    workflow.setobj(mgd.OutputChunks(*haps_axis), chromosomes, haps_axis[:-1])
 
-    pyp.sch.transform('infer_haps', haps_axis, {'mem':16},
-        remixt.analysis.haplotype.infer_haps,
-        None,
-        mgd.TempOutputFile('haps.tsv', *haps_axis),
-        mgd.TempInputFile('normal', *genome_axis),
-        mgd.InputInstance('bychromosome'),
-        mgd.TempFile('haplotyping', *haps_axis),
-        config,
+    workflow.transform(
+        name='infer_haps',
+        axes=haps_axis,
+        ctx={'mem':16},
+        func=remixt.analysis.haplotype.infer_haps,
+        args=(
+            mgd.TempOutputFile('haps.tsv', *haps_axis),
+            mgd.TempInputFile('normal', *genome_axis),
+            mgd.InputInstance('bychromosome'),
+            mgd.TempFile('haplotyping', *haps_axis),
+            config,
+        ),
     )
 
-    pyp.sch.transform('merge_haps', genome_axis, {'mem':8},
-        remixt.utils.merge_tables,
-        None,
-        mgd.TempOutputFile('haps.tsv', *genome_axis),
-        mgd.TempInputFile('haps.tsv', *haps_axis),
+    workflow.transform(
+        name='merge_haps',
+        axes=genome_axis,
+        ctx={'mem':8},
+        func=remixt.utils.merge_tables,
+        args=(
+            mgd.TempOutputFile('haps.tsv', *genome_axis),
+            mgd.TempInputFile('haps.tsv', *haps_axis),
+        ),
     )
 
     tool_axis = mixture_axis + ('bytool',)
 
-    pyp.sch.transform('create_tools', mixture_axis, {'local':True},
-        run_comparison.create_tools,
-        mgd.TempOutputObj('tool', *tool_axis),
-        args['install_dir'],
+    workflow.transform(
+        name='create_tools',
+        axes=mixture_axis,
+        ctx={'local':True},
+        func=run_comparison.create_tools,
+        ret=mgd.TempOutputObj('tool', *tool_axis),
+        args=(args['install_dir'],),
     )
 
-    pyp.sch.transform('create_analysis', tool_axis, {'local':True},
-        run_comparison.create_analysis,
-        mgd.TempOutputObj('tool_analysis', *tool_axis),
-        mgd.TempInputObj('tool', *tool_axis),
-        mgd.TempFile('tool_tmp', *tool_axis),
+    workflow.transform(
+        name='create_analysis',
+        axes=tool_axis,
+        ctx={'local':True},
+        func=run_comparison.create_analysis,
+        ret=mgd.TempOutputObj('tool_analysis', *tool_axis),
+        args=(
+            mgd.TempInputObj('tool', *tool_axis),
+            mgd.TempFile('tool_tmp', *tool_axis),
+        ),
     )
 
     init_axis = tool_axis + ('bytool',)
 
-    pyp.sch.transform('tool_prepare', tool_axis, {'mem':16},
-        run_comparison.tool_prepare,
-        mgd.TempOutputObj('init_idx', *init_axis),
-        mgd.TempInputObj('tool_analysis', *tool_axis),
-        mgd.TempInputFile('normal', *genome_axis),
-        mgd.TempInputFile('tumour', *mixture_axis),
-        mgd.TempInputFile('segment.tsv', *genome_axis),
-        mgd.TempInputFile('perfect_segment.tsv', *genome_axis),
-        mgd.TempInputFile('breakpoint.tsv', *genome_axis),
-        mgd.TempInputFile('haps.tsv', *genome_axis),
+    workflow.transform(
+        name='tool_prepare',
+        axes=tool_axis,
+        ctx={'mem':16},
+        func=run_comparison.tool_prepare,
+        ret=mgd.TempOutputObj('init_idx', *init_axis),
+        args=(
+            mgd.TempInputObj('tool_analysis', *tool_axis),
+            mgd.TempInputFile('normal', *genome_axis),
+            mgd.TempInputFile('tumour', *mixture_axis),
+            mgd.TempInputFile('segment.tsv', *genome_axis),
+            mgd.TempInputFile('perfect_segment.tsv', *genome_axis),
+            mgd.TempInputFile('breakpoint.tsv', *genome_axis),
+            mgd.TempInputFile('haps.tsv', *genome_axis),
+        ),
     )
 
-    pyp.sch.transform('tool_run', init_axis, {'mem':16},
-        run_comparison.tool_run,
-        mgd.TempOutputObj('run_result', *init_axis),
-        mgd.TempInputObj('tool_analysis', *tool_axis),
-        mgd.TempInputObj('init_idx', *init_axis),
+    workflow.transform(
+        name='tool_run',
+        axes=init_axis,
+        ctx={'mem':16},
+        func=run_comparison.tool_run,
+        ret=mgd.TempOutputObj('run_result', *init_axis),
+        args=(
+            mgd.TempInputObj('tool_analysis', *tool_axis),
+            mgd.TempInputObj('init_idx', *init_axis),
+        ),
     )
 
-    pyp.sch.transform('tool_report', tool_axis, {'mem':16},
-        run_comparison.tool_report,
-        None,
-        mgd.TempInputObj('tool_analysis', *tool_axis),
-        mgd.TempInputObj('run_result', *init_axis),
-        mgd.TempOutputFile('cn.tsv', *tool_axis),
-        mgd.TempOutputFile('mix.tsv', *tool_axis),
+    workflow.transform(
+        name='tool_report',
+        axes=tool_axis,
+        ctx={'mem':16},
+        func=run_comparison.tool_report,
+        args=(
+            mgd.TempInputObj('tool_analysis', *tool_axis),
+            mgd.TempInputObj('run_result', *init_axis),
+            mgd.TempOutputFile('cn.tsv', *tool_axis),
+            mgd.TempOutputFile('mix.tsv', *tool_axis),
+        ),
     )
 
-    pyp.sch.transform('evaluate_results', tool_axis, {'mem':1},
-        run_comparison.evaluate_results,
-        None,
-        mgd.TempOutputFile('results.tsv', *tool_axis),
-        mgd.TempInputFile('mixture', *mixture_axis),
-        mgd.TempInputFile('cn.tsv', *tool_axis),
-        mgd.TempInputFile('mix.tsv', *tool_axis),
-        mgd.InputInstance('bytool'),
+    workflow.transform(
+        name='evaluate_results',
+        axes=tool_axis,
+        ctx={'mem':1},
+        func=run_comparison.evaluate_results,
+        args=(
+            mgd.TempOutputFile('results.tsv', *tool_axis),
+            mgd.TempInputFile('mixture', *mixture_axis),
+            mgd.TempInputFile('cn.tsv', *tool_axis),
+            mgd.TempInputFile('mix.tsv', *tool_axis),
+            mgd.InputInstance('bytool'),
+        ),
         germline=mgd.TempInputObj('germline_params', *germline_axis),
         mixture=mgd.TempInputObj('mixture_params', *mixture_axis),
         genome=mgd.TempInputObj('genome_params', *genome_axis),
     )
 
-    pyp.sch.transform('merge_tool_results', mixture_axis, {'mem':1},
-        remixt.utils.merge_tables,
-        None,
-        mgd.TempOutputFile('results.tsv', *mixture_axis),
-        mgd.TempInputFile('results.tsv', *tool_axis),
+    workflow.transform(
+        name='merge_tool_results',
+        axes=mixture_axis,
+        ctx={'mem':1},
+        func=remixt.utils.merge_tables,
+        args=(
+            mgd.TempOutputFile('results.tsv', *mixture_axis),
+            mgd.TempInputFile('results.tsv', *tool_axis),
+        ),
     )
 
-    pyp.sch.transform('merge_mixture_results', genome_axis, {'mem':1},
-        remixt.utils.merge_tables,
-        None,
-        mgd.TempOutputFile('results.tsv', *genome_axis),
-        mgd.TempInputFile('results.tsv', *mixture_axis),
+    workflow.transform(
+        name='merge_mixture_results',
+        axes=genome_axis,
+        ctx={'mem':1},
+        func=remixt.utils.merge_tables,
+        args=(
+            mgd.TempOutputFile('results.tsv', *genome_axis),
+            mgd.TempInputFile('results.tsv', *mixture_axis),
+        ),
     )
 
-    pyp.sch.transform('merge_genome_results', germline_axis, {'mem':1},
-        remixt.utils.merge_tables,
-        None,
-        mgd.TempOutputFile('results.tsv', *germline_axis),
-        mgd.TempInputFile('results.tsv', *genome_axis),
+    workflow.transform(
+        name='merge_genome_results',
+        axes=germline_axis,
+        ctx={'mem':1},
+        func=remixt.utils.merge_tables,
+        args=(
+            mgd.TempOutputFile('results.tsv', *germline_axis),
+            mgd.TempInputFile('results.tsv', *genome_axis),
+        ),
     )
 
-    pyp.sch.transform('merge_germline_results', (), {'mem':1},
-        remixt.utils.merge_tables,
-        None,
-        mgd.OutputFile(args['results_table']),
-        mgd.TempInputFile('results.tsv', *germline_axis),
+    workflow.transform(
+        name='merge_germline_results',
+        axes=(),
+        ctx={'mem':1},
+        func=remixt.utils.merge_tables,
+        args=(
+            mgd.OutputFile(args['results_table']),
+            mgd.TempInputFile('results.tsv', *germline_axis),
+        ),
     )
 
-    pyp.run()
+    pyp.run(workflow)
 
 else:
 

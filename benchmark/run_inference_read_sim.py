@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import pypeliner
 import pypeliner.managed as mgd
 
+import remixt.workflow
+import remixt.simulations.workflow
 import remixt.simulations.pipeline
 import remixt.analysis.haplotype
 import remixt.wrappers
@@ -44,66 +46,39 @@ if __name__ == '__main__':
 
     args = vars(argparser.parse_args())
 
-    config = {'ref_data_directory':args['ref_data_dir']}
-    execfile(default_config_filename, {}, config)
+    ref_data_dir = args['ref_data_dir']
 
+    config = {}
     if args['config'] is not None:
         execfile(args['config'], {}, config)
 
-    config.update(args)
+    pyp = pypeliner.app.Pypeline(config=args)
 
-    pyp = pypeliner.app.Pypeline([remixt, run_inference_read_sim], config)
+    workflow = pypeliner.workflow.Workflow()
 
-    pyp.sch.transform('read_sim_defs', (), {'mem':1,'local':True},
-        run_inference_read_sim.read_sim_defs,
-        mgd.TempOutputObj('sim_defs'),
-        mgd.InputFile(args['sim_defs']),
-        config)
+    workflow.subworkflow(
+        name='read_simulation',
+        func=remixt.simulations.workflow.create_read_simulation_workflow,
+        args=(
+            mgd.TempInputObj('settings', 'bysim'),
+            mgd.TempOutputFile('normal'),
+            mgd.TempOutputFile('tumour'),
+            config,
+            ref_data_dir,
+        ),
+    )
 
-    pyp.sch.transform('simulate_genomes', (), {'mem':4},
-        remixt.simulations.pipeline.simulate_genomes,
-        None,
-        mgd.TempOutputFile('genomes'),
-        mgd.TempInputObj('sim_defs'))
+    workflow.subworkflow(
+        name='infer_haps',
+        func=remixt.workflow.create_infer_haps_workflow,
+        args=(
+            mgd.TempInputFile('normal'),
+            mgd.TempOutputFile('haplotypes'),
+            config,
+            ref_data_dir,
+        ),
+    )
 
-    pyp.sch.transform('simulate_mixture', (), {'mem':1},
-        remixt.simulations.pipeline.simulate_mixture,
-        None,
-        mgd.TempOutputFile('mixture'),
-        mgd.TempInputFile('genomes'),
-        mgd.TempInputObj('sim_defs'))
-
-    pyp.sch.transform('plot_mixture', (), {'mem':4},
-        remixt.simulations.pipeline.plot_mixture,
-        None,
-        mgd.TempOutputFile('mixture_plot.pdf'),
-        mgd.TempInputFile('mixture'))
-
-    pyp.sch.transform('simulate_germline_alleles', (), {'mem':8},
-        remixt.simulations.pipeline.simulate_germline_alleles,
-        None,
-        mgd.TempOutputFile('germline_alleles'),
-        mgd.TempInputObj('sim_defs'),
-        mgd.TempInputObj('sim_defs').extract(lambda a: a['chromosomes']),
-        config)
-
-    pyp.sch.transform('simulate_normal_data', (), {'mem':32},
-        remixt.simulations.pipeline.simulate_normal_data,
-        None,
-        mgd.TempOutputFile('normal'),
-        mgd.TempInputFile('genomes'),
-        mgd.TempInputFile('germline_alleles'),
-        mgd.TempFile('normal_tmp'),
-        mgd.TempInputObj('sim_defs'))
-
-    pyp.sch.transform('simulate_tumour_data', (), {'mem':32},
-        remixt.simulations.pipeline.simulate_tumour_data,
-        None,
-        mgd.TempOutputFile('tumour'),
-        mgd.TempInputFile('mixture'),
-        mgd.TempInputFile('germline_alleles'),
-        mgd.TempFile('tumour_tmp'),
-        mgd.TempInputObj('sim_defs'))
 
     pyp.sch.transform('write_segments', (), {'mem':1},
         remixt.simulations.pipeline.write_segments,
