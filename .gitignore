@@ -9,3 +9,6 @@ src/estimategc
 src/external/blossom5*
 src/samplegc
 bin
+remixt/*.cpp
+remixt/*.c
+remixt/*.so
