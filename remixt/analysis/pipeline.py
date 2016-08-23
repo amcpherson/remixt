@@ -152,6 +152,7 @@ def fit_remixt_variational(
     # Save estimation statistics
     results['stats'] = dict()
     results['stats']['elbo'] = elbo
+    results['stats']['elbo_diff'] = model.prev_elbo_diff
     results['stats']['converged'] = model.converged
     results['stats']['num_iter'] = model.num_iter
     results['stats']['error_message'] = ''

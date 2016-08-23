@@ -177,6 +177,7 @@ class BreakpointModel(object):
         elbo_prev = None
         self.num_iter = 0
         self.converged = False
+        self.prev_elbo_diff = None
         for self.num_iter in xrange(1, max_iter + 1):
             # import pstats, cProfile
             # cProfile.runctx("self.model.update()", globals(), locals(), "Profile.prof")
@@ -188,8 +189,9 @@ class BreakpointModel(object):
             print 'h', np.asarray(self.model.h)
             print self.model.calculate_elbo()
             if elbo_prev is not None:
-                print 'diff:', elbo - elbo_prev
-                if elbo - elbo_prev < elbo_diff_threshold:
+                self.prev_elbo_diff = elbo - elbo_prev
+                print 'diff:', self.prev_elbo_diff
+                if self.prev_elbo_diff < elbo_diff_threshold:
                     self.converged = True
                     break
             elbo_prev = elbo
@@ -217,10 +219,17 @@ class BreakpointModel(object):
     @property
     def h(self):
         return np.asarray(self.model.h)
+        
+    @property
+    def haplotype_length(self):
+        return np.asarray(self.model.effective_lengths[:, 0])
     
     @property
     def phi(self):
-        return np.asarray(self.model.phi)
+        lengths = np.asarray(self.model.effective_lengths[:, 2])
+        phi = self.haplotype_length / lengths
+        phi[lengths <= 0] = 0
+        return phi
 
     @property
     def a(self):

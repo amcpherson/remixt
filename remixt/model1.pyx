@@ -194,10 +194,10 @@ cdef class RemixtModel:
         self.transition_penalty = fabs(transition_penalty)
 
         # Effective lengths set directly for total, learned for major minor
-        phi = effective_lengths * (x[:, :2].sum(axis=1).astype(float) + 1.) / (x[:, 2].astype(float) + 1.)
+        phi = (x[:, :2].sum(axis=1).astype(float) + 1.) / (x[:, 2].astype(float) + 1.)
         measurement_effective_lengths = np.zeros((self.num_segments, 3))
-        measurement_effective_lengths[:, 0] = phi
-        measurement_effective_lengths[:, 1] = phi
+        measurement_effective_lengths[:, 0] = effective_lengths * phi
+        measurement_effective_lengths[:, 1] = effective_lengths * phi
         measurement_effective_lengths[:, 2] = effective_lengths
         self.effective_lengths = measurement_effective_lengths
 
