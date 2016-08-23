@@ -215,7 +215,7 @@ def create_segment_allele_counts(segment_data, allele_data):
     allele_data = (
         allele_data
         .set_index(['chromosome', 'start', 'end', 'hap_label', 'is_allele_a'])['readcount']
-        .unstack()
+        .unstack(fill_value=0)
         .reindex(columns=[0, 1])
         .fillna(0.0)
         .astype(int)
