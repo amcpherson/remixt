@@ -1,9 +1,3 @@
-import os
-import contextlib
-import tarfile
-import gzip
-import StringIO
-import subprocess
 import numpy as np
 import pandas as pd
 
@@ -14,12 +8,6 @@ empty_data = {
     'fragments': remixt.bamreader.create_fragment_table(0),
     'alleles': remixt.bamreader.create_allele_table(0),
 }
-
-
-read_data_dtype = np.dtype([('start', np.uint32), ('length', np.uint16)])
-
-
-allele_data_dtype = np.dtype([('fragment_id', np.uint32), ('position', np.uint32), ('is_alt', np.uint8)])
 
 
 def _get_key(record_type, chromosome):
@@ -81,143 +69,52 @@ def merge_seqdata(out_filename, in_filenames):
                     out_store.put(key, in_store[key], format='table')
 
 
-def write_read_data(reads_file, read_data):
-    """ Write read data for a specific chromosome to a file
-
-    Args:
-        reads_file (str): tar to which data will be written
-        read_data (pandas.DataFrame): read data
-
-    Input 'read_data' dataframe has columns 'start', 'end'.
-
-    """
-
-    raw_data = np.zeros(len(read_data.index), dtype=read_data_dtype)
-
-    raw_data['start'] = read_data['start']
-    raw_data['length'] = read_data['end'] - read_data['start']
-
-    raw_data.tofile(reads_file)
-
-
-def write_allele_data(alleles_file, allele_data, fragment_id_offset=0):
-    """ Write allele data for a specific chromosome to a file
-
-    Args:
-        alleles_file (str): tar to which data will be written
-        allele_data (pandas.DataFrame): allele data
-
-    Input 'allele_data' dataframe has columns 'position', 'fragment_id', 'is_alt'.
-
-    """
-
-    raw_data = np.zeros(len(allele_data.index), dtype=allele_data_dtype)
-
-    raw_data['fragment_id'] = allele_data['fragment_id'] + fragment_id_offset
-    raw_data['position'] = allele_data['position']
-    raw_data['is_alt'] = allele_data['is_alt']
-
-    raw_data.tofile(alleles_file)
-
-
 class Writer(object):
-    def __init__(self, seqdata_filename, temp_dir):
-        """ Streaming writer of seq data files 
+    def __init__(self, seqdata_filename):
+        """ Streaming writer of seq data hdf5 files 
 
         Args:
-            seqdata_filename (str): name of seqdata tar file
-            temp_dir (str): temporary directory to write to
+            seqdata_filename (str): name of seqdata hdf5 file
 
         """
 
-        self.seqdata_filename = seqdata_filename
-        self.temp_dir = temp_dir
+        self.store = pd.HDFStore(seqdata_filename, 'w', complevel=9, complib='zlib')
 
-        self.fragment_id_offset = dict()
-        self.reads_filenames = dict()
-        self.alleles_filenames = dict()
-
-        try:
-            os.makedirs(self.temp_dir)
-        except OSError as e:
-            if e.errno != 17:
-                raise
-
-    def get_reads_filename(self, chromosome):
-        return os.path.join(self.temp_dir, 'reads.{0}'.format(chromosome))
-
-    def get_alleles_filename(self, chromosome):
-        return os.path.join(self.temp_dir, 'alleles.{0}'.format(chromosome))
-
-    def write(self, chromosome, read_data, allele_data):
+    def write(self, chromosome, fragment_data, allele_data):
         """ Write a chunk of reads and alleles data
 
         Args:
-            read_data (pandas.DataFrame): read data
+            fragment_data (pandas.DataFrame): fragment data
             allele_data (pandas.DataFrame): allele data
 
-        Input 'read_data' dataframe has columns 'chromosome', 'start', 'end'.
-        Input 'allele_data' dataframe has columns 'chromosome', 'position', 'fragment_id', 'is_alt'.
+        Input 'fragment_data' dataframe has columns 'fragment_id', 'start', 'end'.
+        if columns 'is_duplicate', 'mapping_quality' are not provided they are
+        given nominal values.
+
+        Input 'allele_data' dataframe has columns 'position', 'fragment_id', 'is_alt'.
 
         """
 
-        if chromosome not in self.fragment_id_offset:
+        # Add nominal mapping quality
+        if 'mapping_quality' not in fragment_data:
+            fragment_data['mapping_quality'] = 60
 
-            with open(self.get_reads_filename(chromosome), 'w'):
-                pass
+        # Add nominal is_duplicate value
+        if 'is_duplicate' not in fragment_data:
+            fragment_data['is_duplicate'] = 0
 
-            with open(self.get_alleles_filename(chromosome), 'w'):
-                pass
+        fragment_data = fragment_data[['fragment_id', 'start', 'end', 'is_duplicate', 'mapping_quality']]
+        allele_data = allele_data[['position', 'fragment_id', 'is_alt']]
 
-            self.reads_filenames[chromosome] = self.get_reads_filename(chromosome)
-            self.alleles_filenames[chromosome] = self.get_alleles_filename(chromosome)
-
-            self.fragment_id_offset[chromosome] = 0
-
-        with open(self.get_reads_filename(chromosome), 'ab') as f:
-            write_read_data(f, read_data)
-
-        with open(self.get_alleles_filename(chromosome), 'ab') as f:
-            write_allele_data(f, allele_data, self.fragment_id_offset[chromosome])
-
-        self.fragment_id_offset[chromosome] += len(read_data.index)
-
-    def gzip_files(self, filenames):
-        """ Gzip files
-
-        Args:
-            filenames (dict): files to gzip, keyed by chromosome
-
-        Returns: 
-            dict: gzipped files, keyed by chromosome
-
-        """
-
-        gzipped = dict()
-
-        for chrom, filename in filenames.iteritems():
-
-            try:
-                os.remove(filename + '.gz')
-            except OSError as e:
-                if e.errno != 2:
-                    raise e
-
-            subprocess.check_call(['gzip', filename])
-
-            gzipped[chrom] = filename + '.gz'
-
-        return gzipped
+        _unique_index_append(self.store, _get_key('fragments', chromosome), fragment_data)
+        _unique_index_append(self.store, _get_key('alleles', chromosome), allele_data)
 
     def close(self):
-        """ Write final seqdata
+        """ Close seq data file
         
         """
 
-        self.reads_filenames = self.gzip_files(self.reads_filenames)
-        self.alleles_filenames = self.gzip_files(self.alleles_filenames)
-
-        create_seqdata(self.seqdata_filename, self.reads_filenames, self.alleles_filenames)
+        self.store.close()
 
 
 def _read_seq_data_full(seqdata_filename, record_type, chromosome):
