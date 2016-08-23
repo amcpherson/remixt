@@ -4,9 +4,7 @@ import numpy as np
 import pandas as pd
 
 import remixt.config
-import remixt.likelihood
 import remixt.cn_model
-import remixt.em
 import remixt.genome_graph
 import remixt.analysis.experiment
 import remixt.analysis.readdepth
@@ -163,169 +161,6 @@ def fit_remixt_variational(
     return results
 
 
-def fit_hmm_viterbi(
-    experiment,
-    emission,
-    prior,
-    max_copy_number,
-    normal_contamination,
-    likelihood_params,
-):
-    N = experiment.l.shape[0]
-    M = emission.h.shape[0]
-
-    results = dict()
-    results['stats'] = dict()
-
-    model = remixt.cn_model.HiddenMarkovModel(
-        N, M, emission, prior, experiment.chains,
-        max_copy_number=max_copy_number,
-        normal_contamination=normal_contamination,
-    )
-
-    # Estimate haploid depths and overdispersion parameters
-    estimator = remixt.em.ExpectationMaximizationEstimator()
-    log_likelihood = estimator.learn_param(model, *likelihood_params)
-
-    # Save estimation statistics
-    results['stats']['h_log_likelihood'] = log_likelihood
-    results['stats']['h_converged'] = estimator.converged
-    results['stats']['h_em_iter'] = estimator.em_iter
-    results['stats']['h_error_message'] = estimator.error_message
-
-    # Infer copy number from viterbi
-    log_likelihood_viterbi, cn = model.optimal_state()
-
-    # Naive breakpoint copy number
-    brk_cn = remixt.cn_model.decode_breakpoints_naive(cn, experiment.adjacencies, experiment.breakpoints)
-
-    # Infer copy number
-    results['cn'] = cn
-    results['brk_cn'] = brk_cn
-    results['stats']['viterbi_log_likelihood'] = log_likelihood_viterbi
-    results['stats']['log_likelihood'] = log_likelihood_viterbi
-    results['stats']['log_prior'] = prior.log_prior(cn).sum()
-
-    return results
-
-
-def fit_hmm_graph(
-    experiment,
-    emission,
-    prior,
-    max_copy_number,
-    normal_contamination,
-    likelihood_params,
-):
-    N = experiment.l.shape[0]
-    M = emission.h.shape[0]
-
-    results = dict()
-    results['stats'] = dict()
-
-    model = remixt.cn_model.HiddenMarkovModel(
-        N, M, emission, prior, experiment.chains,
-        max_copy_number=max_copy_number,
-        normal_contamination=normal_contamination,
-    )
-
-    # Estimate haploid depths
-    estimator = remixt.em.ExpectationMaximizationEstimator()
-    log_likelihood = estimator.learn_param(model, *likelihood_params)
-
-    # Save estimation statistics
-    results['stats']['h_log_likelihood'] = log_likelihood
-    results['stats']['h_converged'] = estimator.converged
-    results['stats']['h_em_iter'] = estimator.em_iter
-    results['stats']['h_error_message'] = estimator.error_message
-
-    # Infer copy number from viterbi
-    _, cn_init = model.optimal_state()
-
-    # Create genome graph initializing from viterbi
-    graph = remixt.genome_graph.GenomeGraphModel(N, M, emission, prior, experiment.adjacencies, experiment.breakpoints)
-    graph.init_copy_number(cn_init)
-
-    # Infer copy number
-    log_likelihood_graph = graph.optimize()
-    cn = graph.segment_cn
-
-    results['cn'] = cn
-    results['brk_cn'] = graph.breakpoint_copy_number
-    results['stats']['graph_opt_iter'] = graph.opt_iter
-    results['stats']['graph_log_likelihood'] = log_likelihood_graph
-    results['stats']['graph_decreased_log_prob'] = graph.decreased_log_prob
-    results['stats']['log_likelihood'] = log_likelihood_graph
-    results['stats']['log_prior'] = prior.log_prior(cn).sum()
-
-    return results
-
-
-def fit_graph(
-    experiment,
-    emission,
-    prior,
-    max_copy_number,
-    normal_contamination,
-    likelihood_params,
-):
-    N = experiment.l.shape[0]
-    M = emission.h.shape[0]
-
-    results = dict()
-    results['stats'] = dict()
-
-    # Save initial h in preparation for single clone viterbi
-    h_init = emission.h
-
-    # Infer initial copy number from viterbi with 1 tumour clone
-    h_init_single = np.zeros((2,))
-    h_init_single[0] = h_init[0]
-    h_init_single[1] = h_init[1:].sum()
-    emission.h = h_init_single
-    model = remixt.cn_model.HiddenMarkovModel(
-        N, 2, emission, prior, experiment.chains,
-        max_copy_number=max_copy_number,
-        normal_contamination=normal_contamination,
-    )
-    _, cn = model.optimal_state()
-    cn_init = np.ones((N, M, 2))
-    for m in xrange(1, M):
-        cn_init[:,m,:] = cn[:,1,:]
-
-    # Initialize haploid depths
-    emission.h = h_init
-
-    # Create genome graph
-    graph = remixt.genome_graph.GenomeGraph(emission, prior, experiment.adjacencies, experiment.breakpoints)
-    graph.set_observed_data(experiment.x, experiment.l)
-    graph.init_copy_number(cn_init)
-
-    # Estimate haploid depths and copy number
-    estimator = remixt.em.HardAssignmentEstimator()
-    log_likelihood = estimator.learn_param(graph, *likelihood_params)
-
-    # Save copy number and estimation statistics
-    results['cn'] = graph.cn
-    results['brk_cn'] = graph.breakpoint_copy_number
-    results['stats']['h_em_iter'] = estimator.em_iter
-    results['stats']['h_converged'] = estimator.converged
-    results['stats']['graph_opt_iter'] = graph.opt_iter
-    results['stats']['graph_log_likelihood'] = log_likelihood
-    results['stats']['graph_decreased_log_posterior'] = graph.decreased_log_posterior
-    results['stats']['log_likelihood'] = log_likelihood
-    results['stats']['log_prior'] = prior.log_prior(graph.cn).sum()
-
-    return results
-
-
-fit_methods = {
-    'hmm_viterbi': fit_hmm_viterbi,
-    'hmm_graph': fit_hmm_graph,
-    'graph': fit_graph,
-}
-
-
 def store_fit_results(store, experiment, fit_results, key_prefix):
 
     h = fit_results['h']
@@ -394,4 +229,3 @@ def collate(collate_filename, experiment_filename, init_results_filename, fit_re
                 store_fit_results(collated, experiment, results, 'solutions/solution_{0}'.format(init_id))
 
         store_optimal_solution(stats_table, collated, config)
-

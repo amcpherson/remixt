@@ -14,7 +14,6 @@ import remixt.simulations.simple as sim_simple
 import remixt.simulations.experiment
 import remixt.simulations.pipeline
 import remixt.cn_model as cn_model
-import remixt.em as em
 import remixt.likelihood as likelihood
 import remixt.genome_graph as genome_graph
 import remixt.seqdataio
