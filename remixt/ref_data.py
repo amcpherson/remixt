@@ -6,7 +6,7 @@ import remixt.config
 import remixt.utils
 
 
-def create_ref_data(config, ref_data_dir):
+def create_ref_data(config, ref_data_dir, ref_data_sentinal):
     try:
         os.makedirs(ref_data_dir)
     except OSError:
@@ -74,4 +74,7 @@ def create_ref_data(config, ref_data_dir):
                             continue
                         snp_positions_file.write('\t'.join([chromosome, position, a0, a1]) + '\n')
     auto_sentinal.run(create_snp_positions)
+
+    with open(ref_data_sentinal, 'w'):
+        pass
 

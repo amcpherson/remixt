@@ -1,4 +1,5 @@
 import argparse
+import os
 
 import remixt.ref_data
 
@@ -22,5 +23,7 @@ if __name__ == '__main__':
     if args['config'] is not None:
         execfile(args['config'], {}, config)
 
-    remixt.ref_data.create_ref_data(config, ref_data_dir)
+    ref_data_sentinal = os.path.join(ref_data_dir, 'sentinal')
+
+    remixt.ref_data.create_ref_data(config, ref_data_dir, ref_data_sentinal)
     
