@@ -412,8 +412,7 @@ def phase_segments(*allele_counts_tables):
     for idx, allele_data in enumerate(allele_counts_tables):
         
         # Allele readcount table
-        allele_data = allele_data.set_index(['chromosome', 'start', 'end', 'hap_label', 'allele_id'])['readcount'].unstack().fillna(0.0)
-        allele_data = allele_data.astype(float)
+        allele_data = allele_data.set_index(['chromosome', 'start', 'end', 'hap_label', 'allele_id'])['readcount'].astype(float).unstack(fill_value=0.0)
         
         # Create major allele call
         allele_phase = allele_data.apply(np.argmax, axis=1)
