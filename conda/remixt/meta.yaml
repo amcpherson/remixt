@@ -18,12 +18,14 @@ requirements:
     - numpy
     - scipy
     - pandas >=0.17.1
+    - pytables
     - pypeliner >=0.4.1
     - statsmodels
     - scikit-learn
     - pyyaml
     - matplotlib
     - seaborn
+    - bokeh >=0.11.1
 
 about:
   home: http://bitbucket.org/dranew/remixt
