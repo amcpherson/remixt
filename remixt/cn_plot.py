@@ -99,12 +99,15 @@ def plot_cnv_genome(ax, cnv, mincopies=-0.4, maxcopies=4, minlength=1000, major_
         end (int): end of region in chromosome, None for end of chromosome
 
     """
-    
+
     if chromosome is None and (start is not None or end is not None):
         raise ValueError('start and end require chromosome arg')
 
     # Ensure we dont modify the calling function's table
-    cnv = cnv[['chromosome', 'start', 'end', 'length', major_col, minor_col]].copy()
+    cnv = cnv[['chromosome', 'start', 'end', major_col, minor_col]].copy()
+
+    if 'length' not in cnv:
+        cnv['length'] = cnv['end'] - cnv['start']
 
     # Restrict segments to those plotted
     if chromosome is not None:
@@ -234,7 +237,11 @@ def create_chromosome_color_map(chromosomes):
 
     chromosome_colors = list()
     for i in xrange(len(chromosomes)):
-        rgb_color = color_map(float(i)/float(len(chromosomes)-1))
+        if len(chromosomes) == 1:
+            f = 0.
+        else:
+            f = float(i)/float(len(chromosomes)-1)
+        rgb_color = color_map(f)
         hex_color = matplotlib.colors.rgb2hex(rgb_color)
         chromosome_colors.append(hex_color)
 
@@ -426,13 +433,11 @@ def plot_breakpoints_genome(ax, breakpoint, chromosome_info, scale_height=1.0):
         ax.add_patch(patch)
 
 
-def experiment_plot(experiment, likelihood, cn, h,
-                    chromosome=None, start=None, end=None):
+def experiment_plot(experiment, cn, h, chromosome=None, start=None, end=None, maxcopies=4):
     """ Plot a sequencing experiment
 
     Args:
         experiment (Experiment): experiment object containing simulation information
-        likelihood (ReadCountLikelihood): likelihood model
         cn (numpy.array): segment copy number
         h (numpy.array): haploid depths
 
@@ -440,13 +445,14 @@ def experiment_plot(experiment, likelihood, cn, h,
         chromosome (str): name of chromosome to plot, None for all chromosomes
         start (int): start of region in chromosome, None for beginning
         end (int): end of region in chromosome, None for end of chromosome
+        maxcopies (int): max copy number for y axis
 
     Returns:
         matplotlib.Figure: figure object of plots
 
     """
 
-    data = experiment.create_cn_table(likelihood, cn, h)
+    data = remixt.analysis.experiment.create_cn_table(experiment, cn, h)
 
     num_plots = 3
     width = 20
@@ -462,7 +468,7 @@ def experiment_plot(experiment, likelihood, cn, h,
     ax = plt.subplot(num_plots, 1, plot_idx)
     plot_idx += 1
 
-    plot_cnv_genome(ax, data, maxcopies=4, major_col='major_raw', minor_col='minor_raw',
+    plot_cnv_genome(ax, data, maxcopies=maxcopies, major_col='major_raw', minor_col='minor_raw',
                     chromosome=chromosome, start=start, end=end)
 
     ax.set_xlabel('')
@@ -471,7 +477,7 @@ def experiment_plot(experiment, likelihood, cn, h,
     ax = plt.subplot(num_plots, 1, plot_idx)
     plot_idx += 1
 
-    plot_cnv_genome(ax, data, maxcopies=4, major_col='major_raw_e', minor_col='minor_raw_e',
+    plot_cnv_genome(ax, data, maxcopies=maxcopies, major_col='major_raw_e', minor_col='minor_raw_e',
                     chromosome=chromosome, start=start, end=end)
 
     ax.set_xlabel('')
@@ -480,7 +486,7 @@ def experiment_plot(experiment, likelihood, cn, h,
     ax = plt.subplot(num_plots, 1, plot_idx)
     plot_idx += 1
 
-    plot_cnv_genome(ax, data, maxcopies=4, major_col='major_1', minor_col='minor_1',
+    plot_cnv_genome(ax, data, maxcopies=maxcopies, major_col='major_1', minor_col='minor_1',
                     chromosome=chromosome, start=start, end=end)
 
     ax.set_xlabel('')
@@ -491,7 +497,7 @@ def experiment_plot(experiment, likelihood, cn, h,
         ax = plt.subplot(num_plots, 1, plot_idx)
         plot_idx += 1
 
-        plot_cnv_genome(ax, data, maxcopies=4, major_col='major_2', minor_col='minor_2',
+        plot_cnv_genome(ax, data, maxcopies=maxcopies, major_col='major_2', minor_col='minor_2',
                         chromosome=chromosome, start=start, end=end)
 
         ax.set_xlabel('')
