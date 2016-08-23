@@ -374,48 +374,6 @@ cdef class RemixtModel:
                             else:
                                 self.add_log_transmat(log_transmat, m, ell, w, mult_const)
 
-    cpdef void init_p_cn(self) except*:
-        """ Initialize chains to something valid.
-        """
-
-        cdef int m, ell
-
-        for _ in range(10):
-            for m in range(1, self.num_clones):
-                print np.asarray(self.x)
-                print self.calculate_expected_x2()
-                print m
-                print self.get_cn()[:, m, :].T
-                self.update_p_cn()
-                # print self.x
-                # print self.calculate_expected_x2()
-                print self.get_cn()[:, m, :].T
-
-            # self.update_phi()
-
-    cpdef calculate_expected_x(self):
-        cdef int n, i, m, ell, s
-        cdef np.ndarray[np.float64_t, ndim=2] x = np.zeros((self.num_segments, self.num_measurements))
-        for n in range(self.num_segments):
-            for i in range(self.num_measurements):
-                for m in range(self.num_clones):
-                    for s in range(self.num_cn_states):
-                        for ell in range(self.num_alleles):
-                            x[n, i] += self.posterior_marginals[n, s] * self.h[m] * self.cn_states[s, m, ell] * self.w_mat[i, ell] * self.effective_lengths[n, i]
-        return x
-
-    cpdef calculate_expected_x2(self):
-        cdef int n, i, m, ell
-        cdef np.ndarray[np.float64_t, ndim=2] x = np.ones((self.num_segments, self.num_measurements))
-        cs = self.get_cn()
-        cs[:, 0, :] = 1
-        for n in range(self.num_segments):
-            for i in range(self.num_measurements):
-                for m in range(self.num_clones):
-                    for ell in range(self.num_alleles):
-                        x[n, i] += self.h[m] * cs[n, m, ell] * self.w_mat[i, ell] * self.effective_lengths[n, i]
-        return x
-
     @cython.boundscheck(False)
     @cython.wraparound(False)
     cpdef calculate_expected(self, int n, int s):
