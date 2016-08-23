@@ -343,13 +343,16 @@ def create_segment_table(experiment):
     return data
 
 
-def create_cn_table(experiment, cn, h):
+def create_cn_table(experiment, cn, h, phi=None):
     """ Create a table of relevant copy number data
 
     Args:
         experiment (Experiment): remixt experiment data
         cn (numpy.array): segment copy number
         h (numpy.array): haploid depths
+        
+    KwArgs:
+        phi (numpy.array): per segment proportion genotype reads
 
     Returns:
         pandas.DataFrame: table of copy number information
@@ -358,17 +361,22 @@ def create_cn_table(experiment, cn, h):
 
     data = create_segment_table(experiment)
 
-    phi = remixt.likelihood.estimate_phi(experiment.x)
+    if phi is None:
+        phi = remixt.likelihood.estimate_phi(experiment.x)
 
     data['major_raw'] = (data['major_depth'] - h[0]) / h[1:].sum()
     data['minor_raw'] = (data['minor_depth'] - h[0]) / h[1:].sum()
     
     data['ratio_raw'] = experiment.x[:, 1].astype(float) / experiment.x[:, :2].sum(axis=1).astype(float)
 
-    x_e = remixt.likelihood.expected_read_count(experiment.l, cn, h, phi)
+    mu = remixt.likelihood.expected_read_count(experiment.l, cn, h, phi)
 
-    major_depth_e = x_e[:, 0] / (phi * experiment.l)
-    minor_depth_e = x_e[:, 1] / (phi * experiment.l)
+    data['major_expected'] = mu[:, 0]
+    data['minor_expected'] = mu[:, 1]
+    data['total_expected'] = mu[:, 2]
+
+    major_depth_e = mu[:, 0] / (phi * experiment.l)
+    minor_depth_e = mu[:, 1] / (phi * experiment.l)
 
     major_raw_e = (major_depth_e - h[0]) / h[1:].sum()
     minor_raw_e = (minor_depth_e - h[0]) / h[1:].sum()

@@ -196,13 +196,11 @@ class BreakpointModel(object):
 
         return elbo
 
-
     def optimal_cn(self):
         cn = np.zeros((self.model.num_segments, self.model.num_clones, self.model.num_alleles), dtype=int)
         self.model.infer_cn(cn)
 
         return cn[self.seg_fwd_remap]
-
 
     def optimal_brk_cn(self):
         brk_cn = np.argmax(self.model.p_breakpoint, axis=-1)
@@ -210,18 +208,35 @@ class BreakpointModel(object):
 
         return brk_cn
 
-
     def breakpoint_prob(self):
         p_breakpoint = np.asarray(self.model.p_breakpoint)
         brk_prob = dict(zip(self.breakpoints, p_breakpoint))
 
         return brk_prob
 
-
     @property
     def h(self):
         return np.asarray(self.model.h)
     
+    @property
+    def phi(self):
+        return np.asarray(self.model.phi)
+
+    @property
+    def a(self):
+        return np.asarray(self.model.a)
+
+    @property
+    def p_garbage(self):
+        return np.asarray(self.model.p_garbage)
+
+    @property
+    def p_breakpoint(self):
+        return np.asarray(self.model.p_breakpoint)
+
+    @property
+    def p_allele(self):
+        return np.asarray(self.model.p_allele)
 
 
 def decode_breakpoints_naive(cn, adjacencies, breakpoints):

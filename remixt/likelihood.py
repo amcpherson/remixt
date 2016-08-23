@@ -10,24 +10,6 @@ import remixt.utils
 
 
 
-class LikelihoodError(ValueError):
-    def __init__(self, message, **variables):
-        """ Error calculating a likelihood.
-
-        Args:
-            message (str): message detailing error
-
-        KwArgs:
-            **variables: variables to be printed
-
-        """
-
-        for name, value in variables.iteritems():
-            message += '\n{0}={1}'.format(name, value)
-
-        ValueError.__init__(self, message)
-
-
 allele_measurement_matrix = np.array([[1, 0, 1], [0, 1, 1]])
 
 
@@ -71,7 +53,7 @@ def expected_read_count(l, cn, h, phi):
         phi (numpy.array): estimate of proportion of genotypable reads
 
     Returns:
-        numpy.array: expected read depths
+        numpy.array: expected read counts
     """
 
     p = proportion_measureable_matrix(phi)
@@ -84,14 +66,6 @@ def expected_read_count(l, cn, h, phi):
     x2 = x1 * p
 
     x3 = (x2.T * l.T).T
-
-    x3 += 1e-16
-
-    for n, ell in zip(*np.where(x3 <= 0)):
-        raise ProbabilityError('mu <= 0', n=n, cn=cn[n], l=l[n], h=h, p=p[n], mu=x3[n])
-
-    for n, ell in zip(*np.where(np.isnan(x3))):
-        raise ProbabilityError('mu is nan', n=n, cn=cn[n], l=l[n], h=h, p=p[n], mu=x3[n])
 
     return x3
 

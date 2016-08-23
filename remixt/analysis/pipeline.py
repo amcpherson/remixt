@@ -143,13 +143,11 @@ def fit_remixt_variational(
 
     elbo = model.optimize(h_init)
 
-    h = model.h
-    cn = model.optimal_cn()
-    brk_cn = model.optimal_brk_cn()
-
-    results['h'] = h
-    results['cn'] = cn
-    results['brk_cn'] = brk_cn
+    results['h'] = model.h
+    results['phi'] = model.phi
+    results['a'] = model.a
+    results['cn'] = model.optimal_cn()
+    results['brk_cn'] = model.optimal_brk_cn()
 
     # Save estimation statistics
     results['stats'] = dict()
@@ -162,26 +160,19 @@ def fit_remixt_variational(
 
 
 def store_fit_results(store, experiment, fit_results, key_prefix):
-
     h = fit_results['h']
     cn = fit_results['cn']
     brk_cn = fit_results['brk_cn']
+    phi = fit_results['phi']
 
     # Create copy number table
-    cn_table = remixt.analysis.experiment.create_cn_table(experiment, cn, h)
-    # cn_table['log_likelihood'] = emission.log_likelihood(cn)
-    # cn_table['log_prior'] = prior.log_prior(cn)
-    # cn_table['major_expected'] = emission.expected_read_count(experiment.l, cn)[:,0]
-    # cn_table['minor_expected'] = emission.expected_read_count(experiment.l, cn)[:,1]
-    # cn_table['total_expected'] = emission.expected_read_count(experiment.l, cn)[:,2]
-    # cn_table['ratio_expected'] = emission.expected_allele_ratio(cn)
-    # cn_table['major_residual'] = np.absolute(cn_table['major_readcount'] - cn_table['major_expected'])
-    # cn_table['minor_residual'] = np.absolute(cn_table['minor_readcount'] - cn_table['minor_expected'])
-    # cn_table['total_residual'] = np.absolute(cn_table['readcount'] - cn_table['total_expected'])
+    cn_table = remixt.analysis.experiment.create_cn_table(experiment, cn, h, phi=phi)
+    cn_table['phi'] = phi
 
     brk_cn_table = remixt.analysis.experiment.create_brk_cn_table(experiment, brk_cn)
 
     store[key_prefix + '/h'] = pd.Series(h, index=xrange(len(h)))
+    store[key_prefix + '/a'] = pd.Series(a, index=xrange(len(a)))
     store[key_prefix + '/cn'] = cn_table
     store[key_prefix + '/mix'] = pd.Series(h / h.sum(), index=xrange(len(h)))
     store[key_prefix + '/brk_cn'] = brk_cn_table

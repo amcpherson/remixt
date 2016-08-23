@@ -1069,19 +1069,20 @@ class ExperimentSampler(object):
         extra_params = dict()
 
         if self.emission_model == 'poisson':
+            mu_poisson = mu + 1e-16
 
-            x = np.array([np.random.poisson(a) for a in mu]).reshape(mu.shape)
+            x = np.array([np.random.poisson(a) for a in mu_poisson]).reshape(mu_poisson.shape)
 
         elif self.emission_model == 'negbin':
+            mu_negbin = mu + 1e-16
 
-            nb_inv_p = self.negbin_r / (self.negbin_r + mu)
+            nb_inv_p = self.negbin_r / (self.negbin_r + mu_negbin)
 
-            x = np.array([np.random.negative_binomial(self.negbin_r, a) for a in nb_inv_p]).reshape(mu.shape)
+            x = np.array([np.random.negative_binomial(self.negbin_r, a) for a in nb_inv_p]).reshape(mu_negbin.shape)
 
             extra_params['negbin_r'] = self.negbin_r
 
         elif self.emission_model == 'normal':
-
             x = np.zeros(mu.shape)
 
             a, b = 0.18751413009612153, 1.3460546185667863
@@ -1096,7 +1097,6 @@ class ExperimentSampler(object):
             x = x.round().astype(int)
 
         if self.noise_prior is not None:
-
             noise_range_total = mu[:, 2].max()
             noise_range_total *= 1.25
 
