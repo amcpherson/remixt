@@ -70,8 +70,7 @@ def read_sim_defs(sim_defs_filename):
 
 
 def create_simulations(sim_defs_filename, config, ref_data_dir):
-    genome_fai = remixt.config.get_filename(config, ref_data_dir, 'genome_fai')
-    chromosome_lengths = remixt.utils.read_chromosome_lengths(genome_fai)
+    chromosome_lengths = remixt.config.get_chromosome_lengths(config, ref_data_dir)
 
     sim_defs = yaml.load(open(sim_defs_filename))
 
@@ -108,7 +107,7 @@ def create_simulations(sim_defs_filename, config, ref_data_dir):
 
     for sim_instance_name, sim_params in simulations.iteritems():
         if 'chromosome_lengths' not in sim_params:
-            if 'chromosome' in sim_params:
+            if 'chromosomes' in sim_params:
                 chromosomes = sim_params['chromosomes']
             else:
                 chromosomes = [str(a) for a in range(1, 23)]

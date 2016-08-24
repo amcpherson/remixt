@@ -21,11 +21,9 @@ def create_segments(segment_filename, config, ref_data_dir, breakpoint_filename=
     """
 
     segment_length = remixt.config.get_param(config, 'segment_length')
-    chromosomes = remixt.config.get_param(config, 'chromosomes')
-    genome_fai_filename = remixt.config.get_filename(config, ref_data_dir, 'genome_fai')
+    chromosomes = remixt.config.get_chromosomes(config, ref_data_dir)
+    chromosome_lengths = remixt.config.get_chromosome_lengths(config, ref_data_dir)
     gap_table_filename = remixt.config.get_filename(config, ref_data_dir, 'gap_table')
-
-    chromosome_lengths = remixt.utils.read_chromosome_lengths(genome_fai_filename)
 
     gap_table_columns = [
         'bin',

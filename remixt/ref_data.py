@@ -56,7 +56,7 @@ def create_ref_data(config, ref_data_dir, ref_data_sentinal):
 
     def create_snp_positions():
         with open(remixt.config.get_filename(config, ref_data_dir, 'snp_positions'), 'w') as snp_positions_file:
-            for chromosome in remixt.config.get_param(config, 'chromosomes'):
+            for chromosome in remixt.config.get_chromosomes(config, ref_data_dir):
                 phased_chromosome = chromosome
                 if chromosome == 'X':
                     phased_chromosome = remixt.config.get_param(config, 'phased_chromosome_x')

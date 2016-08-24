@@ -19,7 +19,7 @@ def create_extract_seqdata_workflow(
      config,
      ref_data_dir,
 ):
-    chromosomes = remixt.config.get_param(config, 'chromosomes')
+    chromosomes = remixt.config.get_chromosomes(config, ref_data_dir)
     snp_positions_filename = remixt.config.get_filename(config, ref_data_dir, 'snp_positions')
 
     bam_max_fragment_length = remixt.config.get_param(config, 'bam_max_fragment_length')
@@ -63,7 +63,7 @@ def create_infer_haps_workflow(
     config,
     ref_data_dir,
 ):
-    chromosomes = remixt.config.get_param(config, 'chromosomes')
+    chromosomes = remixt.config.get_chromosomes(config, ref_data_dir)
 
     workflow = pypeliner.workflow.Workflow()
 

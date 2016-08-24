@@ -11,10 +11,10 @@ import remixt.utils
 
 def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config, ref_data_dir):
 
-    chromosomes = remixt.config.get_param(config, 'chromosomes')
+    chromosomes = remixt.config.get_chromosomes(config, ref_data_dir)
+    chromosome_lengths = remixt.config.get_chromosome_lengths(config, ref_data_dir)
     num_samples = remixt.config.get_param(config, 'sample_gc_num_positions')
     position_offset = remixt.config.get_param(config, 'gc_position_offset')
-    genome_fai = remixt.config.get_filename(config, ref_data_dir, 'genome_fai')
     genome_fasta = remixt.config.get_filename(config, ref_data_dir, 'genome_fasta')
     mappability_filename = remixt.config.get_filename(config, ref_data_dir, 'mappability')
     map_qual_threshold = remixt.config.get_param(config, 'map_qual_threshold')
@@ -22,8 +22,7 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config, re
     fragment_length = int(fragment_length)
     gc_window = fragment_length - 2 * position_offset
 
-    chrom_info = pd.DataFrame({'chrom_length':remixt.utils.read_chromosome_lengths(genome_fai)})
-    chrom_info = chrom_info.reindex(chromosomes)
+    chrom_info = pd.DataFrame({'chrom_length':chromosome_lengths})
     chrom_info['chrom_end'] = chrom_info['chrom_length'].cumsum()
     chrom_info['chrom_start'] = chrom_info['chrom_end'] - chrom_info['chrom_length']
 
