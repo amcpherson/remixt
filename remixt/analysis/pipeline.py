@@ -5,7 +5,6 @@ import pandas as pd
 
 import remixt.config
 import remixt.cn_model
-import remixt.genome_graph
 import remixt.analysis.experiment
 import remixt.analysis.readdepth
 
