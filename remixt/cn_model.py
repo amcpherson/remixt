@@ -219,14 +219,14 @@ class BreakpointModel(object):
     @property
     def h(self):
         return np.asarray(self.model.h)
-        
+
     @property
     def haplotype_length(self):
-        return np.asarray(self.model.effective_lengths[:, 0])
-    
+        return np.asarray(self.model.effective_lengths[:, 0])[self.seg_fwd_remap]
+
     @property
     def phi(self):
-        lengths = np.asarray(self.model.effective_lengths[:, 2])
+        lengths = np.asarray(self.model.effective_lengths[:, 2])[self.seg_fwd_remap]
         phi = self.haplotype_length / lengths
         phi[lengths <= 0] = 0
         return phi
@@ -237,7 +237,7 @@ class BreakpointModel(object):
 
     @property
     def p_garbage(self):
-        return np.asarray(self.model.p_garbage)
+        return np.asarray(self.model.p_garbage)[self.seg_fwd_remap]
 
     @property
     def p_breakpoint(self):
