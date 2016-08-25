@@ -205,19 +205,22 @@ class GCCurve(object):
         return np.array([self.predict(float(x)/float(l)) for x in xrange(0, l + 1)])
 
 
-def gc_map_bias(segment_filename, fragment_mean, fragment_stddev, gc_dist_filename, bias_filename, config, ref_data_dir, do_gc=True, do_map=True):
+def gc_map_bias(segment_filename, fragment_mean, fragment_stddev, gc_dist_filename, bias_filename, config, ref_data_dir):
     """ Calculate per segment GC and mappability biases
     """
     segments = pd.read_csv(segment_filename, sep='\t', converters={'chromosome':str})
 
-    biases = calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_filename, config, ref_data_dir, do_gc=do_gc, do_map=do_map)
+    biases = calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_filename, config, ref_data_dir)
 
     biases.to_csv(bias_filename, sep='\t', index=False)
 
 
-def calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_filename, config, ref_data_dir, do_gc=True, do_map=True):
+def calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_filename, config, ref_data_dir):
     """ Calculate per segment GC and mappability biases
     """
+    do_gc = remixt.config.get_param(config, 'do_gc_correction')
+    do_map = remixt.config.get_param(config, 'do_mappability_correction')
+    
     position_offset = remixt.config.get_param(config, 'gc_position_offset')
     genome_fasta = remixt.config.get_filename(config, ref_data_dir, 'genome_fasta')
     mappability_filename = remixt.config.get_filename(config, ref_data_dir, 'mappability')
