@@ -40,7 +40,7 @@ def haplotype_allele_readcount(allele_counts_filename, segment_filename, seqdata
     allele_counts.to_csv(allele_counts_filename, sep='\t', index=False)
 
 
-def phase_segments(allele_counts_filenames, phased_allele_counts_filename_callback):
+def phase_segments(allele_counts_filenames, phased_allele_counts_filenames):
 
     tumour_ids = allele_counts_filenames.keys()
 
@@ -51,7 +51,7 @@ def phase_segments(allele_counts_filenames, phased_allele_counts_filename_callba
     phased_allele_counts_tables = remixt.analysis.haplotype.phase_segments(*allele_count_tables)
 
     for tumour_id, phased_allele_counts in zip(tumour_ids, phased_allele_counts_tables):
-        phased_allele_counts_filename = phased_allele_counts_filename_callback(tumour_id)
+        phased_allele_counts_filename = phased_allele_counts_filenames[tumour_id]
         phased_allele_counts.to_csv(phased_allele_counts_filename, sep='\t', index=False)
 
 
