@@ -43,7 +43,7 @@ def get_sub_config(config, name):
     sub_config = config.get(name, dict())
     
     # Add global config variables that are not dictionaries (other sub configs)
-    for k, v in config:
+    for k, v in config.iteritems():
         if not isinstance(v, dict):
             sub_config[k] = v
             
