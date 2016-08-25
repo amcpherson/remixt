@@ -258,7 +258,7 @@ def calculate_segment_gc_map_bias(gc_cumsum, mappability, gc_dist, fragment_dist
         if fragment_length < read_length:
             continue
 
-        # Calculate total GC
+        # Calculate gc sum per valid position
         gc_sum = gc_cumsum[fragment_length-position_offset:-position_offset] - gc_cumsum[position_offset:-fragment_length+position_offset]
         gc_length = fragment_length - 2*position_offset
         
@@ -268,19 +268,23 @@ def calculate_segment_gc_map_bias(gc_cumsum, mappability, gc_dist, fragment_dist
         # Calculate per position GC probability
         gc_prob = gc_table[gc_sum]
 
-        # Calculate mappabilities
+        # Calculate mappability for read and mate at each valid position
         mate_position = fragment_length - read_length
         map_prob = mappability[:-fragment_length] * mappability[mate_position:-read_length]
 
         # Calculate fragment length prob
         len_prob = fragment_dist.pdf(fragment_length)
         
+        # Default gc prob to 1
+        if not do_gc:
+            gc_prob = np.ones(gc_prob.shape)
+
+        # Default mappability prob to 1
+        if not do_map:
+            map_prob = np.ones(map_prob.shape)
+
         # Calculate per position probability
-        prob = len_prob
-        if do_gc:
-            prob = prob * gc_prob
-        if do_map:
-            prob = prob * map_prob
+        prob = len_prob * gc_prob * map_prob
         
         bias += prob.sum()
 
