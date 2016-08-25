@@ -337,7 +337,7 @@ def create_remixt_seqdata_workflow(
 
     workflow.setobj(
         obj=mgd.TempOutputObj('infer_haps_config'),
-        value=config.get('infer_haps', {}),
+        value=remixt.config.get_sub_config(config, 'infer_haps'),
     )
 
     workflow.subworkflow(
@@ -353,7 +353,7 @@ def create_remixt_seqdata_workflow(
 
     workflow.setobj(
         obj=mgd.TempOutputObj('prepare_counts_config'),
-        value=config.get('prepare_counts', {}),
+        value=remixt.config.get_sub_config(config, 'prepare_counts'),
     )
 
     workflow.subworkflow(
@@ -370,7 +370,7 @@ def create_remixt_seqdata_workflow(
 
     workflow.setobj(
         obj=mgd.TempOutputObj('calc_bias_config'),
-        value=config.get('calc_bias', {}),
+        value=remixt.config.get_sub_config(config, 'calc_bias'),
     )
 
     workflow.subworkflow(
@@ -410,13 +410,15 @@ def create_remixt_seqdata_workflow(
     )
 
     if not config.get('skip_model_fit', False):
-        fit_model_config = {}
+        fit_model_config = remixt.config.get_sub_config(config, 'fit_model')
+        
+        sample_fit_model_config = {}
         for sample_id in sample_ids:
-            fit_model_config[sample_id] = config.get('fit_model', {}).get(sample_id, {})
+            sample_fit_model_config[sample_id] = remixt.config.get_sub_config(fit_model_config, sample_id)
             
         workflow.setobj(
             obj=mgd.TempOutputObj('fit_model_config', 'tumour_id', axes_origin=[]),
-            value=fit_model_config,
+            value=sample_fit_model_config,
         )
 
         workflow.subworkflow(
@@ -460,7 +462,7 @@ def create_remixt_bam_workflow(
 
     workflow.setobj(
         obj=mgd.TempOutputObj('extract_seqdata_config'),
-        value=config.get('extract_seqdata', {}),
+        value=remixt.config.get_sub_config(config, 'extract_seqdata'),
     )
 
     workflow.subworkflow(
