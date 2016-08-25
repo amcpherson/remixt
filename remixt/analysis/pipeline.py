@@ -164,6 +164,7 @@ def store_fit_results(store, experiment, fit_results, key_prefix):
     cn = fit_results['cn']
     brk_cn = fit_results['brk_cn']
     phi = fit_results['phi']
+    a = fit_results['a']
 
     # Create copy number table
     cn_table = remixt.analysis.experiment.create_cn_table(experiment, cn, h, phi=phi)
