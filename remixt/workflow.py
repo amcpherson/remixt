@@ -409,29 +409,28 @@ def create_remixt_seqdata_workflow(
         ),
     )
 
-    if not config.get('skip_model_fit', False):
-        fit_model_config = remixt.config.get_sub_config(config, 'fit_model')
+    fit_model_config = remixt.config.get_sub_config(config, 'fit_model')
+    
+    sample_fit_model_config = {}
+    for sample_id in sample_ids:
+        sample_fit_model_config[sample_id] = remixt.config.get_sub_config(fit_model_config, sample_id)
         
-        sample_fit_model_config = {}
-        for sample_id in sample_ids:
-            sample_fit_model_config[sample_id] = remixt.config.get_sub_config(fit_model_config, sample_id)
-            
-        workflow.setobj(
-            obj=mgd.TempOutputObj('fit_model_config', 'tumour_id', axes_origin=[]),
-            value=sample_fit_model_config,
-        )
+    workflow.setobj(
+        obj=mgd.TempOutputObj('fit_model_config', 'tumour_id', axes_origin=[]),
+        value=sample_fit_model_config,
+    )
 
-        workflow.subworkflow(
-            name='fit_model',
-            axes=('tumour_id',),
-            func=remixt.workflow.create_fit_model_workflow,
-            args=(
-                mgd.InputFile('experiment', 'tumour_id', template=experiment_template),
-                mgd.OutputFile('results', 'tumour_id', fnames=results_filenames),
-                mgd.TempInputObj('fit_model_config', 'tumour_id'),
-                ref_data_dir,
-            ),
-        )
+    workflow.subworkflow(
+        name='fit_model',
+        axes=('tumour_id',),
+        func=remixt.workflow.create_fit_model_workflow,
+        args=(
+            mgd.InputFile('experiment', 'tumour_id', template=experiment_template),
+            mgd.OutputFile('results', 'tumour_id', fnames=results_filenames),
+            mgd.TempInputObj('fit_model_config', 'tumour_id'),
+            ref_data_dir,
+        ),
+    )
 
     return workflow
 
