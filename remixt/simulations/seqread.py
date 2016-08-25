@@ -139,6 +139,9 @@ def simulate_mixture_read_data(read_data_filename, genomes, read_depths, snps, p
 
     writer = remixt.seqdataio.Writer(read_data_filename)
 
+    # Start of unique index for fragments, per chromosome
+    chromosome_fragment_id_start = collections.Counter()
+
     for genome, read_depth in zip(genomes, read_depths):
         segment_data = _create_segment_table(genome)
 
@@ -150,9 +153,6 @@ def simulate_mixture_read_data(read_data_filename, genomes, read_depths, snps, p
         # Calculate number of reads from this genome
         tumour_genome_length = segment_data['length'].sum()
         num_fragments = int(tumour_genome_length * read_depth)
-
-        # Start of unique index for fragments, per chromosome
-        chromosome_fragment_id_start = collections.Counter()
 
         # Create chunks of fragments to reduce memory usage
         num_fragments_created = 0
