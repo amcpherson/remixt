@@ -506,7 +506,7 @@ def build_solutions_panel(solutions_source, read_depth_source):
     """
     solutions_columns = [
         ('init_id', bokeh.models.NumberFormatter(format='0')),
-        ('log_likelihood', bokeh.models.NumberFormatter(format='0.000')),
+        ('elbo', bokeh.models.NumberFormatter(format='0.000')),
         ('ploidy', bokeh.models.NumberFormatter(format='0.000')),
         ('prop_subclonal', bokeh.models.NumberFormatter(format='0.000')),
         ('haploid_normal', bokeh.models.NumberFormatter(format='0.000')),
