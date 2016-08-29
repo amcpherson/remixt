@@ -39,7 +39,7 @@ class RearrangedGenome(object):
         'chrom_length_concentration':5.,
         'chromosome_lengths':None,
         'event_type':['dcj', 'dup', 'del', 'wgd'],
-        'event_prob':[0.19, 0.4, 0.4, 0.01],
+        'event_prob':[0.19, 0.3, 0.5, 0.01],
         'del_prop_len':0.5,
         'dup_prop_len':0.5,
         'wgd_prop_dup':0.8,
