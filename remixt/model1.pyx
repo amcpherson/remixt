@@ -1019,7 +1019,7 @@ cdef class RemixtModel:
 
         cdef np.ndarray[np.float64_t, ndim=2] log_transmat = np.empty((self.num_cn_states, self.num_cn_states))
 
-        cdef int n, i, m, s, m_
+        cdef int n, i, m, s, m_, s_
         cdef np.float64_t energy = 0.
 
         for n in range(self.num_segments):
@@ -1064,7 +1064,9 @@ cdef class RemixtModel:
         # Transitions factor
         for n in range(0, self.num_segments - 1):
             self.calculate_log_transmat(n, log_transmat)
-            energy += np.sum(self.joint_posterior_marginals[n, :, :] * log_transmat)
+            for s in range(self.num_cn_states):
+                for s_ in range(self.num_cn_states):
+                    energy += self.joint_posterior_marginals[n, s, s_] * log_transmat[s, s_]
 
         # Garbage state prior
         for n in range(self.num_segments):
