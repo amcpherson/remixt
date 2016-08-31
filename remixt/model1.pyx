@@ -274,7 +274,7 @@ cdef class RemixtModel:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    def add_log_transmat(self, np.float64_t[:, :] log_transmat, int m, int ell, int w, np.float64_t mult_const):
+    cdef add_log_transmat(self, np.float64_t[:, :] log_transmat, int m, int ell, int w, np.float64_t mult_const):
         """ Add log transition matrix for no breakpoint.
         """
 
@@ -287,7 +287,7 @@ cdef class RemixtModel:
 
     @cython.boundscheck(False)
     @cython.wraparound(True)
-    def add_log_transmat_expectation_brk(self, np.float64_t[:, :] log_transmat, int m, int ell, int w,
+    cdef add_log_transmat_expectation_brk(self, np.float64_t[:, :] log_transmat, int m, int ell, int w,
                                          np.float64_t[:] p_breakpoint, int breakpoint_orient,
                                          np.float64_t mult_const):
         """ Add expected log transition matrix wrt breakpoint
@@ -310,7 +310,7 @@ cdef class RemixtModel:
 
     @cython.boundscheck(False)
     @cython.wraparound(True)
-    def add_log_breakpoint_p_expectation_cn(self, np.float64_t[:] log_breakpoint_p, np.float64_t[:, :] p_cn,
+    cdef add_log_breakpoint_p_expectation_cn(self, np.float64_t[:] log_breakpoint_p, np.float64_t[:, :] p_cn,
                                             int m, int ell, int w, int breakpoint_orient, np.float64_t mult_const):
         """ Calculate the expected log transition matrix wrt pairwise
         copy number probability.
@@ -333,7 +333,7 @@ cdef class RemixtModel:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cpdef void calculate_log_transmat(self, int n, np.float64_t[:, :] log_transmat) except*:
+    cdef void calculate_log_transmat(self, int n, np.float64_t[:, :] log_transmat):
         """ Calculate the log transition matrix given current breakpoint and
         allele probabilities.
         """
@@ -377,7 +377,8 @@ cdef class RemixtModel:
     @cython.boundscheck(False)
     @cython.wraparound(False)
     cpdef calculate_expected(self, int n, int s):
-        """ Single update of all variational parameters.
+        """ Calculate expected read count per measurement
+        for a specific segment.
         """
         cdef int i, m
         cdef np.ndarray[np.float64_t, ndim=1] expected = np.zeros((self.num_measurements,))
