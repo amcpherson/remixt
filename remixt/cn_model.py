@@ -246,7 +246,7 @@ class BreakpointModel(object):
             calculate_amplification_mask(h_init, self.x1, self.l1, self.max_copy_number) &
             calculate_segment_length_mask(self.l1, self.min_segment_length) & 
             calculate_proportion_genotyped_mask(self.x1, self.min_proportion_genotyped))
-        likelihood_mask = np.zeros((self.model.segment_length,))
+        likelihood_mask = np.zeros((self.model.num_segments,))
         likelihood_mask[boolean_mask] = 1.
 
         self.model.likelihood_mask = likelihood_mask
