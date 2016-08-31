@@ -150,7 +150,8 @@ cdef class RemixtModel:
 
     def __cinit__(self,
         int num_clones, int num_segments,
-        int num_breakpoints, int cn_max, int cn_diff_max,
+        int num_breakpoints, int cn_max,
+        int cn_diff_max, bint normal_contamination,
         np.ndarray[np.int64_t, ndim=2] x,
         np.ndarray[np.int64_t, ndim=1] is_telomere,
         np.ndarray[np.int64_t, ndim=1] breakpoint_idx,
@@ -164,8 +165,9 @@ cdef class RemixtModel:
         self.num_breakpoints = num_breakpoints
         self.cn_max = cn_max
         self.cn_diff_max = cn_diff_max
+        self.normal_contamination = normal_contamination
         self.num_alleles = 2
-        self.cn_states = self.create_cn_states(self.num_clones, self.num_alleles, self.cn_max, self.cn_diff_max)
+        self.cn_states = self.create_cn_states(self.num_clones, self.num_alleles, self.cn_max, self.cn_diff_max, self.normal_contamination)
         self.num_cn_states = self.cn_states.shape[0]
 
         self.x = x
@@ -253,14 +255,19 @@ cdef class RemixtModel:
         self.joint_posterior_marginals[:] = 1.
         self.joint_posterior_marginals /= np.sum(self.joint_posterior_marginals, axis=(-1, -2))[:, np.newaxis, np.newaxis]
 
-    def create_cn_states(self, num_clones, num_alleles, cn_max, cn_diff_max):
+    def create_cn_states(self, num_clones, num_alleles, cn_max, cn_diff_max, normal_contamination):
         """ Create a list of allele specific copy number states.
         """
         num_tumour_vars = (num_clones - 1) * num_alleles
+        
+        if normal_contamination:
+            normal_cn = (1, 1)
+        else:
+            normal_cn = (0, 0)
 
         cn_states = list()
         for cn in itertools.product(range(cn_max + 1), repeat=num_tumour_vars):
-            cn = np.array((1, 1) + cn).reshape((num_clones, num_alleles))
+            cn = np.array(normal_cn + cn).reshape((num_clones, num_alleles))
 
             if not np.all(cn.sum(axis=1) <= cn_max):
                 continue

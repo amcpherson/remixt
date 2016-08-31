@@ -228,7 +228,7 @@ class BreakpointModel(object):
         self.model = remixt.model1.RemixtModel(
             M, self.N1, len(self.breakpoints),
             self.max_copy_number,
-            1,
+            1, self.normal_contamination,
             self.x1,
             self.is_telomere,
             self.breakpoint_idx,
