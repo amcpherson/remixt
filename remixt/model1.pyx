@@ -115,6 +115,7 @@ cdef class RemixtModel:
     cdef public int num_alleles
     cdef public int cn_max
     cdef public int cn_diff_max
+    cdef public bint normal_contamination
     cdef public int num_measurements
     cdef public int num_cn_states
     cdef public np.int64_t[:, :, :] cn_states
