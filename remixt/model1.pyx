@@ -391,75 +391,89 @@ cdef class RemixtModel:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cpdef np.float64_t update(self) except*:
+    cpdef np.float64_t update(self, check_elbo=False) except*:
         """ Single update of all variational parameters.
         """
 
-        elbo_prev = self.calculate_elbo()
+        if check_elbo:
+            elbo_prev = self.calculate_elbo()
 
         threshold = -1e-6
 
         print 'update_p_cn'
         self.update_p_cn()
-        print self.get_cn()[:, :, :]
-        elbo = self.calculate_elbo()
-        print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
-        if elbo - elbo_prev < threshold:
-            raise Exception('elbo error!!!!')
-        elbo_prev = elbo
+
+        if check_elbo:
+            elbo = self.calculate_elbo()
+            print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
+            if elbo - elbo_prev < threshold:
+                raise Exception('elbo error!!!!')
+            elbo_prev = elbo
 
         print 'update_p_breakpoint'
         self.update_p_breakpoint()
-        elbo = self.calculate_elbo()
-        print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
-        if elbo - elbo_prev < threshold:
-            raise Exception('elbo error!!!!')
-        elbo_prev = elbo
+
+        if check_elbo:
+            elbo = self.calculate_elbo()
+            print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
+            if elbo - elbo_prev < threshold:
+                raise Exception('elbo error!!!!')
+            elbo_prev = elbo
 
         print 'update_p_allele'
         self.update_p_allele()
-        elbo = self.calculate_elbo()
-        print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
-        if elbo - elbo_prev < threshold:
-            raise Exception('elbo error!!!!')
-        elbo_prev = elbo
+
+        if check_elbo:
+            elbo = self.calculate_elbo()
+            print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
+            if elbo - elbo_prev < threshold:
+                raise Exception('elbo error!!!!')
+            elbo_prev = elbo
 
         print 'update_p_garbage'
         print np.asarray(self.p_garbage[:, :, 0]).sum(axis=0)
         self.update_p_garbage()
         print np.asarray(self.p_garbage[:, :, 0]).sum(axis=0)
-        elbo = self.calculate_elbo()
-        print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
-        if elbo - elbo_prev < threshold:
-            raise Exception('elbo error!!!!')
-        elbo_prev = elbo
+
+        if check_elbo:
+            elbo = self.calculate_elbo()
+            print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
+            if elbo - elbo_prev < threshold:
+                raise Exception('elbo error!!!!')
+            elbo_prev = elbo
 
         print 'update_h'
         self.update_h()
-        elbo = self.calculate_elbo()
-        print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
-        if elbo - elbo_prev < threshold:
-            raise Exception('elbo error!!!!')
-        elbo_prev = elbo
+
+        if check_elbo:
+            elbo = self.calculate_elbo()
+            print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
+            if elbo - elbo_prev < threshold:
+                raise Exception('elbo error!!!!')
+            elbo_prev = elbo
 
         print 'update_phi'
         print (np.asarray(self.effective_lengths[:, 0]) / (np.asarray(self.effective_lengths[:, 2]) + 1)).mean()
         self.update_phi()
         print (np.asarray(self.effective_lengths[:, 0]) / (np.asarray(self.effective_lengths[:, 2]) + 1)).mean()
-        elbo = self.calculate_elbo()
-        print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
-        if elbo - elbo_prev < threshold:
-            raise Exception('elbo error!!!!')
-        elbo_prev = elbo
+
+        if check_elbo:
+            elbo = self.calculate_elbo()
+            print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
+            if elbo - elbo_prev < threshold:
+                raise Exception('elbo error!!!!')
+            elbo_prev = elbo
 
         print 'update_a', np.asarray(self.a)
         self.update_a()
         print np.asarray(self.a)
-        elbo = self.calculate_elbo()
-        print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
-        if elbo - elbo_prev < threshold:
-            raise Exception('elbo error!!!!')
-        elbo_prev = elbo
+
+        if check_elbo:
+            elbo = self.calculate_elbo()
+            print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
+            if elbo - elbo_prev < threshold:
+                raise Exception('elbo error!!!!')
+            elbo_prev = elbo
 
         print 'done'
 
