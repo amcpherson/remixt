@@ -134,6 +134,7 @@ cdef class RemixtModel:
     cdef public np.float64_t prior_variance
     cdef public np.float64_t prior_total_garbage
     cdef public np.float64_t prior_allele_garbage
+    cdef public np.float64_t[:] likelihood_mask
 
     cdef public np.float64_t[:, :, :] p_breakpoint
     cdef public np.float64_t[:, :, :] p_allele
@@ -209,6 +210,7 @@ cdef class RemixtModel:
         self.prior_variance = 1e5
         self.prior_total_garbage = 1e-10
         self.prior_allele_garbage = 1e-10
+        self.likelihood_mask = np.ones((self.num_segments,))
 
         # Initialize to prefer positive breakpoint copy number
         p_breakpoint = np.zeros((self.num_breakpoints, self.num_clones, self.cn_max + 1))
@@ -521,7 +523,7 @@ cdef class RemixtModel:
     cdef np.float64_t _ll_term_0(self, int n, int i):
         """ Term 0 in likelihood expansion.
         """
-        return -1. * log(self.likelihood_variance[n, i]) / 2.
+        return self.likelihood_mask[n] * -1. * log(self.likelihood_variance[n, i]) / 2.
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -529,7 +531,7 @@ cdef class RemixtModel:
     cdef np.float64_t _ll_term_1(self, int n, int i):
         """ Term 1 in likelihood expansion.
         """
-        return -1. * self.x[n, i]**2 / (2. * self.likelihood_variance[n, i])
+        return self.likelihood_mask[n] * -1. * self.x[n, i]**2 / (2. * self.likelihood_variance[n, i])
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -537,7 +539,7 @@ cdef class RemixtModel:
     cdef np.float64_t _ll_term_2(self, int n, int i, int m, int s):
         """ Term 2 in likelihood expansion.
         """
-        return 2. * self.x[n, i] * self.effective_lengths[n, i] * self.h[m] * self._ll_measured_copies(i, m, s) / (2. * self.likelihood_variance[n, i])
+        return self.likelihood_mask[n] * 2. * self.x[n, i] * self.effective_lengths[n, i] * self.h[m] * self._ll_measured_copies(i, m, s) / (2. * self.likelihood_variance[n, i])
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -545,7 +547,7 @@ cdef class RemixtModel:
     cdef np.float64_t _ll_term_3(self, int n, int i, int m, int s):
         """ Term 3 in likelihood expansion.
         """
-        return -1. * (self.effective_lengths[n, i] * self.h[m] * self._ll_measured_copies(i, m, s))**2 / (2. * self.likelihood_variance[n, i])
+        return self.likelihood_mask[n] * -1. * (self.effective_lengths[n, i] * self.h[m] * self._ll_measured_copies(i, m, s))**2 / (2. * self.likelihood_variance[n, i])
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -553,7 +555,7 @@ cdef class RemixtModel:
     cdef np.float64_t _ll_term_4(self, int n, int i, int m, int m_, int s):
         """ Term 4 in likelihood expansion.
         """
-        return -2. * self.effective_lengths[n, i]**2 * self.h[m] * self.h[m_] * self._ll_measured_copies(i, m, s) * self._ll_measured_copies(i, m_, s) / (2. * self.likelihood_variance[n, i])
+        return self.likelihood_mask[n] * -2. * self.effective_lengths[n, i]**2 * self.h[m] * self.h[m_] * self._ll_measured_copies(i, m, s) * self._ll_measured_copies(i, m_, s) / (2. * self.likelihood_variance[n, i])
 
     @cython.boundscheck(False)
     @cython.wraparound(False)

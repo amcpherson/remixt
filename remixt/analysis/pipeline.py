@@ -80,10 +80,6 @@ def fit(
     config,
     ref_data_dir,
 ):
-    normal_contamination = remixt.config.get_param(config, 'normal_contamination')
-
-    max_copy_number = remixt.config.get_param(config, 'max_copy_number')
-
     with open(experiment_filename, 'r') as f:
         experiment = pickle.load(f)
 
@@ -96,9 +92,8 @@ def fit(
     fit_results = fit_remixt_variational(
         experiment,
         h_init,
-        max_copy_number,
-        normal_contamination,
         init_params['prior_variance'],
+        config,
     )
 
     h = fit_results['h']
@@ -124,10 +119,14 @@ def fit(
 def fit_remixt_variational(
     experiment,
     h_init,
-    max_copy_number,
-    normal_contamination,
     prior_variance,
+    config,
 ):
+    normal_contamination = remixt.config.get_param(config, 'normal_contamination')
+    max_copy_number = remixt.config.get_param(config, 'max_copy_number')
+    min_segment_length = remixt.config.get_param(config, 'likelihood_min_segment_length')
+    min_proportion_genotyped = remixt.config.get_param(config, 'likelihood_min_proportion_genotyped')
+
     results = dict()
 
     model = remixt.cn_model.BreakpointModel(
@@ -138,6 +137,8 @@ def fit_remixt_variational(
         max_copy_number=max_copy_number,
         normal_contamination=normal_contamination,
         prior_variance=prior_variance,
+        min_segment_length=min_segment_length,
+        min_proportion_genotyped=min_proportion_genotyped,
     )
 
     elbo = model.optimize(h_init)

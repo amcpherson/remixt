@@ -23,9 +23,75 @@ def _get_brkend_seg_orient(breakend):
     return n_left, orient
 
 
+def calculate_mean_cn(h, x, l):
+    """ Calculate the mean raw copy number.
+
+    Args:
+        h (numpy.array): haploid read depths, h[0] for normal
+        x (numpy.array): major, minor, and total read counts
+        l (numpy.array): segment lengths
+
+    Returns:
+        numpy.array: N * L dim array, per segment per allele mean copy number
+
+    """
+
+    phi = remixt.likelihood.estimate_phi(x)
+
+    depth = x[:,0:2] / (phi * l)[:, np.newaxis]
+
+    mean_cn = (depth - h[0]) / h[1:].sum()
+
+    return mean_cn
+
+
+def calculate_amplification_mask(h, x, l, cn_max):
+    """ Add a mask for highly amplified regions.
+
+    Args:
+        h (numpy.array): haploid read depths, h[0] for normal
+        x (numpy.array): major, minor, and total read counts
+        l (numpy.array): segment lengths
+        cn_max (int): max unmasked dominant copy number
+
+    """
+
+    dom_cn = calculate_mean_cn(h, x, l)
+    dom_cn[np.isnan(dom_cn)] = np.inf
+    dom_cn = np.clip(dom_cn.round().astype(int), 0, int(1e6))
+
+    return np.all(dom_cn <= cn_max, axis=1)
+
+
+def calculate_segment_length_mask(l, min_segment_length):
+    """ Add a mask for short segments.
+
+    Args:
+        l (numpy.array): segment lengths
+        min_segment_length (float): minimum length of modelled segments
+
+    """
+
+    return (l >= min_segment_length)
+
+
+def calculate_proportion_genotyped_mask(x, min_proportion_genotyped):
+    """ Add a mask for segments with too few genotyped reads.
+
+    Args:
+        x (numpy.array): major, minor, and total read counts
+        min_proportion_genotyped (float): minimum proportion genotyped reads
+
+    """
+
+    p = x[:,:2].sum(axis=1).astype(float) / (x[:,2].astype(float) + 1e-16)
+
+    return (p >= min_proportion_genotyped)
+
+
 class BreakpointModel(object):
 
-    def __init__(self, x, l, adjacencies, breakpoints, max_copy_number=6, normal_contamination=True, prior_variance=1e6):
+    def __init__(self, x, l, adjacencies, breakpoints, **kwargs):
         """ Create a copy number model.
 
         Args:
@@ -38,20 +104,22 @@ class BreakpointModel(object):
             max_copy_number (int): maximum copy number of HMM state space
             normal_contamination (bool): whether the sample is contaminated by normal
             prior_variance (float): variance parameter of clone segment divergence prior
+            min_segment_length (float): minimum size of segments for segment likelihood mask
+            min_proportion_genotyped (float): minimum proportion genotyped reads for segment likelihood mask
+            transition_log_prob (float): penalty on transitions, per copy number change
 
         """
 
         self.N = x.shape[0]
 
         self.breakpoints = list(breakpoints)
-
-        self.normal_contamination = normal_contamination
-
-        self.cn_max = max_copy_number
-
-        self.transition_log_prob = 10.
-
-        self.prior_variance = prior_variance
+        
+        self.max_copy_number = kwargs.get('max_copy_number', 6)
+        self.normal_contamination = kwargs.get('normal_contamination', True)
+        self.prior_variance = kwargs.get('prior_variance', 1e6)
+        self.min_segment_length = kwargs.get('min_segment_length', 10000)
+        self.min_proportion_genotyped = kwargs.get('min_proportion_genotyped', 0.01)
+        self.transition_log_prob = kwargs.get('transition_log_prob', 10.)
 
         # The factor graph model for breakpoint copy number allows only a single breakend
         # interposed between each pair of adjacent segments.  Where multiple breakends are
@@ -134,6 +202,7 @@ class BreakpointModel(object):
         self.x1[self.seg_fwd_remap, :] = x
         self.l1[self.seg_fwd_remap] = l
 
+
     def _write_model(self, model_filename):
         data = {}
         for a in dir(self.model):
@@ -158,7 +227,7 @@ class BreakpointModel(object):
 
         self.model = remixt.model1.RemixtModel(
             M, self.N1, len(self.breakpoints),
-            self.cn_max,
+            self.max_copy_number,
             1,
             self.x1,
             self.is_telomere,
@@ -171,6 +240,16 @@ class BreakpointModel(object):
         self.model.prior_variance = self.prior_variance
 
         self.model.h = h_init
+        
+        # Calculate segment likelihood mask
+        boolean_mask = (
+            calculate_amplification_mask(h_init, self.x1, self.l1, self.max_copy_number) &
+            calculate_segment_length_mask(self.l1, self.min_segment_length) & 
+            calculate_proportion_genotyped_mask(self.x1, self.min_proportion_genotyped))
+        likelihood_mask = np.zeros((self.model.segment_length,))
+        likelihood_mask[boolean_mask] = 1.
+
+        self.model.likelihood_mask = likelihood_mask
 
         elbo = self.model.calculate_elbo()
 
