@@ -219,9 +219,99 @@ class BreakpointModel(object):
         for a in dir(self.model):
             if a in data:
                 setattr(self.model, a, data[a])
+                
+                
+    def update(self, check_elbo=False, update_variance=False):
+        """ Single update of all variational parameters.
+        """
+
+        if check_elbo:
+            elbo_prev = self.model.calculate_elbo()
+
+        threshold = -1e-6
+
+        print 'update_p_cn'
+        self.model.update_p_cn()
+
+        if check_elbo:
+            elbo = self.model.calculate_elbo()
+            print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
+            if elbo - elbo_prev < threshold:
+                raise Exception('elbo error!!!!')
+            elbo_prev = elbo
+
+        print 'update_p_breakpoint'
+        self.model.update_p_breakpoint()
+
+        if check_elbo:
+            elbo = self.model.calculate_elbo()
+            print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
+            if elbo - elbo_prev < threshold:
+                raise Exception('elbo error!!!!')
+            elbo_prev = elbo
+
+        print 'update_p_allele'
+        self.model.update_p_allele()
+
+        if check_elbo:
+            elbo = self.model.calculate_elbo()
+            print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
+            if elbo - elbo_prev < threshold:
+                raise Exception('elbo error!!!!')
+            elbo_prev = elbo
+
+        print 'update_h'
+        self.model.update_h()
+
+        if check_elbo:
+            elbo = self.model.calculate_elbo()
+            print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
+            if elbo - elbo_prev < threshold:
+                raise Exception('elbo error!!!!')
+            elbo_prev = elbo
+
+        print 'update_phi'
+        print (np.asarray(self.model.effective_lengths[:, 0]) / (np.asarray(self.model.effective_lengths[:, 2]) + 1)).mean()
+        self.model.update_phi()
+        print (np.asarray(self.model.effective_lengths[:, 0]) / (np.asarray(self.model.effective_lengths[:, 2]) + 1)).mean()
+
+        if check_elbo:
+            elbo = self.model.calculate_elbo()
+            print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
+            if elbo - elbo_prev < threshold:
+                raise Exception('elbo error!!!!')
+            elbo_prev = elbo
+
+        if update_variance:
+            print 'update_p_garbage'
+            print np.asarray(self.model.p_garbage[:, :, 0]).sum(axis=0)
+            self.model.update_p_garbage()
+            print np.asarray(self.model.p_garbage[:, :, 0]).sum(axis=0)
+
+            if check_elbo:
+                elbo = self.model.calculate_elbo()
+                print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
+                if elbo - elbo_prev < threshold:
+                    raise Exception('elbo error!!!!')
+                elbo_prev = elbo
+
+            print 'update_a', np.asarray(self.model.a)
+            self.model.update_a()
+            print np.asarray(self.model.a)
+
+            if check_elbo:
+                elbo = self.model.calculate_elbo()
+                print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
+                if elbo - elbo_prev < threshold:
+                    raise Exception('elbo error!!!!')
+                elbo_prev = elbo
+
+        print 'done'
+
+        return self.model.calculate_elbo()
 
 
-    def optimize(self, h_init, elbo_diff_threshold=1e-6, max_iter=5):
+    def optimize(self, h_init, elbo_diff_threshold=1e-6, max_update_iter=5, max_update_var_iter=5):
         
         M = h_init.shape[0]
 
@@ -257,13 +347,27 @@ class BreakpointModel(object):
         self.num_iter = 0
         self.converged = False
         self.prev_elbo_diff = None
-        for self.num_iter in xrange(1, max_iter + 1):
+        
+        for self.num_iter in xrange(1, max_update_iter + 1):
             # import pstats, cProfile
             # cProfile.runctx("self.model.update()", globals(), locals(), "Profile.prof")
             # s = pstats.Stats("Profile.prof")
             # s.strip_dirs().sort_stats("cumtime").print_stats()
             # raise
-            elbo = self.model.update()
+            elbo = self.update(update_variance=False)
+            print 'elbo', elbo
+            print 'h', np.asarray(self.model.h)
+            print self.model.calculate_elbo()
+            if elbo_prev is not None:
+                self.prev_elbo_diff = elbo - elbo_prev
+                print 'diff:', self.prev_elbo_diff
+                if self.prev_elbo_diff < elbo_diff_threshold:
+                    self.converged = True
+                    break
+            elbo_prev = elbo
+
+        for self.num_iter in xrange(1, max_update_var_iter + 1):
+            elbo = self.update(update_variance=True)
             print 'elbo', elbo
             print 'h', np.asarray(self.model.h)
             print self.model.calculate_elbo()
