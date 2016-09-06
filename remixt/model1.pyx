@@ -438,7 +438,7 @@ cdef class RemixtModel:
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.cdivision(True)
-    cdef np.float64_t _ll_term_0(self, int n, int i):
+    cdef np.float64_t _ll_term_0(self, int n, int i, int s):
         """ Term 0 in likelihood expansion.
         """
         return self.likelihood_mask[n] * -1. * log(self.likelihood_variance[n, i]) / 2.
@@ -446,7 +446,7 @@ cdef class RemixtModel:
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.cdivision(True)
-    cdef np.float64_t _ll_term_1(self, int n, int i):
+    cdef np.float64_t _ll_term_1(self, int n, int i, int s):
         """ Term 1 in likelihood expansion.
         """
         return self.likelihood_mask[n] * -1. * self.x[n, i]**2 / (2. * self.likelihood_variance[n, i])
@@ -534,7 +534,7 @@ cdef class RemixtModel:
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.cdivision(True)
-    cdef np.float64_t _ll_term_0_a(self, int n, int i):
+    cdef np.float64_t _ll_term_0_a(self, int n, int i, int s):
         """ Term 0 a coefficient in likelihood expansion (excluding a constant term).
         """
         return self.likelihood_mask[n] * -1. / 2.
@@ -542,7 +542,7 @@ cdef class RemixtModel:
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.cdivision(True)
-    cdef np.float64_t _ll_term_1_a(self, int n, int i):
+    cdef np.float64_t _ll_term_1_a(self, int n, int i, int s):
         """ Term 1 a coefficient in likelihood expansion.
         """
         return self.likelihood_mask[n] * -1. * self.x[n, i]**2 / (2. * self.unscaled_variance[n, i])
@@ -734,27 +734,31 @@ cdef class RemixtModel:
             log_p_garbage[:] = 0.
 
             for i in range(self.num_measurements):
+                for s in range(self.num_cn_states):
 
-                # Likelihood, constant factors
-                log_p_garbage[i, 0] += self._ll_term_0(n, i)
-                log_p_garbage[i, 0] += self._ll_term_1(n, i)
+                    # Likelihood, constant factors
+                    log_p_garbage[i, 0] += (
+                        self.posterior_marginals[n, s] *
+                        self._ll_term_0(n, i, s))
+                        
+                    log_p_garbage[i, 0] += (
+                        self.posterior_marginals[n, s] *
+                        self._ll_term_1(n, i, s))
 
-                # Likelihood, singleton factors
-                for m in range(self.num_clones):
-                    for s in range(self.num_cn_states):
+                    # Likelihood, singleton factors
+                    for m in range(self.num_clones):
                         log_p_garbage[i, 0] += (
-                            self.posterior_marginals[n, s]
-                            * self._ll_term_2_3(n, i, m, s))
+                            self.posterior_marginals[n, s] *
+                            self._ll_term_2_3(n, i, m, s))
 
-                # Likelihood, pairwise factors
-                for m in range(self.num_clones):
-                    for m_ in range(self.num_clones):
-                        if m_ <= m:
-                            continue
-                        for s in range(self.num_cn_states):
+                    # Likelihood, pairwise factors
+                    for m in range(self.num_clones):
+                        for m_ in range(self.num_clones):
+                            if m_ <= m:
+                                continue
                             log_p_garbage[i, 0] += (
-                                self.posterior_marginals[n, s]
-                                * self._ll_term_4(n, i, m, m_, s))
+                                self.posterior_marginals[n, s] *
+                                self._ll_term_4(n, i, m, m_, s))
 
             # Total reads
             log_p_garbage[2, 0] += log(1.0 - self.prior_total_garbage)
@@ -895,22 +899,27 @@ cdef class RemixtModel:
 
         for i in range(self.num_measurements):
             for n in range(self.num_segments):
+                for s in range(self.num_cn_states):
+                    coeff_1[i] += (
+                        self.posterior_marginals[n, s] *
+                        self.p_garbage[n, i, 0] *
+                        self._ll_term_0_a(n, i, s))
 
-                coeff_1[i] += self.p_garbage[n, i, 0] * self._ll_term_0_a(n, i)
-                coeff_2[i] += self.p_garbage[n, i, 0] * self._ll_term_1_a(n, i)
+                    coeff_2[i] += (
+                        self.posterior_marginals[n, s] *
+                        self.p_garbage[n, i, 0] *
+                        self._ll_term_1_a(n, i, s))
 
-                for m in range(self.num_clones):
-                    for s in range(self.num_cn_states):
+                    for m in range(self.num_clones):
                         coeff_2[i] += (
                             self.posterior_marginals[n, s] *
                             self.p_garbage[n, i, 0] *
                             self._ll_term_2_3_a(n, i, m, s))
 
-                for m in range(self.num_clones):
-                    for m_ in range(self.num_clones):
-                        if m_ <= m:
-                            continue
-                        for s in range(self.num_cn_states):
+                    for m in range(self.num_clones):
+                        for m_ in range(self.num_clones):
+                            if m_ <= m:
+                                continue
                             coeff_2[i] += (
                                 self.posterior_marginals[n, s] *
                                 self.p_garbage[n, i, 0] *
@@ -972,25 +981,31 @@ cdef class RemixtModel:
 
         for n in range(self.num_segments):
             for i in range(self.num_measurements):
+                for s in range(self.num_cn_states):
 
-                # Likelihood, constant factors
-                energy += self.p_garbage[n, i, 0] * self._ll_term_0(n, i)
-                energy += self.p_garbage[n, i, 0] * self._ll_term_1(n, i)
+                    # Likelihood, constant factors
+                    energy += (
+                        self.posterior_marginals[n, s] *
+                        self.p_garbage[n, i, 0] *
+                        self._ll_term_0(n, i, s))
+                        
+                    energy += (
+                        self.posterior_marginals[n, s] *
+                        self.p_garbage[n, i, 0] *
+                        self._ll_term_1(n, i, s))
 
-                # Likelihood, singleton factor
-                for m in range(self.num_clones):
-                    for s in range(self.num_cn_states):
+                    # Likelihood, singleton factor
+                    for m in range(self.num_clones):
                         energy += (
                             self.posterior_marginals[n, s] *
                             self.p_garbage[n, i, 0] *
                             self._ll_term_2_3(n, i, m, s))
 
-                # Likelihood, pairwise factor
-                for m in range(self.num_clones):
-                    for m_ in range(self.num_clones):
-                        if m_ <= m:
-                            continue
-                        for s in range(self.num_cn_states):
+                    # Likelihood, pairwise factor
+                    for m in range(self.num_clones):
+                        for m_ in range(self.num_clones):
+                            if m_ <= m:
+                                continue
                             energy += (
                                 self.posterior_marginals[n, s] *
                                 self.p_garbage[n, i, 0] *
