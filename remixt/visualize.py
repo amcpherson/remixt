@@ -513,7 +513,7 @@ def build_solutions_panel(solutions_source, read_depth_source):
         ('haploid_tumour', bokeh.models.NumberFormatter(format='0.000')),
         ('clone_1_fraction', bokeh.models.NumberFormatter(format='0.000')),
         ('clone_2_fraction', bokeh.models.NumberFormatter(format='0.000')),
-        ('divergence_weight', None),
+        ('prior_variance', None),
     ]
     columns = [bokeh.models.TableColumn(field=a, title=a, formatter=f) for a, f in solutions_columns]
     solutions_table = bokeh.models.DataTable(source=solutions_source, columns=columns, width=1000, height=500)
