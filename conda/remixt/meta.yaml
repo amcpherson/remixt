@@ -26,6 +26,7 @@ requirements:
     - matplotlib
     - seaborn
     - bokeh >=0.11.1
+    - shapeit
 
 about:
   home: http://bitbucket.org/dranew/remixt
