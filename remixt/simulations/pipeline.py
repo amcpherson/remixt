@@ -165,12 +165,11 @@ def simulate_experiment(experiment_filename, mixture_filename, params):
 def simulate_germline_alleles(germline_alleles_filename, params, config, ref_data_dir):
 
     np.random.seed(params['random_seed'])
-
-    chromosomes = params['chromosomes']
-
-    alleles_table = remixt.simulations.haplotype.create_sim_alleles(chromosomes, config, ref_data_dir)
-
-    alleles_table.to_csv(germline_alleles_filename, sep='\t', index=False, header=True)
+    
+    with pd.HDFStore(germline_alleles_filename, 'w', complevel=9, complib='zlib') as germline_alleles_store:
+        for chromosome in params['chromosomes']:
+            alleles_table = remixt.simulations.haplotype.create_sim_alleles(chromosome, config, ref_data_dir)
+            germline_alleles_store['/chromosome_{}'.format(chromosome)] = alleles_table
 
 
 def simulate_normal_data(read_data_filename, genome_filename, germline_alleles_filename, params):
