@@ -23,6 +23,8 @@ def create_sim_alleles(chromosome, config, ref_data_dir, recomb_rate=20.0/1.e8):
 
     """
 
+    print chromosome
+
     hap_filename = remixt.config.get_filename(config, ref_data_dir, 'haplotypes', chromosome=chromosome)
     legend_filename = remixt.config.get_filename(config, ref_data_dir, 'legend', chromosome=chromosome)
 
@@ -76,14 +78,17 @@ def create_sim_alleles(chromosome, config, ref_data_dir, recomb_rate=20.0/1.e8):
     # Remove indels
     data = data[(data['a0'].str.len() == 1) & (data['a1'].str.len() == 1)]
 
-    # Ensure sorted by position
-    data.sort('position', inplace=True)
+    # Nucleotides stored as categorical for efficiency
+    data['a0'] = data['a0'].astype('category')
+    data['a1'] = data['a1'].astype('category')
+    data['nt_0'] = data['nt_0'].astype('category')
+    data['nt_1'] = data['nt_1'].astype('category')
 
-    # Add chromosome for full table
-    data['chromosome'] = chromosome
+    # Ensure sorted by position
+    data = data.sort_values('position').reset_index(drop=True)
 
     # Reformat output
     data = data.rename(columns={'a0':'ref', 'a1':'alt'})
-    data = data[['chromosome', 'position', 'ref', 'alt', 'is_alt_0', 'is_alt_1', 'nt_0', 'nt_1']]
+    data = data[['position', 'ref', 'alt', 'is_alt_0', 'is_alt_1', 'nt_0', 'nt_1']]
 
     return data

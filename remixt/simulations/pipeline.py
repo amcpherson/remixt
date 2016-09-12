@@ -169,7 +169,7 @@ def simulate_germline_alleles(germline_alleles_filename, params, config, ref_dat
     with pd.HDFStore(germline_alleles_filename, 'w', complevel=9, complib='zlib') as germline_alleles_store:
         for chromosome in params['chromosomes']:
             alleles_table = remixt.simulations.haplotype.create_sim_alleles(chromosome, config, ref_data_dir)
-            germline_alleles_store['/chromosome_{}'.format(chromosome)] = alleles_table
+            germline_alleles_store.put('/chromosome_{}'.format(chromosome), alleles_table, format='table')
 
 
 def simulate_normal_data(read_data_filename, genome_filename, germline_alleles_filename, params):
@@ -177,10 +177,7 @@ def simulate_normal_data(read_data_filename, genome_filename, germline_alleles_f
     with open(genome_filename, 'r') as genome_file:
         gc = pickle.load(genome_file)
 
-    germline_alleles = pd.read_csv(
-        germline_alleles_filename, sep='\t',
-        usecols=['chromosome', 'position', 'is_alt_0', 'is_alt_1'],
-        dtype={'chromosome': str, 'position': np.uint32, 'is_alt_0': np.uint8, 'is_alt_1': np.uint8})
+    germline_alleles = pd.HDFStore(germline_alleles_filename, 'r')
 
     np.random.seed(params['random_seed'])
 
@@ -197,10 +194,7 @@ def resample_normal_data(read_data_filename, source_filename, genome_filename, g
     with open(genome_filename, 'r') as genome_file:
         gc = pickle.load(genome_file)
 
-    germline_alleles = pd.read_csv(
-        germline_alleles_filename, sep='\t',
-        usecols=['chromosome', 'position', 'is_alt_0', 'is_alt_1'],
-        dtype={'chromosome': str, 'position': np.uint32, 'is_alt_0': np.uint8, 'is_alt_1': np.uint8})
+    germline_alleles = pd.HDFStore(germline_alleles_filename, 'r')
 
     np.random.seed(params['random_seed'])
 
@@ -218,10 +212,7 @@ def simulate_tumour_data(read_data_filename, mixture_filename, germline_alleles_
     with open(mixture_filename, 'r') as mixture_file:
         gm = pickle.load(mixture_file)
 
-    germline_alleles = pd.read_csv(
-        germline_alleles_filename, sep='\t',
-        usecols=['chromosome', 'position', 'is_alt_0', 'is_alt_1'],
-        dtype={'chromosome': str, 'position': np.uint32, 'is_alt_0': np.uint8, 'is_alt_1': np.uint8})
+    germline_alleles = pd.HDFStore(germline_alleles_filename, 'r')
 
     np.random.seed(params['random_seed'])
 
@@ -238,10 +229,7 @@ def resample_tumour_data(read_data_filename, source_filename, mixture_filename, 
     with open(mixture_filename, 'r') as mixture_file:
         gm = pickle.load(mixture_file)
 
-    germline_alleles = pd.read_csv(
-        germline_alleles_filename, sep='\t',
-        usecols=['chromosome', 'position', 'is_alt_0', 'is_alt_1'],
-        dtype={'chromosome': str, 'position': np.uint32, 'is_alt_0': np.uint8, 'is_alt_1': np.uint8})
+    germline_alleles = pd.HDFStore(germline_alleles_filename, 'r')
 
     np.random.seed(params['random_seed'])
 
