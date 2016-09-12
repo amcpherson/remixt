@@ -84,8 +84,9 @@ def create_sim_alleles(chromosome, config, ref_data_dir, recomb_rate=20.0/1.e8):
     data['nt_0'] = data['nt_0'].astype('category')
     data['nt_1'] = data['nt_1'].astype('category')
 
-    # Ensure sorted by position
-    data = data.sort_values('position').reset_index(drop=True)
+    # Ensure sorted by position, regular index
+    data.sort_values('position', inplace=True)
+    data.reset_index(drop=True, inplace=True)
 
     # Reformat output
     data = data.rename(columns={'a0':'ref', 'a1':'alt'})
