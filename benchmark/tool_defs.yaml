@@ -18,26 +18,39 @@ remixt:
   kwargs:
     ref_data_dir: '{ref_data_dir}/remixt/'
 
-# titan:
-#   name: titan
-#   workflow:
-#     module: biowrappers.components.copy_number_calling.titan
-#     run_function: create_titan_workflow
-#     setup_function: create_setup_titan_workflow
-#   config:
-#     chrom_info_filename: '{ref_data_dir}/chromInfo.txt.gz'
-#     mappability_url: 'http://hgdownload.cse.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeMapability/wgEncodeCrgMapabilityAlign100mer.bigWig'
-#     mappability_wig: '{ref_data_dir}/titan/wgEncodeCrgMapabilityAlign100mer.wig'
-#     gc_wig: '{ref_data_dir}/titan/GRCh37_gc.wig'
-#     window_size: 1000
-#     convert_output: True
+ titan:
+   name: titan
+   workflow:
+     module: biowrappers.components.copy_number_calling.titan
+     run_function: create_titan_workflow
+     setup_function: create_setup_titan_workflow
+   config:
+     chrom_info_filename: '{ref_data_dir}/chromInfo.txt.gz'
+     mappability_url: 'http://hgdownload.cse.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeMapability/wgEncodeCrgMapabilityAlign100mer.bigWig'
+     mappability_wig: '{ref_data_dir}/titan/wgEncodeCrgMapabilityAlign100mer.wig'
+     gc_wig: '{ref_data_dir}/titan/GRCh37_gc.wig'
+     window_size: 1000
+     convert_output: True
 
-# clonehd:
-#   name: clonehd
-#   workflow:
-#     module: biowrappers.components.copy_number_calling.clonehd
-#     run_function: create_clonehd_workflow
-#     setup_function: create_setup_clonehd_workflow
-#   config:
-#     chrom_info_filename: '{ref_data_dir}/chromInfo.txt.gz'
+ clonehd:
+   name: clonehd
+   workflow:
+     module: biowrappers.components.copy_number_calling.clonehd
+     run_function: create_clonehd_workflow
+     setup_function: create_setup_clonehd_workflow
+   config:
+     chrom_info_filename: '{ref_data_dir}/chromInfo.txt.gz'
+
+ theta:
+   name: theta
+   workflow:
+     module: biowrappers.components.copy_number_calling.theta
+     run_function: create_theta_workflow
+     setup_function: create_setup_theta_workflow
+   config:
+     chromosomes: ['20', '21']
+     chromosome_url_template: 'ftp://ftp.ensembl.org/pub/release-70/fasta/homo_sapiens/dna/Homo_sapiens.GRCh37.70.dna.chromosome.{{}}.fa.gz'
+     chromosome_template: '{ref_data_dir}/theta/chromosomes/Homo_sapiens.GRCh37.70.dna.chromosome.{{}}.fa'
+     mappability_url: 'http://compbio.med.harvard.edu/BIC-seq/hg19.CRG.75bp.tar.gz'
+     mappability_template: '{ref_data_dir}/theta/hg19.CRG.75bp/hg19.CRC.75mer.chr{{}}.txt'
 
