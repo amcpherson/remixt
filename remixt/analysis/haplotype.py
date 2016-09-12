@@ -88,7 +88,7 @@ def read_snp_counts(seqdata_filename, chromosome, num_rows=1000000):
     # Consolodate positions split by chunking
     snp_counts = snp_counts.groupby('position').sum().reset_index()
 
-    snp_counts.sort('position', inplace=True)
+    snp_counts.sort_values('position', inplace=True)
 
     return snp_counts
 
