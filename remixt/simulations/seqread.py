@@ -247,6 +247,28 @@ def simulate_mixture_read_data(read_data_filename, genomes, read_depths, snps, p
     writer.close()
 
 
+def _get_segment_fragments(chrom_read_depth_data, source_filename, chromosome):
+    source_fragments = remixt.seqdataio.read_fragment_data(source_filename, chromosome)
+
+    # Create a table of segments sorted by start, with index as 0..N-1
+    # merge segment index back into read depth table
+    segment_data = chrom_read_depth_data[['start', 'end']].drop_duplicates().sort_values('start').reset_index(drop=True)
+    segment_data['segment_idx'] = range(len(segment_data.index))
+    chrom_read_depth_data = chrom_read_depth_data.merge(segment_data)
+
+    # Annotate each fragment as belonging to a single segment
+    source_fragments['segment_idx'] = remixt.segalg.find_contained_segments(
+        segment_data[['start', 'end']].values, source_fragments[['start', 'end']].values)
+
+    # Remove fragments not fully contained in segments
+    source_fragments = source_fragments[source_fragments['segment_idx'] >= 0]
+
+    # Add read depth to each fragment
+    source_fragments = source_fragments.merge(chrom_read_depth_data[['segment_idx', 'allele', 'read_depth']])
+
+    return source_fragments
+
+
 def resample_mixture_read_data(read_data_filename, source_filename, genomes, read_depths, snps, params):
     """ Simulate read data from a mixture of genomes.
 
@@ -260,58 +282,51 @@ def resample_mixture_read_data(read_data_filename, source_filename, genomes, rea
 
     """
 
-    segment_data = []
+    read_depth_data = []
+    for genome_idx, genome in enumerate(genomes):
+        genome_read_depth_data = _create_segment_table(genome)
+        genome_read_depth_data['genome_idx'] = genome_idx
+        read_depth_data.append(genome_read_depth_data)
+    read_depth_data = pd.concat(read_depth_data, ignore_index=True)
 
-    for genome, read_depth in zip(genomes, read_depths):
-        genome_segment_data = _create_segment_table(genome)
+    # Calculate read depth for each segment
+    read_depth_data = read_depth_data.groupby(['chromosome', 'start', 'end', 'allele', 'genome_idx']).size().rename('copies').reset_index()
+    read_depth_data = read_depth_data.merge(pd.DataFrame(list(enumerate(read_depths)), columns=['genome_idx', 'haploid_read_depth']))
+    read_depth_data['read_depth'] = read_depth_data['copies'] * read_depth_data['haploid_read_depth']
+    read_depth_data = read_depth_data.groupby(['chromosome', 'start', 'end', 'allele'])['read_depth'].sum().reset_index()
 
-        # Calculate number of reads for each segment
-        genome_segment_data['num_reads'] = genome_segment_data['length'] * read_depth
+    # Calculate total number of expected reads
+    read_depth_data['length'] = read_depth_data['end'] - read_depth_data['start']
+    total_reads = (read_depth_data['length'] * read_depth_data['read_depth']).sum()
 
-        segment_data.append(genome_segment_data)
-
-    segment_data = pd.concat(segment_data, ignore_index=True)
-
-    # Sum number of reads for each segment allele
-    read_info = segment_data.groupby(['chromosome', 'start', 'end', 'allele'])['num_reads'].sum().reset_index()
+    # Calculate a normalization constant for probability of each read being sampled
+    sum_source_depth = 0.
+    for chromosome, chrom_read_depth_data in read_depth_data.groupby('chromosome'):
+        sum_source_depth += _get_segment_fragments(chrom_read_depth_data, source_filename, chromosome)['read_depth'].sum()
 
     writer = remixt.seqdataio.Writer(read_data_filename)
 
     # Start of unique index for fragments, per chromosome
     chromosome_fragment_id_start = collections.Counter()
 
-    for chromosome, chrom_read_info in read_info.groupby('chromosome'):
-        source_fragments = remixt.seqdataio.read_fragment_data(source_filename, chromosome)
-        source_alleles = remixt.seqdataio.read_allele_data(source_filename, chromosome)
+    for chromosome, chrom_read_depth_data in read_depth_data.groupby('chromosome'):
+        print 'chromosome'
+        source_fragments = _get_segment_fragments(chrom_read_depth_data, source_filename, chromosome)
 
-        # Ensure segments are sorted by start, and the index is 0..N-1
-        chrom_segment_info = chrom_read_info[['start', 'end']].drop_duplicates().sort_values('start').reset_index(drop=True)
-        chrom_segment_info['segment_idx'] = range(len(chrom_segment_info.index))
+        # Resample reads with a poisson
+        source_fragments['expected_resample_count'] = source_fragments['read_depth'] * total_reads / sum_source_depth
+        source_fragments['resample_count'] = np.random.poisson(source_fragments['expected_resample_count'].values)
 
-        # Annotate each fragment as belonging to a single segment
-        source_fragments['segment_idx'] = remixt.segalg.find_contained_segments(
-            chrom_segment_info[['start', 'end']].values, source_fragments[['start', 'end']].values)
-
-        # Remove fragments not fully contained in segments
-        source_fragments = source_fragments[source_fragments['segment_idx'] >= 0]
-
-        # Annotate chrom read info table with segment index
-        chrom_read_info = chrom_read_info.merge(chrom_segment_info)
-
-        # Select fragments for each segment allele
-        sampled_fragments = []
-        for idx in chrom_read_info.index:
-            allele = chrom_read_info.loc[idx, 'allele']
-            num_reads = chrom_read_info.loc[idx, 'num_reads']
-
-            # Sample required number of reads for this segment with replacement
-            source_segment_fragments = source_fragments[source_fragments['segment_idx'] == segment_idx]
-            sampled_segment_fragments = source_segment_fragments.loc[np.random.choice(source_segment_fragments.index, size=num_reads, replace=True)]
-            sampled_segment_fragments['allele'] = allele
-
-            sampled_fragments.append(sampled_segment_fragments[['start', 'end', 'allele']])
-
-        sampled_fragments = pd.concat(sampled_fragments, ignore_index=True)
+        # Replicate reads according to the number of times they have been sampled
+        sampled_fragments = pd.DataFrame(
+            data=0,
+            columns=['start', 'end', 'allele'],
+            index=xrange(source_fragments['resample_count'].sum()),
+            dtype=np.int)
+        sampled_fragments.values[:] = np.repeat(
+            source_fragments[['start', 'end', 'allele']].values,
+            source_fragments['resample_count'].values,
+            axis=0)
 
         # Reindex for subsequent index based merge
         sampled_fragments.reset_index(drop=True, inplace=True)
@@ -320,18 +335,24 @@ def resample_mixture_read_data(read_data_filename, source_filename, genomes, rea
         chromosome_fragment_id_start[chromosome] += len(sampled_fragments.index)
 
         # Position data
-        chrom_snps = snps['/chromosome_{}'.format(chromosome)]
+        chrom_snps = snps['/chromosome_{}'.format(chromosome)][['position', 'is_alt_0', 'is_alt_1']]
 
         # Overlap snp positions and fragment intervals
+        print sampled_fragments
+        print chrom_snps
         fragment_idx, snp_idx = remixt.segalg.interval_position_overlap(
             sampled_fragments[['start', 'end']].values,
             chrom_snps['position'].values,
         )
+        print 'done'
 
         # Create fragment snp table
         fragment_snps = pd.DataFrame({'snp_idx':snp_idx, 'fragment_idx':fragment_idx})
+        print 'merge1'
         fragment_snps = fragment_snps.merge(sampled_fragments, left_on='fragment_idx', right_index=True)
+        print 'merge2'
         fragment_snps = fragment_snps.merge(chrom_snps, left_on='snp_idx', right_index=True)
+        print 'done'
 
         # Keep only snps falling within reads
         fragment_snps = fragment_snps[
@@ -355,9 +376,9 @@ def resample_mixture_read_data(read_data_filename, source_filename, genomes, rea
         fragment_snps['is_alt'] = np.where(base_call_error, 1-fragment_snps['is_alt'], fragment_snps['is_alt'])
 
         # Write out a chunk of data
+        print 'done'
         writer.write(chromosome, sampled_fragments, fragment_snps)
-
-        num_fragments_created += len(chrom_fragments.index)
+        print 'done'
 
     writer.close()
 
