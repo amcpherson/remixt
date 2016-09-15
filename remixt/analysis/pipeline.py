@@ -91,7 +91,11 @@ def fit_task(
     
 
 def fit(experiment, init_params, config):
-    h_init = init_params['h_init']
+    h_init = np.array([
+        init_params['h_normal'],
+        init_params['h_tumour'] * init_params['mix_frac'],
+        init_params['h_tumour'] * (1. - init_params['mix_frac']),
+    ])
     divergence_weight = init_params['divergence_weight']
 
     normal_contamination = remixt.config.get_param(config, 'normal_contamination')
