@@ -285,13 +285,12 @@ def create_fit_model_workflow(
     workflow.transform(
         name='fit',
         axes=('init_id',),
-        func=remixt.analysis.pipeline.fit,
+        func=remixt.analysis.pipeline.fit_task,
         args=(
             mgd.TempOutputFile('fit_results', 'init_id'),
             mgd.InputFile(experiment_filename),
             mgd.TempInputObj('init_params', 'init_id'),
             mgd.TempInputObj('config'),
-            ref_data_dir,
         ),
     )
 
