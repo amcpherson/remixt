@@ -15,7 +15,6 @@ import remixt.simulations.experiment
 import remixt.simulations.pipeline
 import remixt.cn_model as cn_model
 import remixt.likelihood as likelihood
-import remixt.genome_graph as genome_graph
 import remixt.seqdataio
 import remixt.tests.utils
 import remixt.cn_plot
@@ -60,8 +59,8 @@ def load_test_experiment():
         experiment = pickle.load(experiment_file)
 
     return experiment
-
-
+    
+    
 def uniform_cn_prior():
 
     cn_max = 4
@@ -298,17 +297,23 @@ class remixt_unittest(unittest.TestCase):
 
         experiment = load_test_experiment()
 
-        h_init = experiment.h * (1. + 0.05 * np.random.randn(*experiment.h.shape))
-        print experiment.h, h_init
-        print (experiment.phi * experiment.l)[:1]
+        init_params = {}
+        init_params['h_init'] = experiment.h * (1. + 0.05 * np.random.randn(*experiment.h.shape))
+        init_params['divergence_weight'] = 1e-7
+        init_params['mode_idx'] = 0
+        
+        config = {}
+        
+        import pstats, cProfile
+        cProfile.runctx("fit_results = remixt.analysis.pipeline.fit(experiment, init_params, config)", globals(), locals(), "Profile.prof")
+        s = pstats.Stats("Profile.prof")
+        s.strip_dirs().sort_stats("cumtime").print_stats()
+        raise
+        fit_results = remixt.analysis.pipeline.fit(experiment, init_params, config)
 
-        model = cn_model.BreakpointModel(experiment.x, experiment.l, experiment.adjacencies, experiment.breakpoints,
-            normal_contamination=False, prior_variance=1e7)
-        model.optimize(h_init, max_iter=10)
-
-        h = np.asarray(model.model.h)
-        cn = model.optimal_cn()
-        brk_cn = model.optimal_brk_cn()
+        h = fit_results['h']
+        cn = fit_results['cn']
+        brk_cn = fit_results['brk_cn']
 
         cn_table = remixt.analysis.experiment.create_cn_table(experiment, cn, h)
         brk_cn_table = remixt.analysis.experiment.create_brk_cn_table(experiment, brk_cn)
