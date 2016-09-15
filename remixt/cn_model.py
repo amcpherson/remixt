@@ -256,56 +256,57 @@ class BreakpointModel(object):
         self.model.framelogprob = framelogprob
 
         for num_iter in xrange(self.num_update_iter):
-            elbo = self.update()
+            self.update()
         
         posterior_marginals = np.asarray(self.model.posterior_marginals).T
         
-        return elbo, cn_states, posterior_marginals
+        return self.prev_elbo, cn_states, posterior_marginals
 
 
-    def update(self, check_elbo=False):
+    def _check_elbo(self, prev_elbo, name):
+        elbo = self.model.calculate_elbo()
+        print 'elbo diff: {:.10f}'.format(elbo - prev_elbo)
+        if elbo - prev_elbo < threshold:
+            raise Exception('elbo error for step {}!'.format(name))
+        prev_elbo = elbo
+        return elbo
+        
+        
+    def update(self, check_elbo=True):
         """ Single update of all variational parameters.
         """
 
-        if check_elbo:
+        if self.prev_elbo is None:
             self.prev_elbo = self.model.calculate_elbo()
 
+        elbo = self.prev_elbo
         threshold = -1e-6
 
         print 'update_p_cn'
         self.model.update_p_cn()
 
         if check_elbo:
-            elbo = self.model.calculate_elbo()
-            print 'elbo diff: {:.10f}'.format(elbo - self.prev_elbo)
-            if elbo - self.prev_elbo < threshold:
-                raise Exception('elbo error!!!!')
-            self.prev_elbo = elbo
+            elbo = self._check_elbo(elbo)
 
         print 'update_p_breakpoint'
         self.model.update_p_breakpoint()
 
         if check_elbo:
-            elbo = self.model.calculate_elbo()
-            print 'elbo diff: {:.10f}'.format(elbo - self.prev_elbo)
-            if elbo - self.prev_elbo < threshold:
-                raise Exception('elbo error!!!!')
-            self.prev_elbo = elbo
+            elbo = self._check_elbo(elbo)
 
         print 'update_p_allele'
         self.model.update_p_allele()
 
         if check_elbo:
-            elbo = self.model.calculate_elbo()
-            print 'elbo diff: {:.10f}'.format(elbo - self.prev_elbo)
-            if elbo - self.prev_elbo < threshold:
-                raise Exception('elbo error!!!!')
-            self.prev_elbo = elbo
+            elbo = self._check_elbo(elbo)
 
         print 'done'
         
         if not check_elbo:
-            self.prev_elbo = self.model.calculate_elbo()
+            elbo = self.model.calculate_elbo()
+            
+        self.prev_elbo_diff = self.prev_elbo - elbo
+        self.prev_elbo = elbo
 
 
     def optimize(self, h_init, elbo_diff_threshold=1e-6, max_update_iter=5, max_update_var_iter=5):
