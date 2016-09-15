@@ -5,6 +5,7 @@ import pandas as pd
 
 import remixt.config
 import remixt.cn_model
+import remixt.em
 import remixt.analysis.experiment
 import remixt.analysis.readdepth
 
@@ -17,7 +18,7 @@ def init(
     min_ploidy = remixt.config.get_param(config, 'min_ploidy')
     max_ploidy = remixt.config.get_param(config, 'max_ploidy')
     tumour_mix_fractions = remixt.config.get_param(config, 'tumour_mix_fractions')
-    prior_variances = remixt.config.get_param(config, 'prior_variances')
+    divergence_weights = remixt.config.get_param(config, 'divergence_weights')
 
     with open(experiment_filename, 'r') as f:
         experiment = pickle.load(f)
@@ -60,8 +61,8 @@ def init(
 
     # Attempt several divergence parameters
     init_params = []
-    prior_variance_params = [{'prior_variance': w} for w in prior_variances]
-    for h_p, w_p in itertools.product(init_h_params, prior_variance_params):
+    divergence_weight_params = [{'divergence_weight': w} for w in divergence_weights]
+    for h_p, w_p in itertools.product(init_h_params, divergence_weight_params):
         params = h_p.copy()
         params.update(w_p)
         init_params.append(params)
@@ -73,92 +74,79 @@ def init(
     return dict(enumerate(init_params))
 
 
-def fit(
+def fit_task(
     results_filename,
     experiment_filename,
     init_params,
     config,
-    ref_data_dir,
 ):
     with open(experiment_filename, 'r') as f:
         experiment = pickle.load(f)
-
-    h_init = np.array([
-        init_params['h_normal'],
-        init_params['h_tumour'] * init_params['mix_frac'],
-        init_params['h_tumour'] * (1. - init_params['mix_frac']),
-    ])
-
-    fit_results = fit_remixt_variational(
-        experiment,
-        h_init,
-        init_params['prior_variance'],
-        config,
-    )
-
-    h = fit_results['h']
-    cn = fit_results['cn']
-
-    ploidy = (cn[:,1:,:].mean(axis=1).T * experiment.l).sum() / experiment.l.sum()
-    divergent = (cn[:,1:,:].max(axis=1) != cn[:,1:,:].min(axis=1)) * 1.
-    proportion_divergent = (divergent.T * experiment.l).sum() / (2. * experiment.l.sum())
-
-    # Create a table of relevant statistics
-    fit_results['stats']['num_clones'] = len(h)
-    fit_results['stats']['num_segments'] = len(experiment.x)
-    fit_results['stats']['ploidy'] = ploidy
-    fit_results['stats']['proportion_divergent'] = proportion_divergent
-    fit_results['stats']['mode_idx'] = init_params['mode_idx']
-    fit_results['stats']['prior_variance'] = init_params['prior_variance']
-
+        
+    fit_results = fit(experiment, init_params, config)
+    
     # Store in pickle format
     with open(results_filename, 'w') as f:
         pickle.dump(fit_results, f)
+    
 
+def fit(experiment, init_params, config):
+    h_init = init_params['h_init']
+    divergence_weight = init_params['divergence_weight']
 
-def fit_remixt_variational(
-    experiment,
-    h_init,
-    prior_variance,
-    config,
-):
     normal_contamination = remixt.config.get_param(config, 'normal_contamination')
     max_copy_number = remixt.config.get_param(config, 'max_copy_number')
     min_segment_length = remixt.config.get_param(config, 'likelihood_min_segment_length')
     min_proportion_genotyped = remixt.config.get_param(config, 'likelihood_min_proportion_genotyped')
-
-    results = dict()
+    num_em_iter = remixt.config.get_param(config, 'num_em_iter')
+    num_update_iter = remixt.config.get_param(config, 'num_update_iter')
 
     model = remixt.cn_model.BreakpointModel(
+        h_init,
         experiment.x,
         experiment.l,
         experiment.adjacencies,
         experiment.breakpoints,
         max_copy_number=max_copy_number,
         normal_contamination=normal_contamination,
-        prior_variance=prior_variance,
+        divergence_weight=divergence_weight,
         min_segment_length=min_segment_length,
         min_proportion_genotyped=min_proportion_genotyped,
     )
+    model.num_update_iter = num_update_iter
 
-    elbo = model.optimize(h_init)
+    # Estimate haploid depths and other likelihood parameters
+    estimator = remixt.em.ExpectationMaximizationEstimator()
+    estimator.num_em_iter = num_em_iter
+    elbo = estimator.learn_param(model, *model.likelihood_params)
 
-    results['h'] = model.h
-    results['phi'] = model.phi
-    results['a'] = model.a
-    results['cn'] = model.optimal_cn()
-    results['brk_cn'] = model.optimal_brk_cn()
+    fit_results = dict()
+
+    fit_results['h'] = model.h
+    fit_results['cn'] = model.optimal_cn()
+    fit_results['brk_cn'] = model.optimal_brk_cn()
 
     # Save estimation statistics
-    results['stats'] = dict()
-    results['stats']['elbo'] = elbo
-    results['stats']['elbo_diff'] = model.prev_elbo_diff
-    results['stats']['converged'] = model.converged
-    results['stats']['num_iter'] = model.num_iter
-    results['stats']['error_message'] = ''
+    fit_results['stats'] = dict()
+    fit_results['stats']['elbo'] = elbo
+    fit_results['stats']['elbo_diff'] = model.prev_elbo_diff
+    fit_results['stats']['error_message'] = ''
 
-    return results
+    cn = fit_results['cn']
+    ploidy = (cn[:,1:,:].mean(axis=1).T * experiment.l).sum() / experiment.l.sum()
+    divergent = (cn[:,1:,:].max(axis=1) != cn[:,1:,:].min(axis=1)) * 1.
+    proportion_divergent = (divergent.T * experiment.l).sum() / (2. * experiment.l.sum())
 
+    # Create a table of relevant statistics
+    fit_results['stats']['num_clones'] = len(model.h)
+    fit_results['stats']['num_segments'] = len(experiment.x)
+    fit_results['stats']['ploidy'] = ploidy
+    fit_results['stats']['proportion_divergent'] = proportion_divergent
+    fit_results['stats']['mode_idx'] = init_params['mode_idx']
+    fit_results['stats']['divergence_weight'] = init_params['divergence_weight']
+
+    return fit_results
+    
 
 def store_fit_results(store, experiment, fit_results, key_prefix):
     h = fit_results['h']

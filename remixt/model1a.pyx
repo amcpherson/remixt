@@ -116,7 +116,6 @@ cdef class RemixtModel:
     cdef public int cn_max
     cdef public int cn_diff_max
     cdef public bint normal_contamination
-    cdef public int num_measurements
     cdef public int num_cn_states
     cdef public np.int64_t[:, :, :] cn_states
 
@@ -124,22 +123,10 @@ cdef class RemixtModel:
     cdef public np.int64_t[:] is_telomere
     cdef public np.int64_t[:] breakpoint_idx
     cdef public np.int64_t[:] breakpoint_orient
-    cdef public np.float64_t[:, :] effective_lengths
-    cdef public np.float64_t[:] true_lengths
     cdef public np.float64_t transition_penalty
-
-    cdef public np.float64_t[:] h
-    cdef public np.float64_t[:] a
-    cdef public np.float64_t[:, :] unscaled_variance
-    cdef public np.float64_t[:, :] likelihood_variance
-    cdef public np.float64_t prior_variance
-    cdef public np.float64_t prior_total_garbage
-    cdef public np.float64_t prior_allele_garbage
-    cdef public np.float64_t[:] likelihood_mask
 
     cdef public np.float64_t[:, :, :] p_breakpoint
     cdef public np.float64_t[:, :, :] p_allele
-    cdef public np.float64_t[:, :, :] p_garbage
 
     cdef public np.float64_t hmm_log_norm_const
     cdef public np.float64_t[:, :] framelogprob
@@ -147,18 +134,13 @@ cdef class RemixtModel:
     cdef public np.float64_t[:, :] posterior_marginals
     cdef public np.float64_t[:, :, :] joint_posterior_marginals
 
-    cdef public np.int64_t[:, :] w_mat
-
     def __cinit__(self,
         int num_clones, int num_segments,
         int num_breakpoints, int cn_max,
         int cn_diff_max, bint normal_contamination,
-        np.ndarray[np.int64_t, ndim=2] x,
         np.ndarray[np.int64_t, ndim=1] is_telomere,
         np.ndarray[np.int64_t, ndim=1] breakpoint_idx,
         np.ndarray[np.int64_t, ndim=1] breakpoint_orient,
-        np.ndarray[np.float64_t, ndim=1] effective_lengths,
-        np.ndarray[np.float64_t, ndim=1] true_lengths,
         np.float64_t transition_penalty):
 
         self.num_clones = num_clones
@@ -170,8 +152,6 @@ cdef class RemixtModel:
         self.num_alleles = 2
         self.cn_states = self.create_cn_states(self.num_clones, self.num_alleles, self.cn_max, self.cn_diff_max, self.normal_contamination)
         self.num_cn_states = self.cn_states.shape[0]
-
-        self.x = x
 
         if is_telomere.shape[0] != num_segments:
             raise ValueError('is_telomere must have length equal to num_segments')
@@ -185,35 +165,10 @@ cdef class RemixtModel:
         if breakpoint_idx.max() + 1 != num_breakpoints:
             raise ValueError('breakpoint_idx must have maximum of num_breakpoints positive indices')
 
-        if effective_lengths.shape[0] != num_segments:
-            raise ValueError('effective_lengths must have length equal to num_segments')
-
-        if true_lengths.shape[0] != num_segments:
-            raise ValueError('true_lengths must have length equal to num_segments')
-
         self.is_telomere = is_telomere
         self.breakpoint_idx = breakpoint_idx
         self.breakpoint_orient = breakpoint_orient
-        self.true_lengths = true_lengths
         self.transition_penalty = fabs(transition_penalty)
-
-        # Effective lengths set directly for total, learned for major minor
-        phi = (x[:, :2].sum(axis=1).astype(float) + 1.) / (x[:, 2].astype(float) + 1.)
-        measurement_effective_lengths = np.zeros((self.num_segments, 3))
-        measurement_effective_lengths[:, 0] = effective_lengths * phi
-        measurement_effective_lengths[:, 1] = effective_lengths * phi
-        measurement_effective_lengths[:, 2] = effective_lengths
-        self.effective_lengths = measurement_effective_lengths
-
-        # Must be initialized by user
-        self.h = np.zeros((self.num_clones,))
-        self.unscaled_variance = (x + 1)**1.75
-        self.a = np.array([0.062]*3)
-        self.likelihood_variance = self.a * np.asarray(self.unscaled_variance)
-        self.prior_variance = 1e5
-        self.prior_total_garbage = 1e-10
-        self.prior_allele_garbage = 1e-10
-        self.likelihood_mask = np.ones((self.num_segments,))
 
         # Initialize to prefer positive breakpoint copy number
         p_breakpoint = np.zeros((self.num_breakpoints, self.num_clones, self.cn_max + 1))
@@ -228,27 +183,11 @@ cdef class RemixtModel:
         self.p_allele[:, 1, 0] = 0.49
         self.p_allele[:, 1, 1] = 0.01
 
-        # Initialize to prior
-        self.p_garbage = np.ones((self.num_segments, 3, 2))
-        self.p_garbage[:, 0, 0] = (1. - self.prior_total_garbage)
-        self.p_garbage[:, 0, 1] = self.prior_total_garbage
-        self.p_garbage[:, 1, 0] = (1. - self.prior_allele_garbage)
-        self.p_garbage[:, 1, 1] = self.prior_allele_garbage
-        self.p_garbage[:, 2, 0] = (1. - self.prior_allele_garbage)
-        self.p_garbage[:, 2, 1] = self.prior_allele_garbage
-
         self.hmm_log_norm_const = 0.
         self.framelogprob = np.ones((self.num_segments, self.num_cn_states))
         self.log_transmat = np.zeros((self.num_segments - 1, self.num_cn_states, self.num_cn_states))
         self.posterior_marginals = np.zeros((self.num_segments, self.num_cn_states))
         self.joint_posterior_marginals = np.zeros((self.num_segments - 1, self.num_cn_states, self.num_cn_states))
-
-        self.w_mat = np.array(
-            [[1, 0],
-             [0, 1],
-             [1, 1]])
-
-        self.num_measurements = 3
 
         # Initialize to something valid
         self.posterior_marginals[:] = 1.
@@ -386,201 +325,6 @@ cdef class RemixtModel:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cpdef calculate_expected(self, int n, int s):
-        """ Calculate expected read count per measurement
-        for a specific segment.
-        """
-        cdef int i, m
-        cdef np.ndarray[np.float64_t, ndim=1] expected = np.zeros((self.num_measurements,))
-
-        for i in range(self.num_measurements):
-            for m in range(self.num_clones):
-                expected[i] += self.effective_lengths[n, i] * self.h[m] * self._ll_measured_copies(i, m, s)
-
-        return expected
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _lp_term_1(self, int n, int m, int s):
-        """ Term 1 in prior expansion.
-        """
-        cdef int ell
-        cdef np.float64_t ll = 0.
-        for ell in range(self.num_alleles):
-            ll += -self.true_lengths[n] * (self.num_clones - 2) * self.cn_states[s, m, ell]**2 / self.prior_variance
-        return ll
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _lp_term_2(self, int n, int m, int m_, int s):
-        """ Term 2 in prior expansion.
-        """
-        cdef int ell
-        cdef np.float64_t ll = 0.
-        for ell in range(self.num_alleles):
-            ll += self.true_lengths[n] * 2. * self.cn_states[s, m, ell] * self.cn_states[s, m_, ell] / self.prior_variance
-        return ll
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_measured_copies(self, int i, int m, int s):
-        """ Term 2 in likelihood expansion.
-        """
-        cdef int ell
-        cdef np.float64_t kappa = 0.
-        for ell in range(self.num_alleles):
-            kappa += self.cn_states[s, m, ell] * self.w_mat[i, ell]
-        return kappa
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_term_0(self, int n, int i, int s):
-        """ Term 0 in likelihood expansion.
-        """
-        return self.likelihood_mask[n] * -1. * log(self.likelihood_variance[n, i]) / 2.
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_term_1(self, int n, int i, int s):
-        """ Term 1 in likelihood expansion.
-        """
-        return self.likelihood_mask[n] * -1. * self.x[n, i]**2 / (2. * self.likelihood_variance[n, i])
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_term_2(self, int n, int i, int m, int s):
-        """ Term 2 in likelihood expansion.
-        """
-        return self.likelihood_mask[n] * 2. * self.x[n, i] * self.effective_lengths[n, i] * self.h[m] * self._ll_measured_copies(i, m, s) / (2. * self.likelihood_variance[n, i])
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_term_3(self, int n, int i, int m, int s):
-        """ Term 3 in likelihood expansion.
-        """
-        return self.likelihood_mask[n] * -1. * (self.effective_lengths[n, i] * self.h[m] * self._ll_measured_copies(i, m, s))**2 / (2. * self.likelihood_variance[n, i])
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_term_4(self, int n, int i, int m, int m_, int s):
-        """ Term 4 in likelihood expansion.
-        """
-        return self.likelihood_mask[n] * -2. * self.effective_lengths[n, i]**2 * self.h[m] * self.h[m_] * self._ll_measured_copies(i, m, s) * self._ll_measured_copies(i, m_, s) / (2. * self.likelihood_variance[n, i])
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_term_2_3(self, int n, int i, int m, int s):
-        """ Term 2 + 3 in likelihood expansion.
-        """
-        return self._ll_term_2(n, i, m, s) + self._ll_term_3(n, i, m, s)
-        
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_term_2_h(self, int n, int i, int m, int s):
-        """ Term 2 h coefficient in likelihood expansion.
-        """
-        return self.likelihood_mask[n] * 2. * self.x[n, i] * self.effective_lengths[n, i] * self._ll_measured_copies(i, m, s) / (2. * self.likelihood_variance[n, i])
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_term_3_h(self, int n, int i, int m, int s):
-        """ Term 3 h coefficient in likelihood expansion.
-        """
-        return self.likelihood_mask[n] * -1. * (self.effective_lengths[n, i] * self._ll_measured_copies(i, m, s))**2 / (2. * self.likelihood_variance[n, i])
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_term_4_h(self, int n, int i, int m, int m_, int s):
-        """ Term 4 h coefficient in likelihood expansion.
-        """
-        return self.likelihood_mask[n] * -2. * self.effective_lengths[n, i]**2 * self._ll_measured_copies(i, m, s) * self._ll_measured_copies(i, m_, s) / (2. * self.likelihood_variance[n, i])
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_term_2_l(self, int n, int i, int m, int s):
-        """ Term 2 l coefficient in in likelihood expansion.
-        """
-        return self.likelihood_mask[n] * 2. * self.x[n, i] * self.h[m] * self._ll_measured_copies(i, m, s) / (2. * self.likelihood_variance[n, i])
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_term_3_l(self, int n, int i, int m, int s):
-        """ Term 3 l coefficient in in likelihood expansion.
-        """
-        return self.likelihood_mask[n] * -1. * (self.h[m] * self._ll_measured_copies(i, m, s))**2 / (2. * self.likelihood_variance[n, i])
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_term_4_l(self, int n, int i, int m, int m_, int s):
-        """ Term 4 l coefficient in in likelihood expansion.
-        """
-        return self.likelihood_mask[n] * -2. * self.h[m] * self.h[m_] * self._ll_measured_copies(i, m, s) * self._ll_measured_copies(i, m_, s) / (2. * self.likelihood_variance[n, i])
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_term_0_a(self, int n, int i, int s):
-        """ Term 0 a coefficient in likelihood expansion (excluding a constant term).
-        """
-        return self.likelihood_mask[n] * -1. / 2.
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_term_1_a(self, int n, int i, int s):
-        """ Term 1 a coefficient in likelihood expansion.
-        """
-        return self.likelihood_mask[n] * -1. * self.x[n, i]**2 / (2. * self.unscaled_variance[n, i])
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_term_2_a(self, int n, int i, int m, int s):
-        """ Term 2 a coefficient in likelihood expansion.
-        """
-        return self.likelihood_mask[n] * 2. * self.x[n, i] * self.effective_lengths[n, i] * self.h[m] * self._ll_measured_copies(i, m, s) / (2. * self.unscaled_variance[n, i])
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_term_3_a(self, int n, int i, int m, int s):
-        """ Term 3 a coefficient in likelihood expansion.
-        """
-        return self.likelihood_mask[n] * -1. * (self.effective_lengths[n, i] * self.h[m] * self._ll_measured_copies(i, m, s))**2 / (2. * self.unscaled_variance[n, i])
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_term_4_a(self, int n, int i, int m, int m_, int s):
-        """ Term 4 a coefficient in likelihood expansion.
-        """
-        return self.likelihood_mask[n] * -2. * self.effective_lengths[n, i]**2 * self.h[m] * self.h[m_] * self._ll_measured_copies(i, m, s) * self._ll_measured_copies(i, m_, s) / (2. * self.unscaled_variance[n, i])
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    @cython.cdivision(True)
-    cdef np.float64_t _ll_term_2_3_a(self, int n, int i, int m, int s):
-        """ Term 2 + 3 a coefficient in likelihood expansion.
-        """
-        return self._ll_term_2_a(n, i, m, s) + self._ll_term_3_a(n, i, m, s)
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
     @cython.cdivision(True)
     cpdef void update_p_cn(self) except*:
         """ Update the parameters of the approximating HMM.
@@ -593,38 +337,9 @@ cdef class RemixtModel:
         cdef np.ndarray[np.float64_t, ndim=1] log_posterior_marginals = np.zeros((self.num_cn_states,))
         cdef np.ndarray[np.float64_t, ndim=2] log_joint_posterior_marginals = np.zeros((self.num_cn_states, self.num_cn_states))
 
-        # Build the frame log probabilities of this chain
-        for n in range(self.num_segments):
-            for s in range(self.num_cn_states):
-                self.framelogprob[n, s] = 0.
-
-                for m in range(1, self.num_clones):
-
-                    # Copy number prior, singleton factors
-                    self.framelogprob[n, s] += self._lp_term_1(n, m, s)
-
-                    # Copy number prior, pairwise factors
-                    for m_ in range(1, self.num_clones):
-                        if m_ <= m:
-                            continue
-                        self.framelogprob[n, s] += self._lp_term_2(n, m, m_, s)
-
-                for m in range(self.num_clones):
-
-                    # Likelihood, singleton factors
-                    for i in range(self.num_measurements):
-                        self.framelogprob[n, s] += (
-                            self.p_garbage[n, i, 0] *
-                            self._ll_term_2_3(n, i, m, s))
-
-                    # Likelihood, pairwise factors
-                    for i in range(self.num_measurements):
-                        for m_ in range(self.num_clones):
-                            if m_ <= m:
-                                continue
-                            self.framelogprob[n, s] += (
-                                self.p_garbage[n, i, 0] *
-                                self._ll_term_4(n, i, m, m_, s))
+        # Assume frame log probabilities of this chain
+        assert self.framelogprob.shape[0] == self.num_segments
+        assert self.framelogprob.shape[1] == self.num_cn_states
 
         # Build the log transition probabilities of this chain
         for n in range(0, self.num_segments - 1):
@@ -722,219 +437,6 @@ cdef class RemixtModel:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cpdef void update_p_garbage(self) except*:
-        """ Update the read count garbage state approximating distribution.
-        """
-
-        cdef int n, i, m, s, m_
-        cdef np.ndarray[np.float64_t, ndim=2] log_p_garbage = np.empty((3, 2))
-        cdef np.ndarray[np.float64_t, ndim=1] log_p_allele_garbage = np.empty((2,))
-
-        for n in range(self.num_segments):
-            log_p_garbage[:] = 0.
-
-            for i in range(self.num_measurements):
-                for s in range(self.num_cn_states):
-
-                    # Likelihood, constant factors
-                    log_p_garbage[i, 0] += (
-                        self.posterior_marginals[n, s] *
-                        self._ll_term_0(n, i, s))
-                        
-                    log_p_garbage[i, 0] += (
-                        self.posterior_marginals[n, s] *
-                        self._ll_term_1(n, i, s))
-
-                    # Likelihood, singleton factors
-                    for m in range(self.num_clones):
-                        log_p_garbage[i, 0] += (
-                            self.posterior_marginals[n, s] *
-                            self._ll_term_2_3(n, i, m, s))
-
-                    # Likelihood, pairwise factors
-                    for m in range(self.num_clones):
-                        for m_ in range(self.num_clones):
-                            if m_ <= m:
-                                continue
-                            log_p_garbage[i, 0] += (
-                                self.posterior_marginals[n, s] *
-                                self._ll_term_4(n, i, m, m_, s))
-
-            # Total reads
-            log_p_garbage[2, 0] += log(1.0 - self.prior_total_garbage)
-            log_p_garbage[2, 1] += log(self.prior_total_garbage)
-            _exp_normalize(self.p_garbage[n, 2, :], log_p_garbage[2, :])
-
-            # Allele specific reads
-            log_p_allele_garbage[:] = log_p_garbage[0, :] + log_p_garbage[1, :]
-            log_p_allele_garbage[0] += log(1.0 - self.prior_allele_garbage)
-            log_p_allele_garbage[1] += log(self.prior_allele_garbage)
-            _exp_normalize(self.p_garbage[n, 0, :], log_p_allele_garbage)
-            _exp_normalize(self.p_garbage[n, 1, :], log_p_allele_garbage)
-
-    def _h_opt_objective(self, h, coeff_1, coeff_2):
-        return -np.sum(h * coeff_1) - np.sum(np.outer(h, h) * coeff_2)
-
-    def _h_opt_jacobian(self, h, coeff_1, coeff_2):
-        return -coeff_1 - np.dot(coeff_2 + coeff_2.T, h)
-
-    def _h_opt_hessian(self, h, coeff_1, coeff_2):
-        return -coeff_2 - coeff_2.T
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    cpdef void update_h(self) except *:
-        """ Update haploid read depths.
-        """
-
-        cdef int n, m, i, s, m_
-        cdef np.ndarray[np.float64_t, ndim=1] coeff_1
-        cdef np.ndarray[np.float64_t, ndim=2] coeff_2
-
-        coeff_1 = np.zeros((self.num_clones,))
-        coeff_2 = np.zeros((self.num_clones, self.num_clones))
-
-        for n in range(self.num_segments):
-            for m in range(self.num_clones):
-                for i in range(self.num_measurements):
-                    for s in range(self.num_cn_states):
-                        coeff_1[m] += (
-                            self.posterior_marginals[n, s] *
-                            self.p_garbage[n, i, 0] *
-                            self._ll_term_2_h(n, i, m, s))
-
-                        coeff_2[m, m] += (
-                            self.posterior_marginals[n, s] *
-                            self.p_garbage[n, i, 0] *
-                            self._ll_term_3_h(n, i, m, s))
-
-        for n in range(self.num_segments):
-            for m in range(self.num_clones):
-                for m_ in range(self.num_clones):
-                    if m_ <= m:
-                        continue
-                    for i in range(self.num_measurements):
-                        for s in range(self.num_cn_states):
-                            coeff_2[m, m_] += (
-                                self.posterior_marginals[n, s] *
-                                self.p_garbage[n, i, 0] *
-                                self._ll_term_4_h(n, i, m, m_, s))
-
-        try:
-            self.h = np.linalg.solve(coeff_2 + coeff_2.T, -coeff_1)
-            success = True
-        except Exception as e:
-            success = False
-
-        if success and not np.any(np.asarray(self.h) < 0.):
-            return
-
-        opt_result = scipy.optimize.minimize(
-            self._h_opt_objective,
-            self.h,
-            args=(coeff_1, coeff_2),
-            jac=self._h_opt_jacobian,
-            hess=None,
-            bounds=[(0., np.inf)] * self.num_clones)
-
-        if not opt_result.success:
-            raise Exception('error for optimizing h: ' + opt_result.message)
-
-        self.h = opt_result.x
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    cpdef void update_phi(self) except *:
-        """ Update effective length for allele read counts.
-        """
-
-        cdef int n, i, m, s, m_
-        cdef np.float64_t coeff_1, coeff_2, phi
-
-        for n in range(self.num_segments):
-            coeff_1 = 0.
-            coeff_2 = 0.
-
-            for i in range(2):
-                for m in range(self.num_clones):
-                    for s in range(self.num_cn_states):
-                        coeff_1 += (
-                            self.posterior_marginals[n, s] *
-                            self.p_garbage[n, i, 0] *
-                            self._ll_term_2_l(n, i, m, s))
-
-                        coeff_2 += (
-                            self.posterior_marginals[n, s] *
-                            self.p_garbage[n, i, 0] *
-                            self._ll_term_3_l(n, i, m, s))
-
-            for i in range(2):
-                for m in range(self.num_clones):
-                    for m_ in range(self.num_clones):
-                        if m_ <= m:
-                            continue
-                        for s in range(self.num_cn_states):
-                            coeff_2 += (
-                                self.posterior_marginals[n, s] *
-                                self.p_garbage[n, i, 0] *
-                                self._ll_term_4_l(n, i, m, m_, s))
-
-            if coeff_2 == 0.:
-                phi = 0.
-            else:
-                phi = -coeff_1 / (2. * coeff_2)
-
-            self.effective_lengths[n, 0] = phi
-            self.effective_lengths[n, 1] = phi
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
-    cpdef void update_a(self) except *:
-        """ Update variance multipler.
-        """
-
-        cdef int n, i, m, s, m_
-        cdef np.float64_t[:] coeff_1 = np.zeros((self.num_measurements,))
-        cdef np.float64_t[:] coeff_2 = np.zeros((self.num_measurements,))
-
-        for i in range(self.num_measurements):
-            for n in range(self.num_segments):
-                for s in range(self.num_cn_states):
-                    coeff_1[i] += (
-                        self.posterior_marginals[n, s] *
-                        self.p_garbage[n, i, 0] *
-                        self._ll_term_0_a(n, i, s))
-
-                    coeff_2[i] += (
-                        self.posterior_marginals[n, s] *
-                        self.p_garbage[n, i, 0] *
-                        self._ll_term_1_a(n, i, s))
-
-                    for m in range(self.num_clones):
-                        coeff_2[i] += (
-                            self.posterior_marginals[n, s] *
-                            self.p_garbage[n, i, 0] *
-                            self._ll_term_2_3_a(n, i, m, s))
-
-                    for m in range(self.num_clones):
-                        for m_ in range(self.num_clones):
-                            if m_ <= m:
-                                continue
-                            coeff_2[i] += (
-                                self.posterior_marginals[n, s] *
-                                self.p_garbage[n, i, 0] *
-                                self._ll_term_4_a(n, i, m, m_, s))
-
-        self.a[0] = (coeff_2[0] + coeff_2[1]) / (coeff_1[0] + coeff_1[1])
-        self.a[1] = (coeff_2[0] + coeff_2[1]) / (coeff_1[0] + coeff_1[1])
-        self.a[2] = coeff_2[2] / coeff_1[2]
-
-        for i in range(self.num_measurements):
-            for n in range(self.num_segments):
-                self.likelihood_variance[n, i] = self.unscaled_variance[n, i] * self.a[i]
-
-    @cython.boundscheck(False)
-    @cython.wraparound(False)
     cpdef np.float64_t calculate_variational_entropy(self):
         """ Calculate the entropy of the approximating distribution.
         """
@@ -946,8 +448,6 @@ cdef class RemixtModel:
         entropy += np.sum(np.asarray(self.joint_posterior_marginals) * np.asarray(self.log_transmat))
         entropy += _entropy(np.asarray(self.p_breakpoint).flatten())
         entropy += _entropy(np.asarray(self.p_allele).flatten())
-        entropy += _entropy(np.asarray(self.p_garbage)[:, 0, :].flatten())
-        entropy += _entropy(np.asarray(self.p_garbage)[:, 2, :].flatten())
 
         # print 'entropy', entropy
 
@@ -966,50 +466,12 @@ cdef class RemixtModel:
         cdef int n, i, m, s, m_, s_
         cdef np.float64_t energy = 0.
 
+        # Likelihood factor
         for n in range(self.num_segments):
             for s in range(self.num_cn_states):
-                for m in range(1, self.num_clones):
-
-                    # Copy number prior, singleton factors
-                    energy += self.posterior_marginals[n, s] * self._lp_term_1(n, m, s)
-
-                    # Copy number prior, pairwise factors
-                    for m_ in range(1, self.num_clones):
-                        if m_ <= m:
-                            continue
-                        energy += self.posterior_marginals[n, s] * self._lp_term_2(n, m, m_, s)
-
-        for n in range(self.num_segments):
-            for i in range(self.num_measurements):
-                for s in range(self.num_cn_states):
-
-                    # Likelihood, constant factors
-                    energy += (
-                        self.posterior_marginals[n, s] *
-                        self.p_garbage[n, i, 0] *
-                        self._ll_term_0(n, i, s))
-                        
-                    energy += (
-                        self.posterior_marginals[n, s] *
-                        self.p_garbage[n, i, 0] *
-                        self._ll_term_1(n, i, s))
-
-                    # Likelihood, singleton factor
-                    for m in range(self.num_clones):
-                        energy += (
-                            self.posterior_marginals[n, s] *
-                            self.p_garbage[n, i, 0] *
-                            self._ll_term_2_3(n, i, m, s))
-
-                    # Likelihood, pairwise factor
-                    for m in range(self.num_clones):
-                        for m_ in range(self.num_clones):
-                            if m_ <= m:
-                                continue
-                            energy += (
-                                self.posterior_marginals[n, s] *
-                                self.p_garbage[n, i, 0] *
-                                self._ll_term_4(n, i, m, m_, s))
+                energy += (
+                    self.posterior_marginals[n, s] *
+                    self.framelogprob[n, s])
 
         # Transitions factor
         for n in range(0, self.num_segments - 1):
@@ -1017,13 +479,6 @@ cdef class RemixtModel:
             for s in range(self.num_cn_states):
                 for s_ in range(self.num_cn_states):
                     energy += self.joint_posterior_marginals[n, s, s_] * log_transmat[s, s_]
-
-        # Garbage state prior
-        for n in range(self.num_segments):
-            energy += self.p_garbage[n, 0, 0] * log(1. - self.prior_total_garbage)
-            energy += self.p_garbage[n, 0, 1] * log(self.prior_total_garbage)
-            energy += self.p_garbage[n, 2, 0] * log(1. - self.prior_allele_garbage)
-            energy += self.p_garbage[n, 2, 1] * log(self.prior_allele_garbage)
 
         # print 'energy', energy
 

@@ -42,6 +42,11 @@ extensions = [
         include_dirs=[numpy.get_include()],
     ),
     Extension(
+        name='remixt.model1a',
+        sources=['remixt/model1a.pyx'],
+        include_dirs=[numpy.get_include()],
+    ),
+    Extension(
         name='remixt.model2',
         sources=['remixt/model2.pyx'],
         include_dirs=[numpy.get_include()],

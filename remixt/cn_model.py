@@ -7,7 +7,7 @@ import scipy.optimize
 import scipy.misc
 import pickle
 
-import remixt.model1
+import remixt.model1a
 import remixt.model2
 import remixt.model3
 
@@ -23,78 +23,57 @@ def _get_brkend_seg_orient(breakend):
     return n_left, orient
 
 
-def calculate_mean_cn(h, x, l):
-    """ Calculate the mean raw copy number.
+class CopyNumberPrior(object):
 
-    Args:
-        h (numpy.array): haploid read depths, h[0] for normal
-        x (numpy.array): major, minor, and total read counts
-        l (numpy.array): segment lengths
+    def __init__(self, l, max_divergence=1, divergence_weight=1e-7):
+        """ Create a copy number prior.
 
-    Returns:
-        numpy.array: N * L dim array, per segment per allele mean copy number
+        Args:
+            l (numpy.array): observed lengths of segments
 
-    """
+        KwArgs:
+            max_divergence (int): maxmimum allowed divergence between segments
+            divergence_weight (float): prior length scaled weight on divergent segments
 
-    phi = remixt.likelihood.estimate_phi(x)
+        """
+        
+        self.l = l
 
-    depth = x[:,0:2] / (phi * l)[:, np.newaxis]
+        self.max_divergence = max_divergence
+        self.divergence_weight = divergence_weight
 
-    mean_cn = (depth - h[0]) / h[1:].sum()
-
-    return mean_cn
-
-
-def calculate_amplification_mask(h, x, l, cn_max):
-    """ Add a mask for highly amplified regions.
-
-    Args:
-        h (numpy.array): haploid read depths, h[0] for normal
-        x (numpy.array): major, minor, and total read counts
-        l (numpy.array): segment lengths
-        cn_max (int): max unmasked dominant copy number
-
-    """
-
-    dom_cn = calculate_mean_cn(h, x, l)
-    dom_cn[np.isnan(dom_cn)] = np.inf
-    dom_cn = np.clip(dom_cn.round().astype(int), 0, int(1e6))
-
-    return np.all(dom_cn <= cn_max, axis=1)
+        if divergence_weight < 0.:
+            raise ValueError('divergence weight should be positive, was {}'.format(divergence_weight))
 
 
-def calculate_segment_length_mask(l, min_segment_length):
-    """ Add a mask for short segments.
+    def log_prior(self, cn):
+        """ Evaluate log prior probability of segment copy number.
+        
+        Args:
+            cn (numpy.array): copy number state of segments
 
-    Args:
-        l (numpy.array): segment lengths
-        min_segment_length (float): minimum length of modelled segments
+        Returns:
+            numpy.array: log prior per segment
 
-    """
+        """
 
-    return (l >= min_segment_length)
+        subclonal = (cn[:,1:,:].max(axis=1) != cn[:,1:,:].min(axis=1)) * 1
+        lp = -1.0 * np.sum(subclonal, axis=1) * self.l * self.divergence_weight
 
+        subclonal_divergence = (cn[:,1:,:].max(axis=1) - cn[:,1:,:].min(axis=1)) * 1
+        invalid_divergence = (subclonal_divergence > self.max_divergence).any(axis=1)
+        lp -= np.where(invalid_divergence, 1000., 0.)
 
-def calculate_proportion_genotyped_mask(x, min_proportion_genotyped):
-    """ Add a mask for segments with too few genotyped reads.
-
-    Args:
-        x (numpy.array): major, minor, and total read counts
-        min_proportion_genotyped (float): minimum proportion genotyped reads
-
-    """
-
-    p = x[:,:2].sum(axis=1).astype(float) / (x[:,2].astype(float) + 1e-16)
-
-    return (p >= min_proportion_genotyped)
+        return lp
 
 
 class BreakpointModel(object):
 
-    def __init__(self, x, l, adjacencies, breakpoints, **kwargs):
+    def __init__(self, h_init, x, l, adjacencies, breakpoints, **kwargs):
         """ Create a copy number model.
 
         Args:
+            h_init (numpy.array): per clone haploid read depth
             x (numpy.array): observed minor, major, total reads
             l (numpy.array): observed segment lengths
             adjacencies (list of tuple): pairs of adjacent segments
@@ -103,20 +82,22 @@ class BreakpointModel(object):
         KwArgs:
             max_copy_number (int): maximum copy number of HMM state space
             normal_contamination (bool): whether the sample is contaminated by normal
-            prior_variance (float): variance parameter of clone segment divergence prior
+            divergence_weight (float): clone segment divergence prior parameter
             min_segment_length (float): minimum size of segments for segment likelihood mask
             min_proportion_genotyped (float): minimum proportion genotyped reads for segment likelihood mask
             transition_log_prob (float): penalty on transitions, per copy number change
 
         """
 
+        self.M = h_init.shape[0]
         self.N = x.shape[0]
 
         self.breakpoints = list(breakpoints)
         
         self.max_copy_number = kwargs.get('max_copy_number', 6)
+        self.max_copy_number_diff = kwargs.get('max_copy_number_diff', 1)
         self.normal_contamination = kwargs.get('normal_contamination', True)
-        self.prior_variance = kwargs.get('prior_variance', 1e6)
+        self.divergence_weight = kwargs.get('divergence_weight', 1e6)
         self.min_segment_length = kwargs.get('min_segment_length', 10000)
         self.min_proportion_genotyped = kwargs.get('min_proportion_genotyped', 0.01)
         self.transition_log_prob = kwargs.get('transition_log_prob', 10.)
@@ -202,6 +183,43 @@ class BreakpointModel(object):
         self.x1[self.seg_fwd_remap, :] = x
         self.l1[self.seg_fwd_remap] = l
 
+        # Create emission / prior / copy number models
+        self.emission = remixt.likelihood.NegBinBetaBinLikelihood(self.x1, self.l1)
+        self.emission.h = h_init
+
+        # Create prior probability model
+        self.prior = remixt.cn_model.CopyNumberPrior(self.l1, divergence_weight=self.divergence_weight)
+
+        # Mask amplifications and poorly modelled segments from likelihood
+        self.emission.add_amplification_mask(self.max_copy_number)
+        self.emission.add_segment_length_mask(self.min_segment_length)
+        self.emission.add_proportion_genotyped_mask(self.min_proportion_genotyped)
+
+        # Parameters of the likelihood to include in optimization
+        self.likelihood_params = [
+            self.emission.h_param,
+            self.emission.r_param,
+            self.emission.M_param,
+            # self.emission.z_param,
+            self.emission.hdel_mu_param,
+            self.emission.loh_p_param,
+        ]
+
+        self.model = remixt.model1a.RemixtModel(
+            self.M, self.N1, len(self.breakpoints),
+            self.max_copy_number,
+            self.max_copy_number_diff,
+            self.normal_contamination,
+            self.is_telomere,
+            self.breakpoint_idx,
+            self.breakpoint_orient,
+            self.transition_log_prob,
+        )
+
+        self.prev_elbo = None
+        self.prev_elbo_diff = None
+        self.num_update_iter = 1
+
 
     def _write_model(self, model_filename):
         data = {}
@@ -221,12 +239,36 @@ class BreakpointModel(object):
                 setattr(self.model, a, data[a])
                 
                 
-    def update(self, check_elbo=False, update_variance=False):
+    def log_likelihood(self, cn):
+        return self.emission.log_likelihood(cn) + self.prior.log_prior(cn)
+        
+        
+    def posterior_marginals(self):
+        framelogprob = np.zeros((self.model.num_segments, self.model.num_cn_states))
+        
+        cn_states = []
+        for s in xrange(self.model.num_cn_states):
+            cn = np.array([np.asarray(self.model.cn_states[s])] * self.model.num_segments)
+            framelogprob[:, s] = self.log_likelihood(cn)
+            cn_states.append(cn)
+        cn_states = np.array(cn_states)
+            
+        self.model.framelogprob = framelogprob
+
+        for num_iter in xrange(self.num_update_iter):
+            elbo = self.update()
+        
+        posterior_marginals = np.asarray(self.model.posterior_marginals).T
+        
+        return elbo, cn_states, posterior_marginals
+
+
+    def update(self, check_elbo=False):
         """ Single update of all variational parameters.
         """
 
         if check_elbo:
-            elbo_prev = self.model.calculate_elbo()
+            self.prev_elbo = self.model.calculate_elbo()
 
         threshold = -1e-6
 
@@ -235,111 +277,40 @@ class BreakpointModel(object):
 
         if check_elbo:
             elbo = self.model.calculate_elbo()
-            print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
-            if elbo - elbo_prev < threshold:
+            print 'elbo diff: {:.10f}'.format(elbo - self.prev_elbo)
+            if elbo - self.prev_elbo < threshold:
                 raise Exception('elbo error!!!!')
-            elbo_prev = elbo
+            self.prev_elbo = elbo
 
         print 'update_p_breakpoint'
         self.model.update_p_breakpoint()
 
         if check_elbo:
             elbo = self.model.calculate_elbo()
-            print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
-            if elbo - elbo_prev < threshold:
+            print 'elbo diff: {:.10f}'.format(elbo - self.prev_elbo)
+            if elbo - self.prev_elbo < threshold:
                 raise Exception('elbo error!!!!')
-            elbo_prev = elbo
+            self.prev_elbo = elbo
 
         print 'update_p_allele'
         self.model.update_p_allele()
 
         if check_elbo:
             elbo = self.model.calculate_elbo()
-            print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
-            if elbo - elbo_prev < threshold:
+            print 'elbo diff: {:.10f}'.format(elbo - self.prev_elbo)
+            if elbo - self.prev_elbo < threshold:
                 raise Exception('elbo error!!!!')
-            elbo_prev = elbo
-
-        print 'update_h'
-        self.model.update_h()
-
-        if check_elbo:
-            elbo = self.model.calculate_elbo()
-            print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
-            if elbo - elbo_prev < threshold:
-                raise Exception('elbo error!!!!')
-            elbo_prev = elbo
-
-        print 'update_phi'
-        print (np.asarray(self.model.effective_lengths[:, 0]) / (np.asarray(self.model.effective_lengths[:, 2]) + 1)).mean()
-        self.model.update_phi()
-        print (np.asarray(self.model.effective_lengths[:, 0]) / (np.asarray(self.model.effective_lengths[:, 2]) + 1)).mean()
-
-        if check_elbo:
-            elbo = self.model.calculate_elbo()
-            print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
-            if elbo - elbo_prev < threshold:
-                raise Exception('elbo error!!!!')
-            elbo_prev = elbo
-
-        if update_variance:
-            print 'update_p_garbage'
-            print np.asarray(self.model.p_garbage[:, :, 0]).sum(axis=0)
-            self.model.update_p_garbage()
-            print np.asarray(self.model.p_garbage[:, :, 0]).sum(axis=0)
-
-            if check_elbo:
-                elbo = self.model.calculate_elbo()
-                print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
-                if elbo - elbo_prev < threshold:
-                    raise Exception('elbo error!!!!')
-                elbo_prev = elbo
-
-            print 'update_a', np.asarray(self.model.a)
-            self.model.update_a()
-            print np.asarray(self.model.a)
-
-            if check_elbo:
-                elbo = self.model.calculate_elbo()
-                print 'elbo diff: {:.10f}'.format(elbo - elbo_prev)
-                if elbo - elbo_prev < threshold:
-                    raise Exception('elbo error!!!!')
-                elbo_prev = elbo
+            self.prev_elbo = elbo
 
         print 'done'
-
-        return self.model.calculate_elbo()
+        
+        if not check_elbo:
+            self.prev_elbo = self.model.calculate_elbo()
 
 
     def optimize(self, h_init, elbo_diff_threshold=1e-6, max_update_iter=5, max_update_var_iter=5):
         
         M = h_init.shape[0]
-
-        self.model = remixt.model1.RemixtModel(
-            M, self.N1, len(self.breakpoints),
-            self.max_copy_number,
-            1, self.normal_contamination,
-            self.x1,
-            self.is_telomere,
-            self.breakpoint_idx,
-            self.breakpoint_orient,
-            self.l1, self.l1,
-            self.transition_log_prob,
-        )
-
-        self.model.prior_variance = self.prior_variance
-
-        self.model.h = h_init
-        
-        # Calculate segment likelihood mask
-        boolean_mask = (
-            calculate_amplification_mask(h_init, self.x1, self.l1, self.max_copy_number) &
-            calculate_segment_length_mask(self.l1, self.min_segment_length) & 
-            calculate_proportion_genotyped_mask(self.x1, self.min_proportion_genotyped))
-        likelihood_mask = np.zeros((self.model.num_segments,))
-        likelihood_mask[boolean_mask] = 1.
-
-        self.model.likelihood_mask = likelihood_mask
 
         elbo = self.model.calculate_elbo()
 
@@ -401,26 +372,7 @@ class BreakpointModel(object):
 
     @property
     def h(self):
-        return np.asarray(self.model.h)
-
-    @property
-    def haplotype_length(self):
-        return np.asarray(self.model.effective_lengths[:, 0])[self.seg_fwd_remap]
-
-    @property
-    def phi(self):
-        lengths = np.asarray(self.model.effective_lengths[:, 2])[self.seg_fwd_remap]
-        phi = self.haplotype_length / lengths
-        phi[lengths <= 0] = 0
-        return phi
-
-    @property
-    def a(self):
-        return np.asarray(self.model.a)
-
-    @property
-    def p_garbage(self):
-        return np.asarray(self.model.p_garbage)[self.seg_fwd_remap]
+        return np.asarray(self.emission.h)
 
     @property
     def p_breakpoint(self):

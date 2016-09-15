@@ -120,5 +120,11 @@ likelihood_min_segment_length               = 10000
 likelihood_min_proportion_genotyped         = 0.01
 
 # Length scaled weights on divergent segments
-prior_variances                             = [1e6, 1e7, 1e8]
+divergence_weights                          = [1e-6, 1e-7, 1e-8]
+
+# Number of iterations of EM for parameter optimization
+num_em_iter                                 = 10
+
+# Number of iterations of Variational Inference per EM iteration
+num_update_iter                             = 5
 
