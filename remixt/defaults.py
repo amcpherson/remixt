@@ -95,7 +95,7 @@ max_copy_number                             = 6
 
 # Tumour mixture fractions for initialization of haploid depth
 # parameter optimization
-tumour_mix_fractions                        = [0.5, 0.4, 0.25, 0.1]
+tumour_mix_fractions                        = [0.45, 0.3, 0.2, 0.1]
 
 # Maximum and minimum ploidy of initial haploid depth parameters
 # Ploidy selection can be performed by setting min and max ploidy to a small range
