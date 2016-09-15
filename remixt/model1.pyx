@@ -207,7 +207,7 @@ cdef class RemixtModel:
 
         # Must be initialized by user
         self.h = np.zeros((self.num_clones,))
-        self.unscaled_variance = (x + 1)**1.75
+        self.unscaled_variance = x**1.75 + 50.
         self.a = np.array([0.062]*3)
         self.likelihood_variance = self.a * np.asarray(self.unscaled_variance)
         self.prior_variance = 1e5
