@@ -296,19 +296,23 @@ class remixt_unittest(unittest.TestCase):
     def test_learn_h_variational(self):
 
         experiment = load_test_experiment()
+        
+        h_init = experiment.h * (1. + 0.05 * np.random.randn(*experiment.h.shape))
 
         init_params = {}
-        init_params['h_init'] = experiment.h * (1. + 0.05 * np.random.randn(*experiment.h.shape))
+        init_params['h_normal'] = h_init[0]
+        init_params['h_tumour'] = h_init[1:].sum()
+        init_params['mix_frac'] = h_init[1] / h_init[1:].sum()
         init_params['divergence_weight'] = 1e-7
         init_params['mode_idx'] = 0
         
         config = {}
         
-        import pstats, cProfile
-        cProfile.runctx("fit_results = remixt.analysis.pipeline.fit(experiment, init_params, config)", globals(), locals(), "Profile.prof")
-        s = pstats.Stats("Profile.prof")
-        s.strip_dirs().sort_stats("cumtime").print_stats()
-        raise
+        # import pstats, cProfile
+        # cProfile.runctx("fit_results = remixt.analysis.pipeline.fit(experiment, init_params, config)", globals(), locals(), "Profile.prof")
+        # s = pstats.Stats("Profile.prof")
+        # s.strip_dirs().sort_stats("cumtime").print_stats()
+        # raise
         fit_results = remixt.analysis.pipeline.fit(experiment, init_params, config)
 
         h = fit_results['h']
