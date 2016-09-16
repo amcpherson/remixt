@@ -753,6 +753,67 @@ class NegBinLikelihood(IndepAlleleLikelihood):
         return partial_r
 
 
+class BinomialDistribution(object):
+
+    def __init__(self, **kwargs):
+        """ Binomial distribution for allele count data.
+
+        """
+        pass
+
+    def log_likelihood(self, k, n, p):
+        """ Calculate binomial allele count log likelihood.
+        
+        Args:
+            k (numpy.array): observed minor allelic read counts
+            n (numpy.array): observed total allelic read counts
+            p (numpy.array): expected minor allele fraction
+        
+        Returns:
+            float: log likelihood per segment
+            
+        The pmf of the binomial is:
+        
+            C(n, k) * p**k * (1-p)**(n-k)
+
+        The log likelihood is thus:
+        
+            log(G(n+1)) - log(G(k+1)) - log(G(n-k+1))
+                + k * log(p) + (n - k) * log(1 - p)
+
+        """
+
+        ll = (gammaln(n+1) - gammaln(k+1) - gammaln(n-k+1)
+            + k * np.log(p) + (n - k) * np.log(1 - p))
+        
+        return ll
+
+
+    def log_likelihood_partial_p(self, k, n, p):
+        """ Calculate the partial derivative of the binomial allele count
+        log likelihood with respect to p
+
+        Args:
+            k (numpy.array): observed minor allelic read counts
+            n (numpy.array): observed total allelic read counts
+            p (numpy.array): expected minor allele fraction
+        
+        Returns:
+            numpy.array: log likelihood derivative per segment per clone
+
+        The partial derivative of the log pmf of the binomial with 
+        respect to p is:
+        
+            k / p - (n - k) / (1 - p)
+
+        """
+
+        M = self.M
+
+        partial_p = k / p - (n - k) / (1 - p)
+        
+        return partial_p
+
 
 class BetaBinDistribution(object):
 
