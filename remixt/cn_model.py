@@ -272,7 +272,7 @@ class BreakpointModel(object):
         return elbo
         
         
-    def update(self, check_elbo=True):
+    def update(self, check_elbo=False):
         """ Single update of all variational parameters.
         """
 
@@ -286,19 +286,19 @@ class BreakpointModel(object):
         self.model.update_p_cn()
 
         if check_elbo:
-            elbo = self._check_elbo(elbo)
+            elbo = self._check_elbo(elbo, 'p_cn')
 
         print 'update_p_breakpoint'
         self.model.update_p_breakpoint()
 
         if check_elbo:
-            elbo = self._check_elbo(elbo)
+            elbo = self._check_elbo(elbo, 'p_breakpoint')
 
         print 'update_p_allele'
         self.model.update_p_allele()
 
         if check_elbo:
-            elbo = self._check_elbo(elbo)
+            elbo = self._check_elbo(elbo, 'p_allele')
 
         print 'done'
         
