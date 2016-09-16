@@ -45,6 +45,7 @@ extensions = [
         name='remixt.model1a',
         sources=['remixt/model1a.pyx'],
         include_dirs=[numpy.get_include()],
+        extra_compile_args=["-Wno-unused-function"],
     ),
     Extension(
         name='remixt.model2',
