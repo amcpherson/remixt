@@ -1,3 +1,4 @@
+# cython: profile=True
 from libc.math cimport exp, log, fabs
 import numpy as np
 import scipy
@@ -282,46 +283,60 @@ cdef class RemixtModel:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
+    cdef void calculate_log_transmat_regular(self, int n, np.float64_t[:, :] log_transmat):
+        cdef int v, w, m, ell
+
+        log_transmat[:] = 0.
+
+        for v in range(2):
+            for w in range(2):
+                mult_const = -self.transition_penalty * self.p_allele[n, v, w]
+
+                for m in range(self.num_clones):
+                    for ell in range(self.num_alleles):
+                        self.add_log_transmat(log_transmat, m, ell, w, mult_const)
+        
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    cdef void calculate_log_transmat_breakpoint(self, int n, np.float64_t[:, :] log_transmat):
+        cdef int v, w, m, ell
+
+        log_transmat[:] = 0.
+
+        for v in range(2):
+            for w in range(2):
+                for m in range(self.num_clones):
+                    mult_const = -self.transition_penalty * self.p_allele[n, v, w]
+
+                    for ell in range(self.num_alleles):
+                        if ell == v:
+                            self.add_log_transmat_expectation_brk(
+                                log_transmat, m, ell, w,
+                                self.p_breakpoint[self.breakpoint_idx[n], m, :],
+                                self.breakpoint_orient[n],
+                                mult_const)
+
+                        else:
+                            self.add_log_transmat(log_transmat, m, ell, w, mult_const)
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
     cdef void calculate_log_transmat(self, int n, np.float64_t[:, :] log_transmat):
         """ Calculate the log transition matrix given current breakpoint and
         allele probabilities.
         """
 
-        cdef int v, w, m
+        cdef int v, w, m, ell
         cdef np.float64_t mult_const
 
         if self.is_telomere[n] > 0:
             log_transmat[:] = 0.
 
         elif self.breakpoint_idx[n] < 0:
-            log_transmat[:] = 0.
-
-            for v in range(2):
-                for w in range(2):
-                    mult_const = -self.transition_penalty * self.p_allele[n, v, w]
-
-                    for m in range(self.num_clones):
-                        for ell in range(self.num_alleles):
-                            self.add_log_transmat(log_transmat, m, ell, w, mult_const)
+            self.calculate_log_transmat_regular(n, log_transmat)
 
         else:
-            log_transmat[:] = 0.
-
-            for v in range(2):
-                for w in range(2):
-                    for m in range(self.num_clones):
-                        mult_const = -self.transition_penalty * self.p_allele[n, v, w]
-
-                        for ell in range(self.num_alleles):
-                            if ell == v:
-                                self.add_log_transmat_expectation_brk(
-                                    log_transmat, m, ell, w,
-                                    self.p_breakpoint[self.breakpoint_idx[n], m, :],
-                                    self.breakpoint_orient[n],
-                                    mult_const)
-
-                            else:
-                                self.add_log_transmat(log_transmat, m, ell, w, mult_const)
+            self.calculate_log_transmat_breakpoint(n, log_transmat)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -333,7 +348,7 @@ cdef class RemixtModel:
         cdef np.ndarray[np.float64_t, ndim=2] alphas = np.empty((self.num_segments, self.num_cn_states))
         cdef np.ndarray[np.float64_t, ndim=2] betas = np.empty((self.num_segments, self.num_cn_states))
 
-        cdef int n, m, s, m_, i
+        cdef int n, s, s_
         cdef np.ndarray[np.float64_t, ndim=1] log_posterior_marginals = np.zeros((self.num_cn_states,))
         cdef np.ndarray[np.float64_t, ndim=2] log_joint_posterior_marginals = np.zeros((self.num_cn_states, self.num_cn_states))
 
@@ -374,7 +389,7 @@ cdef class RemixtModel:
         """ Update the breakpoint approximating distributions.
         """
 
-        cdef int t, i, j, brk_allele
+        cdef int n, m, v, w, ell, k
         cdef np.ndarray[np.float64_t, ndim=3] log_p_breakpoint = np.zeros((self.num_breakpoints, self.num_clones, self.cn_max + 1))
 
         for n in range(0, self.num_segments - 1):
@@ -403,7 +418,7 @@ cdef class RemixtModel:
         """ Update the rearranged allele approximating distribution.
         """
 
-        cdef int v, n, m, ell
+        cdef int n, v, w, m, ell
 
         cdef np.ndarray[np.float64_t, ndim=2] log_transmat = np.empty((self.num_cn_states, self.num_cn_states))
         cdef np.ndarray[np.float64_t, ndim=2] log_p_allele = np.empty((2, 2))
@@ -444,7 +459,6 @@ cdef class RemixtModel:
         cdef np.float64_t entropy = 0.
 
         entropy += -np.sum(self.hmm_log_norm_const)
-        entropy += np.sum(np.asarray(self.posterior_marginals) * np.asarray(self.framelogprob))
         entropy += np.sum(np.asarray(self.joint_posterior_marginals) * np.asarray(self.log_transmat))
         entropy += _entropy(np.asarray(self.p_breakpoint).flatten())
         entropy += _entropy(np.asarray(self.p_allele).flatten())
@@ -463,15 +477,8 @@ cdef class RemixtModel:
 
         cdef np.ndarray[np.float64_t, ndim=2] log_transmat = np.empty((self.num_cn_states, self.num_cn_states))
 
-        cdef int n, i, m, s, m_, s_
+        cdef int n, s, s_
         cdef np.float64_t energy = 0.
-
-        # Likelihood factor
-        for n in range(self.num_segments):
-            for s in range(self.num_cn_states):
-                energy += (
-                    self.posterior_marginals[n, s] *
-                    self.framelogprob[n, s])
 
         # Transitions factor
         for n in range(0, self.num_segments - 1):
