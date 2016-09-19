@@ -171,7 +171,7 @@ class BreakpointModel(object):
                 # Next new segment
                 n_new += 1
 
-        assert not np.any((self.breakpoint_idx >= 0) & (self.is_telomere[n] == 1))
+        assert not np.any((self.breakpoint_idx >= 0) & (self.is_telomere == 1))
         assert np.all(np.bincount(self.breakpoint_idx[self.breakpoint_idx >= 0]) == 2)
 
         # These should be zero lengthed segments, and zero read counts
