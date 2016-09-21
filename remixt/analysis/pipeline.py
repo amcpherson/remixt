@@ -1,4 +1,5 @@
 import pickle
+import joblib
 import itertools
 import numpy as np
 import pandas as pd
@@ -85,12 +86,7 @@ def fit_task(
         
     fit_results = fit(experiment, init_params, config)
     
-    # Store in npz format
-    np.savez_compressed(results_filename, **fit_results)
-    
-    # Remove automatically added extension if necessary
-    if not results_filename.endswith('.npz'):
-        os.rename(results_filename + '.npz', results_filename)
+    joblib.dump(fit_results, results_filename, compress=True)
 
 
 def fit(experiment, init_params, config):
@@ -133,8 +129,8 @@ def fit(experiment, init_params, config):
     fit_results['cn'] = model.optimal_cn()
     fit_results['brk_cn'] = model.optimal_brk_cn()
 
-    # Low level model data for debugging
-    fit_results['model_data'] = model.get_model_data()
+    # Include model for debugging
+    fit_results['model'] = model
 
     # Save estimation statistics
     fit_results['stats'] = dict()
@@ -192,7 +188,7 @@ def collate(collate_filename, experiment_filename, init_results_filename, fit_re
     # Extract the statistics for selecting solutions
     stats_table = list()
     for init_id, results_filename in fit_results_filenames.iteritems():
-        results = np.load(results_filename)
+        results = joblib.load(results_filename)
         stats = dict(results['stats'])
         stats['init_id'] = init_id
         stats_table.append(stats)
@@ -210,7 +206,7 @@ def collate(collate_filename, experiment_filename, init_results_filename, fit_re
             experiment = pickle.load(f)
 
         for init_id, results_filename in fit_results_filenames.iteritems():
-            results = np.load(results_filename)
+            results = joblib.load(results_filename)
             store_fit_results(collated, experiment, results, 'solutions/solution_{0}'.format(init_id))
 
         store_optimal_solution(stats_table, collated, config)
