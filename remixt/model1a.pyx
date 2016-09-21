@@ -194,6 +194,20 @@ cdef class RemixtModel:
         self.posterior_marginals /= np.sum(self.posterior_marginals, axis=-1)[:, np.newaxis]
         self.joint_posterior_marginals[:] = 1.
         self.joint_posterior_marginals /= np.sum(self.joint_posterior_marginals, axis=(-1, -2))[:, np.newaxis, np.newaxis]
+        
+    def __getnewargs__(self):
+        return (
+            self.num_clones,
+            self.num_segments,
+            self.num_breakpoints,
+            self.cn_max,
+            self.cn_diff_max,
+            self.normal_contamination,
+            np.asarray(self.is_telomere),
+            np.asarray(self.breakpoint_idx),
+            np.asarray(self.breakpoint_orient),
+            self.transition_penalty,
+        )
 
     def create_cn_states(self, num_clones, num_alleles, cn_max, cn_diff_max, normal_contamination):
         """ Create a list of allele specific copy number states.

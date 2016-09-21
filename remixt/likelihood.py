@@ -1157,7 +1157,15 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
         self.hdel_mu = np.array([1e-6])
         self.loh_p = np.array([1e-3])
 
-        self.h_param = OptimizeParameter(
+        self.negbin = NegBinDistribution()
+        self.negbin_hdel = NegBinDistribution()
+
+        self.betabin = BetaBinUniformDistribution(dist_type=BetaBinReflectedDistribution)
+        self.betabin_loh = BetaBinUniformDistribution(dist_type=BetaBinReflectedDistribution)
+
+    @property
+    def h_param(self):
+        return OptimizeParameter(
             name='h',
             fset=self._set_h,
             fget=self._get_h,
@@ -1165,7 +1173,9 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
             log_likelihood_partial=self.log_likelihood_partial_h,
         )
 
-        self.r_param = OptimizeParameter(
+    @property
+    def r_param(self):
+        return OptimizeParameter(
             name='r',
             fset=self._set_r,
             fget=self._get_r,
@@ -1173,7 +1183,9 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
             log_likelihood_partial=self.log_likelihood_partial_r,
         )
 
-        self.M_param = OptimizeParameter(
+    @property
+    def M_param(self):
+        return OptimizeParameter(
             name='M',
             fset=self._set_M,
             fget=self._get_M,
@@ -1181,7 +1193,9 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
             log_likelihood_partial=self.log_likelihood_partial_M,
         )
 
-        self.z_param = OptimizeParameter(
+    @property
+    def z_param(self):
+        return OptimizeParameter(
             name='z',
             fset=self._set_z,
             fget=self._get_z,
@@ -1189,7 +1203,9 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
             log_likelihood_partial=self.log_likelihood_partial_z,
         )
 
-        self.hdel_mu_param = OptimizeParameter(
+    @property
+    def hdel_mu_param(self):
+        return OptimizeParameter(
             name='hdel_mu',
             fset=self._set_hdel_mu,
             fget=self._get_hdel_mu,
@@ -1197,19 +1213,15 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
             log_likelihood_partial=self.log_likelihood_partial_hdel_mu,
         )
 
-        self.loh_p_param = OptimizeParameter(
+    @property
+    def loh_p_param(self):
+        return OptimizeParameter(
             name='loh_p',
             fset=self._set_loh_p,
             fget=self._get_loh_p,
             bounds=(1e-16, 0.5),
             log_likelihood_partial=self.log_likelihood_partial_loh_p,
         )
-
-        self.negbin = NegBinDistribution()
-        self.negbin_hdel = NegBinDistribution()
-
-        self.betabin = BetaBinUniformDistribution(dist_type=BetaBinReflectedDistribution)
-        self.betabin_loh = BetaBinUniformDistribution(dist_type=BetaBinReflectedDistribution)
 
     def _get_r(self):
         return np.array([

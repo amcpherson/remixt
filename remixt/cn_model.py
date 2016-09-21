@@ -195,16 +195,6 @@ class BreakpointModel(object):
         self.emission.add_segment_length_mask(self.min_segment_length)
         self.emission.add_proportion_genotyped_mask(self.min_proportion_genotyped)
 
-        # Parameters of the likelihood to include in optimization
-        self.likelihood_params = [
-            self.emission.h_param,
-            self.emission.r_param,
-            self.emission.M_param,
-            # self.emission.z_param,
-            self.emission.hdel_mu_param,
-            self.emission.loh_p_param,
-        ]
-
         self.model = remixt.model1a.RemixtModel(
             self.M, self.N1, len(self.breakpoints),
             self.max_copy_number,
@@ -219,6 +209,18 @@ class BreakpointModel(object):
         self.prev_elbo = None
         self.prev_elbo_diff = None
         self.num_update_iter = 1
+        
+    
+    @property
+    def likelihood_params(self):
+        return [
+            self.emission.h_param,
+            self.emission.r_param,
+            self.emission.M_param,
+            # self.emission.z_param,
+            self.emission.hdel_mu_param,
+            self.emission.loh_p_param,
+        ]
 
 
     def get_model_data(self):
@@ -272,7 +274,9 @@ class BreakpointModel(object):
 
 
     def _check_elbo(self, prev_elbo, name):
+        threshold = -1e-6
         elbo = self.model.calculate_elbo()
+        print 'elbo: {:.10f}'.format(elbo)
         print 'elbo diff: {:.10f}'.format(elbo - prev_elbo)
         if elbo - prev_elbo < threshold:
             raise Exception('elbo error for step {}!'.format(name))
@@ -286,9 +290,9 @@ class BreakpointModel(object):
 
         if self.prev_elbo is None:
             self.prev_elbo = self.model.calculate_elbo()
+            print 'elbo: {:.10f}'.format(self.prev_elbo)
 
         elbo = self.prev_elbo
-        threshold = -1e-6
 
         print 'update_p_cn'
         self.model.update_p_cn()
@@ -312,6 +316,7 @@ class BreakpointModel(object):
         
         if not check_elbo:
             elbo = self.model.calculate_elbo()
+            print 'elbo: {:.10f}'.format(elbo)
             
         self.prev_elbo_diff = self.prev_elbo - elbo
         self.prev_elbo = elbo
