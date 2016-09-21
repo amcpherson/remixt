@@ -85,10 +85,9 @@ def fit_task(
         
     fit_results = fit(experiment, init_params, config)
     
-    # Store in pickle format
-    with open(results_filename, 'w') as f:
-        pickle.dump(fit_results, f)
-    
+    # Store in npz format
+    np.savez_compressed(results_filename, **fit_results)
+
 
 def fit(experiment, init_params, config):
     h_init = np.array([
@@ -129,6 +128,9 @@ def fit(experiment, init_params, config):
     fit_results['h'] = model.h
     fit_results['cn'] = model.optimal_cn()
     fit_results['brk_cn'] = model.optimal_brk_cn()
+
+    # Low level model data for debugging
+    fit_results['model_data'] = model.get_model_data()
 
     # Save estimation statistics
     fit_results['stats'] = dict()
@@ -186,11 +188,10 @@ def collate(collate_filename, experiment_filename, init_results_filename, fit_re
     # Extract the statistics for selecting solutions
     stats_table = list()
     for init_id, results_filename in fit_results_filenames.iteritems():
-        with open(results_filename, 'r') as f:
-            results = pickle.load(f)
-            stats = results['stats']
-            stats['init_id'] = init_id
-            stats_table.append(stats)
+        results = np.load(results_filename)
+        stats = dict(results['stats'])
+        stats['init_id'] = init_id
+        stats_table.append(stats)
     stats_table = pd.DataFrame(stats_table)
 
     # Write out selected solutions
@@ -205,8 +206,7 @@ def collate(collate_filename, experiment_filename, init_results_filename, fit_re
             experiment = pickle.load(f)
 
         for init_id, results_filename in fit_results_filenames.iteritems():
-            with open(results_filename, 'r') as f:
-                results = pickle.load(f)
-                store_fit_results(collated, experiment, results, 'solutions/solution_{0}'.format(init_id))
+            results = np.load(results_filename)
+            store_fit_results(collated, experiment, results, 'solutions/solution_{0}'.format(init_id))
 
         store_optimal_solution(stats_table, collated, config)

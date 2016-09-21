@@ -221,14 +221,22 @@ class BreakpointModel(object):
         self.num_update_iter = 1
 
 
-    def _write_model(self, model_filename):
+    def get_model_data(self):
         data = {}
         for a in dir(self.model):
             if a in ['__doc__', '__pyx_vtable__']:
                 continue
             if callable(getattr(self.model, a)):
                 continue
-            data[a] = getattr(self.model, a)
+            if type(getattr(self.model, a)).__name__ == '_memoryviewslice':
+                data[a] = np.asarray(getattr(self.model, a))
+            else:
+                data[a] = getattr(self.model, a)
+        return data
+
+
+    def _write_model(self, model_filename):
+        data = self.get_model_data()
         pickle.dump(data, open(model_filename, 'w'))
 
 
