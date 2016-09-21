@@ -87,6 +87,10 @@ def fit_task(
     
     # Store in npz format
     np.savez_compressed(results_filename, **fit_results)
+    
+    # Remove automatically added extension if necessary
+    if not results_filename.endswith('.npz'):
+        os.rename(results_filename + '.npz', results_filename)
 
 
 def fit(experiment, init_params, config):
