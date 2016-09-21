@@ -120,7 +120,6 @@ cdef class RemixtModel:
     cdef public int num_cn_states
     cdef public np.int64_t[:, :, :] cn_states
 
-    cdef public np.int64_t[:, :] x
     cdef public np.int64_t[:] is_telomere
     cdef public np.int64_t[:] breakpoint_idx
     cdef public np.int64_t[:] breakpoint_orient
