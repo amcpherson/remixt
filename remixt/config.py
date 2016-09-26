@@ -39,13 +39,8 @@ def get_chromosomes(config, ref_data_dir):
     return get_chromosome_lengths(config, ref_data_dir).keys()
     
     
-def get_sub_config(config, name):
-    sub_config = config.get(name, dict())
-    
-    # Add global config variables that are not dictionaries (other sub configs)
-    for k, v in config.iteritems():
-        if not isinstance(v, dict):
-            sub_config[k] = v
-            
-    return sub_config
-    
+def get_sample_config(config, sample_id):
+    sample_config = config.copy()
+    sample_config.update(config.get('sample_specific', dict()).get(sample_id, dict()))
+    return sample_config
+
