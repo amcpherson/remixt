@@ -278,6 +278,18 @@ def plot_cnv_scatter(ax, cnv, major_col='major', minor_col='minor', highlight_co
     # Scatter color
     cnv = cnv.merge(chromosome_colors)
 
+    major_samples = remixt.utils.weighted_resample(cnv[major_col].values, cnv['length'].values)
+    major_min = np.percentile(major_samples, 1)
+    major_max = np.percentile(major_samples, 99)
+    major_margin = 0.25 * (major_max - major_min)
+    xlim = (major_min - major_margin, major_max + major_margin)
+
+    minor_samples = remixt.utils.weighted_resample(cnv[minor_col].values, cnv['length'].values)
+    minor_min = np.percentile(minor_samples, 1)
+    minor_max = np.percentile(minor_samples, 99)
+    minor_margin = 0.25 * (minor_max - minor_min)
+    ylim = (minor_min - minor_margin, minor_max + minor_margin)
+
     if highlight_col is not None:
         cnv_greyed = cnv[~cnv[highlight_col]]
         cnv = cnv[cnv[highlight_col]]
@@ -289,18 +301,6 @@ def plot_cnv_scatter(ax, cnv, major_col='major', minor_col='minor', highlight_co
         s=cnv['scatter_size'], facecolor=cnv['color'], edgecolor=cnv['color'],
         linewidth=0.0, zorder=2)
     
-    major_samples = remixt.utils.weighted_resample(cnv[major_col].values, cnv['length'].values)
-    major_min = np.percentile(major_samples, 5)
-    major_max = np.percentile(major_samples, 95)
-    major_margin = 0.25 * (major_max - major_min)
-    xlim = (major_min - major_margin, major_max + major_margin)
-
-    minor_samples = remixt.utils.weighted_resample(cnv[minor_col].values, cnv['length'].values)
-    minor_min = np.percentile(minor_samples, 5)
-    minor_max = np.percentile(minor_samples, 95)
-    minor_margin = 0.25 * (minor_max - minor_min)
-    ylim = (minor_min - minor_margin, minor_max + minor_margin)
-
     ax.set_xlim(xlim)
     ax.set_xlabel('major')
     ax.set_ylim(ylim)
