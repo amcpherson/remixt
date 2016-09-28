@@ -31,19 +31,11 @@ def init(
     init_h_mono = remixt.analysis.readdepth.calculate_candidate_h_monoclonal(minor_modes)
 
     # Calculate candidate haploid depths for normal contamination and multiple clones
-    # Filter candidates with inappropriate ploidy
     init_h_params = []
     ploidy_estimates = []
     for mode_idx, h_mono in enumerate(init_h_mono):
         estimated_ploidy = remixt.analysis.readdepth.estimate_ploidy(h_mono, experiment)
         assert not np.isinf(estimated_ploidy) and not np.isnan(estimated_ploidy)
-        ploidy_estimates.append(estimated_ploidy)
-
-        if min_ploidy is not None and estimated_ploidy < min_ploidy:
-            continue
-
-        if max_ploidy is not None and estimated_ploidy > max_ploidy:
-            continue
 
         for mix_frac in tumour_mix_fractions:
             params = {
@@ -54,11 +46,31 @@ def init(
             }
 
             init_h_params.append(params)
+            ploidy_estimates.append(estimated_ploidy)
 
-    # Check if min and max ploidy was too strict
-    if len(init_h_params) == 0:
-        raise Exception('no valid ploidy estimates in range {}-{}, candidates are {}'.format(
-            min_ploidy, max_ploidy, repr(ploidy_estimates)))
+    # Filter candidates with unacceptable ploidy
+    def ploidy_filter_dist(ploidy):
+        if min_ploidy is not None and ploidy < min_ploidy:
+            return min_ploidy - ploidy
+
+        if max_ploidy is not None and ploidy > max_ploidy:
+            return ploidy - max_ploidy
+            
+        return 0.
+
+    def ploidy_filter(ploidy):
+        return ploidy_filter_dist(ploidy) == 0.
+
+    is_ploidy_filtered = [ploidy_filter(a) for a in ploidy_estimates]
+    
+    # Check if min and max ploidy was too strict and select single closest ploidy
+    if not any(is_ploidy_filtered):
+        ploidy_dists = [ploidy_filter_dist(a) for a in ploidy_estimates]
+        is_ploidy_filtered = [a == min(ploidy_dists) for a in ploidy_dists]
+        
+    # Filter ploidy and h initializations
+    init_h_params = [a for i, a in enumerate(init_h_params) if is_ploidy_filtered[i]]
+    ploidy_estimates = [a for i, a in enumerate(ploidy_estimates) if is_ploidy_filtered[i]]
 
     # Attempt several divergence parameters
     init_params = []
