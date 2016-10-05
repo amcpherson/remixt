@@ -126,7 +126,7 @@ cdef class RemixtModel:
     cdef public np.float64_t transition_penalty
 
     cdef public np.float64_t[:, :, :] p_breakpoint
-    cdef public np.float64_t[:, :, :] p_allele
+    cdef public np.float64_t[:, :] p_allele
 
     cdef public np.float64_t hmm_log_norm_const
     cdef public np.float64_t[:, :] framelogprob
@@ -177,11 +177,9 @@ cdef class RemixtModel:
         self.p_breakpoint = p_breakpoint
 
         # Initialize to prefer no allele swaps
-        self.p_allele = np.ones((self.num_segments, 2, 2))
-        self.p_allele[:, 0, 0] = 0.49
-        self.p_allele[:, 0, 1] = 0.01
-        self.p_allele[:, 1, 0] = 0.49
-        self.p_allele[:, 1, 1] = 0.01
+        self.p_allele = np.ones((self.num_segments, self.num_alleles))
+        self.p_allele[:, 0] = 0.5
+        self.p_allele[:, 1] = 0.5
 
         self.hmm_log_norm_const = 0.
         self.framelogprob = np.ones((self.num_segments, self.num_cn_states))
@@ -237,20 +235,19 @@ cdef class RemixtModel:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef add_log_transmat(self, np.float64_t[:, :] log_transmat, int m, int ell, int w, np.float64_t mult_const):
+    cdef add_log_transmat(self, np.float64_t[:, :] log_transmat, int m, int ell, np.float64_t mult_const):
         """ Add log transition matrix for no breakpoint.
         """
 
-        cdef int s_1, s_2, ell_
+        cdef int s_1, s_2
 
-        ell_ = w * (1 - ell) + (1 - w) * ell
         for s_1 in range(self.num_cn_states):
             for s_2 in range(self.num_cn_states):
-                log_transmat[s_1, s_2] += mult_const * fabs(self.cn_states[s_1, m, ell] - self.cn_states[s_2, m, ell_])
+                log_transmat[s_1, s_2] += mult_const * fabs(self.cn_states[s_1, m, ell] - self.cn_states[s_2, m, ell])
 
     @cython.boundscheck(False)
     @cython.wraparound(True)
-    cdef add_log_transmat_expectation_brk(self, np.float64_t[:, :] log_transmat, int m, int ell, int w,
+    cdef add_log_transmat_expectation_brk(self, np.float64_t[:, :] log_transmat, int m, int ell,
                                          np.float64_t[:] p_breakpoint, int breakpoint_orient,
                                          np.float64_t mult_const):
         """ Add expected log transition matrix wrt breakpoint
@@ -266,28 +263,26 @@ cdef class RemixtModel:
             for cn_b in range(self.cn_max + 1):
                 p_b[d] += p_breakpoint[cn_b] * abs(d - breakpoint_orient * cn_b)
 
-        ell_ = w * (1 - ell) + (1 - w) * ell
         for s_1 in range(self.num_cn_states):
             for s_2 in range(self.num_cn_states):
-                log_transmat[s_1, s_2] += mult_const * p_b[self.cn_states[s_1, m, ell] - self.cn_states[s_2, m, ell_]]
+                log_transmat[s_1, s_2] += mult_const * p_b[self.cn_states[s_1, m, ell] - self.cn_states[s_2, m, ell]]
 
     @cython.boundscheck(False)
     @cython.wraparound(True)
     cdef add_log_breakpoint_p_expectation_cn(self, np.float64_t[:] log_breakpoint_p, np.float64_t[:, :] p_cn,
-                                            int m, int ell, int w, int breakpoint_orient, np.float64_t mult_const):
+                                            int m, int ell, int breakpoint_orient, np.float64_t mult_const):
         """ Calculate the expected log transition matrix wrt pairwise
         copy number probability.
         """
 
-        cdef int d, s_1, s_2, cn_b, ell_
+        cdef int d, s_1, s_2, cn_b
         cdef np.ndarray[np.float64_t, ndim=1] p_d
 
         p_d = np.zeros(((self.cn_max + 1) * 2,))
 
-        ell_ = w * (1 - ell) + (1 - w) * ell
         for s_1 in range(self.num_cn_states):
             for s_2 in range(self.num_cn_states):
-                d = self.cn_states[s_1, m, ell] - self.cn_states[s_2, m, ell_]
+                d = self.cn_states[s_1, m, ell] - self.cn_states[s_2, m, ell]
                 p_d[d] += p_cn[s_1, s_2]
 
         for cn_b in range(self.cn_max + 1):
@@ -297,40 +292,35 @@ cdef class RemixtModel:
     @cython.boundscheck(False)
     @cython.wraparound(False)
     cdef void calculate_log_transmat_regular(self, int n, np.float64_t[:, :] log_transmat):
-        cdef int v, w, m, ell
+        cdef int m, ell
 
         log_transmat[:] = 0.
 
-        for v in range(2):
-            for w in range(2):
-                mult_const = -self.transition_penalty * self.p_allele[n, v, w]
-
-                for m in range(self.num_clones):
-                    for ell in range(self.num_alleles):
-                        self.add_log_transmat(log_transmat, m, ell, w, mult_const)
+        for m in range(self.num_clones):
+            for ell in range(self.num_alleles):
+                self.add_log_transmat(log_transmat, m, ell, -self.transition_penalty)
         
     @cython.boundscheck(False)
     @cython.wraparound(False)
     cdef void calculate_log_transmat_breakpoint(self, int n, np.float64_t[:, :] log_transmat):
-        cdef int v, w, m, ell
+        cdef int v, m, ell
 
         log_transmat[:] = 0.
 
         for v in range(2):
-            for w in range(2):
-                for m in range(self.num_clones):
-                    mult_const = -self.transition_penalty * self.p_allele[n, v, w]
+            for m in range(self.num_clones):
+                mult_const = -self.transition_penalty * self.p_allele[n, v]
 
-                    for ell in range(self.num_alleles):
-                        if ell == v:
-                            self.add_log_transmat_expectation_brk(
-                                log_transmat, m, ell, w,
-                                self.p_breakpoint[self.breakpoint_idx[n], m, :],
-                                self.breakpoint_orient[n],
-                                mult_const)
+                for ell in range(self.num_alleles):
+                    if ell == v:
+                        self.add_log_transmat_expectation_brk(
+                            log_transmat, m, ell,
+                            self.p_breakpoint[self.breakpoint_idx[n], m, :],
+                            self.breakpoint_orient[n],
+                            mult_const)
 
-                        else:
-                            self.add_log_transmat(log_transmat, m, ell, w, mult_const)
+                    else:
+                        self.add_log_transmat(log_transmat, m, ell, mult_const)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -339,7 +329,7 @@ cdef class RemixtModel:
         allele probabilities.
         """
 
-        cdef int v, w, m, ell
+        cdef int v, m, ell
         cdef np.float64_t mult_const
 
         if self.is_telomere[n] > 0:
@@ -402,7 +392,7 @@ cdef class RemixtModel:
         """ Update the breakpoint approximating distributions.
         """
 
-        cdef int n, m, v, w, ell, k
+        cdef int n, m, v, ell, k
         cdef np.ndarray[np.float64_t, ndim=3] log_p_breakpoint = np.zeros((self.num_breakpoints, self.num_clones, self.cn_max + 1))
 
         for n in range(0, self.num_segments - 1):
@@ -411,15 +401,14 @@ cdef class RemixtModel:
 
             for m in range(self.num_clones):
                 for v in range(2):
-                    for w in range(2):
-                        mult_const = -self.transition_penalty * self.p_allele[n, v, w]
+                    mult_const = -self.transition_penalty * self.p_allele[n, v]
 
-                        for ell in range(self.num_clones):
-                            if ell == v:
-                                self.add_log_breakpoint_p_expectation_cn(
-                                    log_p_breakpoint[self.breakpoint_idx[n], m, :],
-                                    self.joint_posterior_marginals[n, :, :],
-                                    m, ell, w, self.breakpoint_orient[n], mult_const)
+                    for ell in range(self.num_clones):
+                        if ell == v:
+                            self.add_log_breakpoint_p_expectation_cn(
+                                log_p_breakpoint[self.breakpoint_idx[n], m, :],
+                                self.joint_posterior_marginals[n, :, :],
+                                m, ell, self.breakpoint_orient[n], mult_const)
 
         for k in range(self.num_breakpoints):
             for m in range(self.num_clones):
@@ -431,10 +420,10 @@ cdef class RemixtModel:
         """ Update the rearranged allele approximating distribution.
         """
 
-        cdef int n, v, w, m, ell
+        cdef int n, v, m, ell
 
         cdef np.ndarray[np.float64_t, ndim=2] log_transmat = np.empty((self.num_cn_states, self.num_cn_states))
-        cdef np.ndarray[np.float64_t, ndim=2] log_p_allele = np.empty((2, 2))
+        cdef np.ndarray[np.float64_t, ndim=1] log_p_allele = np.empty((self.num_alleles,))
 
         for n in range(0, self.num_segments - 1):
             if self.breakpoint_idx[n] < 0:
@@ -443,25 +432,24 @@ cdef class RemixtModel:
             log_p_allele[:] = 0.
 
             for v in range(2):
-                for w in range(2):
-                    for m in range(self.num_clones):
-                        for ell in range(self.num_alleles):
-                            log_transmat[:] = 0.
+                for m in range(self.num_clones):
+                    for ell in range(self.num_alleles):
+                        log_transmat[:] = 0.
 
-                            if v == ell:
-                                self.add_log_transmat_expectation_brk(
-                                    log_transmat, m, ell, w,
-                                    self.p_breakpoint[self.breakpoint_idx[n], m, :],
-                                    self.breakpoint_orient[n],
-                                    -self.transition_penalty)
+                        if v == ell:
+                            self.add_log_transmat_expectation_brk(
+                                log_transmat, m, ell,
+                                self.p_breakpoint[self.breakpoint_idx[n], m, :],
+                                self.breakpoint_orient[n],
+                                -self.transition_penalty)
 
-                            else:
-                                self.add_log_transmat(log_transmat, m, ell, w, -self.transition_penalty)
+                        else:
+                            self.add_log_transmat(log_transmat, m, ell, -self.transition_penalty)
 
-                            log_p_allele[v, w] += np.sum(
-                                log_transmat * self.joint_posterior_marginals[n, :, :])
+                        log_p_allele[v] += np.sum(
+                            log_transmat * self.joint_posterior_marginals[n, :, :])
 
-            _exp_normalize2(self.p_allele[n, :, :], log_p_allele)
+            _exp_normalize(self.p_allele[n, :], log_p_allele)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
