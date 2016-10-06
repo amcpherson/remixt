@@ -1030,8 +1030,8 @@ class ExperimentSampler(object):
 
         self.emission_model = params.get('emission_model', 'negbin')
 
-        if self.emission_model not in ('poisson', 'negbin', 'normal'):
-            raise ValueError('emission_model must be one of "poisson", "negbin", "normal"')
+        if self.emission_model not in ('poisson', 'negbin', 'normal', 'full'):
+            raise ValueError('emission_model must be one of "poisson", "negbin", "normal", "full"')
 
         self.noise_prior = params.get('noise_prior', 0.01)
 
@@ -1085,35 +1085,71 @@ class ExperimentSampler(object):
         elif self.emission_model == 'normal':
             x = np.zeros(mu.shape)
 
-            a, b = 0.18751413009612153, 1.3460546185667863
+            mu_total = mu[:, 2]
+            a, b = 0.14514556880927346, 1.3745893696636038
+            variance = a * mu_total**b
+            variance[variance == 0] = 50.
 
-            x[:, 2] = np.array([np.random.normal(loc=_mu, scale=(a * _mu**b)**0.5) for _mu in mu[:, 2]]).reshape(mu[:, 2].shape)
+            x[:, 2] = np.random.normal(loc=mu_total, scale=variance**0.5)
+            
+            mu_allele = mu[:, 0:2]
+            a, b = 0.040819090849598873, 1.4981089638117262
+            variance = a * mu_allele**b
+            variance[variance == 0] = 50.
 
-            a, b = 0.053728057000299798, 1.4633092477154768
-
-            x[:, 0:2] = np.array([np.random.normal(loc=_mu, scale=(a * _mu**b)**0.5) for _mu in mu[:, 0:2]]).reshape(mu[:, 0:2].shape)
+            x[:, 0:2] = np.random.normal(loc=mu_allele, scale=variance**0.5)
 
             x[x < 0] = 0
             x = x.round().astype(int)
 
-        if self.noise_prior is not None:
-            noise_range_total = mu[:, 2].max()
-            noise_range_total *= 1.25
+            if self.noise_prior is not None:
+                noise_range_total = mu[:, 2].max()
+                noise_range_total *= 1.25
 
-            is_outlier_total = np.random.choice(
-                [True, False], size=mu[:, 2].shape,
-                p=[self.noise_prior, 1. - self.noise_prior])
+                is_outlier_total = np.random.choice(
+                    [True, False], size=mu[:, 2].shape,
+                    p=[self.noise_prior, 1. - self.noise_prior])
 
-            x[is_outlier_total, 2] = (np.random.randint(noise_range_total, size=mu[:, 2].shape))[is_outlier_total]
+                x[is_outlier_total, 2] = (np.random.randint(noise_range_total, size=mu[:, 2].shape))[is_outlier_total]
 
-            is_outlier_allele = np.random.choice(
-                [True, False], size=mu[:, 0].shape,
-                p=[self.noise_prior, 1. - self.noise_prior])
+                is_outlier_allele = np.random.choice(
+                    [True, False], size=mu[:, 0].shape,
+                    p=[self.noise_prior, 1. - self.noise_prior])
 
-            outlier_allele_ratio = np.random.beta(2, 2, size=mu[:, 0].shape)
+                outlier_allele_ratio = np.random.beta(2, 2, size=mu[:, 0].shape)
 
-            x[is_outlier_allele, 0] = (outlier_allele_ratio * x[:, 0:2].sum(axis=1))[is_outlier_allele]
-            x[is_outlier_allele, 1] = ((1. - outlier_allele_ratio) * x[:, 0:2].sum(axis=1))[is_outlier_allele]
+                x[is_outlier_allele, 0] = (outlier_allele_ratio * x[:, 0:2].sum(axis=1))[is_outlier_allele]
+                x[is_outlier_allele, 1] = ((1. - outlier_allele_ratio) * x[:, 0:2].sum(axis=1))[is_outlier_allele]
+                
+        elif self.emission_model == 'full':
+            x = np.zeros(mu.shape)
+
+            mu_total = mu[:, 2]
+            a, b = 0.14514556880927346, 1.3745893696636038
+            variance = a * mu_total**b
+            variance[variance == 0] = 50.
+
+            x[:, 2] = np.random.normal(loc=mu_total, scale=variance**0.5)
+
+            M = 1200
+            loh_p = 0.01
+            noise_prior = 0.03
+
+            mu_total = mu[:, 2]
+            p_true = mu[:, 0] / mu[:, 0:2].sum(axis=1)
+            
+            p_true[p_true == 0] = loh_p
+            p_true[p_true == 1] = loh_p
+
+            p_dispersion = np.random.beta(M * p_true, M * (1 - p_true))
+            p_noise = np.random.random(size=p_true.shape)
+            p_is_noise = np.random.random(size=p_true.shape) <= noise_prior
+            p_binomial = np.where(p_is_noise, p_noise, p_dispersion)
+            
+            allele_reads = (x[:, 2] * phi).astype(int)
+            
+            x[:, 0] = np.random.binomial(allele_reads, p_binomial)
+            x[:, 1] = allele_reads.astype(float) - x[:, 0]
 
         # Reorder x as segment * major/minor/total and record
         # whether the major allele refers to the first (a) allele

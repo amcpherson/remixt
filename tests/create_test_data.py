@@ -13,8 +13,9 @@ def generate_experiment(experiment_filename, experiment_plot_filename):
 
     params = {
         'N': 5000,
+        'frac_normal': 0.4,
         'frac_clone': [0.4, 0.2],
-        'emission_model': 'normal',
+        'emission_model': 'full',
         'num_ancestral_events': 100,
         'num_descendent_events': 50,
     }
