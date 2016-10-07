@@ -377,7 +377,7 @@ def evaluate_cn_results(genome_mixture, cn_data_table, order_true, order_pred, a
         allow_swap (bool): allow copy number swapping with no penalty
 
     Returns:
-        dict: dictionary of evaluation statistics
+        dict: dictionary of pandas.DataFrame with evaluation statistics
 
     Predicted copy number data `cn_data_table` should have columns 'chromosome', 'start', 'end',
     in addition to either 'major_m', 'minor_m' for clone 'm', or 'total_m' for allele non-specific
@@ -447,11 +447,16 @@ def evaluate_cn_results(genome_mixture, cn_data_table, order_true, order_pred, a
     proportion_clonal_correct = float((is_clonal_correct * segment_lengths).sum()) / float(segment_lengths.sum())
     proportion_subclonal_correct = float((is_subclonal_correct * segment_lengths).sum()) / float(segment_lengths.sum())
 
-    results = dict()
-    results['proportion_cn_correct'] = proportion_cn_correct
-    results['proportion_dom_cn_correct'] = proportion_dom_cn_correct
-    results['proportion_clonal_correct'] = proportion_clonal_correct
-    results['proportion_subclonal_correct'] = proportion_subclonal_correct
+    evaluation = dict()
+    evaluation['proportion_cn_correct'] = proportion_cn_correct
+    evaluation['proportion_dom_cn_correct'] = proportion_dom_cn_correct
+    evaluation['proportion_clonal_correct'] = proportion_clonal_correct
+    evaluation['proportion_subclonal_correct'] = proportion_subclonal_correct
+    evaluation = pd.Series(evaluation)
+    
+    results = {
+        'cn_evaluation': evaluation,
+    }
 
     return results
 
@@ -467,7 +472,7 @@ def evaluate_brk_cn_results(genome_mixture, brk_cn_table, order_true, order_pred
         allow_swap (bool): allow copy number swapping with no penalty
 
     Returns:
-        dict: dictionary of evaluation statistics
+        dict: dictionary of pandas.DataFrame with evaluation statistics
 
     Predicted breakpoint copy number data `brk_cn_table` should have columns
     'n_1', 'side_1', 'n_2', 'side_2', in addition to either 'cn_m', for clone 'm'.
@@ -532,14 +537,20 @@ def evaluate_brk_cn_results(genome_mixture, brk_cn_table, order_true, order_pred
     data['true_subclonal'] = (data[true_cols] == 0).any(axis=1) & data['true_present']
     data['pred_subclonal'] = (data[pred_cols] == 0).any(axis=1) & data['pred_present']
 
-    results = dict()
-    results['brk_cn_correct_proportion'] = float(data['cn_correct'].sum()) / float(len(data.index))
-    results['brk_cn_present_num_true'] = float(data['true_present'].sum())
-    results['brk_cn_present_num_pos'] = float(data['pred_present'].sum())
-    results['brk_cn_present_num_true_pos'] = float((data['pred_present'] & data['true_present']).sum())
-    results['brk_cn_subclonal_num_true'] = float(data['true_subclonal'].sum())
-    results['brk_cn_subclonal_num_pos'] = float(data['pred_subclonal'].sum())
-    results['brk_cn_subclonal_num_true_pos'] = float((data['pred_subclonal'] & data['true_subclonal']).sum())
+    evaluation = dict()
+    evaluation['brk_cn_correct_proportion'] = float(data['cn_correct'].sum()) / float(len(data.index))
+    evaluation['brk_cn_present_num_true'] = float(data['true_present'].sum())
+    evaluation['brk_cn_present_num_pos'] = float(data['pred_present'].sum())
+    evaluation['brk_cn_present_num_true_pos'] = float((data['pred_present'] & data['true_present']).sum())
+    evaluation['brk_cn_subclonal_num_true'] = float(data['true_subclonal'].sum())
+    evaluation['brk_cn_subclonal_num_pos'] = float(data['pred_subclonal'].sum())
+    evaluation['brk_cn_subclonal_num_true_pos'] = float((data['pred_subclonal'] & data['true_subclonal']).sum())
+    evaluation = pd.Series(evaluation)
+    
+    results = {
+        'brk_cn_table': data,
+        'brk_cn_evaluation': evaluation,
+    }
 
     return results
 
@@ -552,6 +563,9 @@ def evaluate_results(genome_mixture, cn_table, brk_cn_table, mix_pred):
         cn_table (pandas.DataFrame): predicted copy number data
         brk_cn_table (pandas.DataFrame): predicted copy number table
         mix_pred (numpy.array): predicted mixture
+
+    Returns:
+        dict: dictionary of pandas.DataFrame with evaluation statistics
 
     Predicted copy number data `cn_table` should have columns 'chromosome', 'start', 'end',
     in addition to either 'major_m', 'minor_m' for clone 'm', or 'total_m' for allele non-specific
@@ -579,12 +593,13 @@ def evaluate_results(genome_mixture, cn_table, brk_cn_table, mix_pred):
 
     brk_cn_results = evaluate_brk_cn_results(genome_mixture, brk_cn_table, order_true, order_pred, allow_swap)
     results.update(brk_cn_results)
-
+    
+    mix_results = {}
     for idx, f in enumerate(mix_true):
-        results['mix_true_'+str(idx)] = f
-
+        mix_results['mix_true_'+str(idx)] = f
     for idx, f in enumerate(mix_pred):
-        results['mix_pred_'+str(idx)] = f
+        mix_results['mix_pred_'+str(idx)] = f
+    results['mix_results'] = pd.Series(mix_results)
 
     return results
 
@@ -624,10 +639,10 @@ def evaluate_results_task(
         raise ValueError('either mixture_filename or experiment_filename must be set')
 
     evaluation = evaluate_results(mixture, cn_table, brk_cn_table, mix_pred)
-    evaluation = pd.DataFrame([evaluation])
 
     with pd.HDFStore(evaluation_filename, 'w') as store:
-        store['/evaluation'] = evaluation
+        for key, data in evaluation.iteritems():
+            store['/' + key] = data
 
 
 def merge_evaluations(merged_filename, sim_defs, evaluation_filenames, key_names):
