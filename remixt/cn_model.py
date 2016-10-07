@@ -367,7 +367,17 @@ class BreakpointModel(object):
         return cn[self.seg_fwd_remap]
 
     def optimal_brk_cn(self):
-        brk_cn = np.argmax(self.model.p_breakpoint, axis=-1)
+        brk_cn = []
+        
+        for brk_idx, p_breakpoint in enumerate(np.asarray(self.model.p_breakpoint)):
+            prob = p_breakpoint.max()
+            s_b, v_1, v_2 = np.where(p_breakpoint == prob)
+            s_b = s_b[0]
+            v_1 = v_1[0]
+            v_2 = v_2[0]
+            
+            brk_cn.append(np.asarray(self.model.brk_states)[s_b])
+            
         brk_cn = dict(zip(self.breakpoints, brk_cn))
 
         return brk_cn
