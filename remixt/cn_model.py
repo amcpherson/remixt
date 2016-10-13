@@ -215,11 +215,11 @@ class BreakpointModel(object):
     def likelihood_params(self):
         return [
             self.emission.h_param,
-            self.emission.r_param,
-            self.emission.M_param,
+            # self.emission.r_param,
+            # self.emission.M_param,
             # self.emission.z_param,
-            self.emission.hdel_mu_param,
-            self.emission.loh_p_param,
+            # self.emission.hdel_mu_param,
+            # self.emission.loh_p_param,
         ]
 
 
@@ -284,7 +284,7 @@ class BreakpointModel(object):
         return elbo
         
         
-    def update(self, check_elbo=True):
+    def update(self, check_elbo=False):
         """ Single update of all variational parameters.
         """
 
@@ -361,6 +361,10 @@ class BreakpointModel(object):
         return elbo
 
     def optimal_cn(self):
+        self.model.argmax_alleles()
+        self.model.update_p_cn()
+        self.model.update_p_breakpoint()
+
         cn = np.zeros((self.model.num_segments, self.model.num_clones, self.model.num_alleles), dtype=int)
         self.model.infer_cn(cn)
 
@@ -395,10 +399,6 @@ class BreakpointModel(object):
     @property
     def p_breakpoint(self):
         return np.asarray(self.model.p_breakpoint)
-
-    @property
-    def p_allele(self):
-        return np.asarray(self.model.p_allele)
 
 
 def decode_breakpoints_naive(cn, adjacencies, breakpoints):
