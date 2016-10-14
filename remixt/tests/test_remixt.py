@@ -7,6 +7,7 @@ import pickle
 import numpy as np
 import pandas as pd
 import random
+import joblib
 import scipy
 import scipy.optimize
 
@@ -314,7 +315,10 @@ class remixt_unittest(unittest.TestCase):
         # s.strip_dirs().sort_stats("cumtime").print_stats()
         # raise
         fit_results = remixt.analysis.pipeline.fit(experiment, init_params, config)
-
+        
+        # with open('test_model.gz', 'w') as f:
+        #     pickle.dump(fit_results, f)
+        
         h = fit_results['h']
         cn = fit_results['cn']
         brk_cn = fit_results['brk_cn']
@@ -322,8 +326,10 @@ class remixt_unittest(unittest.TestCase):
         cn_table = remixt.analysis.experiment.create_cn_table(experiment, cn, h)
         brk_cn_table = remixt.analysis.experiment.create_brk_cn_table(experiment, brk_cn)
 
-        results_table = remixt.simulations.pipeline.evaluate_results(experiment.genome_mixture, cn_table, brk_cn_table, h / h.sum())
-        print results_table
+        evaluation = remixt.simulations.pipeline.evaluate_results(experiment.genome_mixture, cn_table, brk_cn_table, h / h.sum())
+        with pd.HDFStore('test.h5', 'w') as store:
+            for key, data in evaluation.iteritems():
+                store['/' + key] = data
 
         print 'creating visualization'
         remixt.visualize.create_genome_visualization(cn_table, brk_cn_table, 'test.html')
