@@ -259,8 +259,6 @@ class BreakpointModel(object):
         cn_states = []
         for s in xrange(self.model.num_cn_states):
             cn = np.array([np.asarray(self.model.cn_states[s])] * self.model.num_segments)
-            if self.model.allele_swap_states[s] == 1:
-                cn = cn[:, :, ::-1]
             framelogprob[:, s] = self.log_likelihood(cn)
             cn_states.append(cn)
         cn_states = np.array(cn_states)
@@ -363,18 +361,9 @@ class BreakpointModel(object):
         return elbo
 
     def optimal_cn(self):
-        self.model.argmax_alleles()
-        self.model.update_p_cn()
-        self.model.update_p_breakpoint()
-
         cn = np.zeros((self.model.num_segments, self.model.num_clones, self.model.num_alleles), dtype=int)
-        allele_swap = np.zeros((self.model.num_segments,), dtype=int)
         
-        self.model.infer_cn(cn, allele_swap)
-
-        for n in range(self.model.num_segments):
-            if allele_swap[n] == 1:
-                cn[n, :, :] = cn[n, :, ::-1]
+        self.model.infer_cn(cn)
 
         return cn[self.seg_fwd_remap]
 
@@ -382,12 +371,7 @@ class BreakpointModel(object):
         brk_cn = []
         
         for brk_idx, p_breakpoint in enumerate(np.asarray(self.model.p_breakpoint)):
-            prob = p_breakpoint.max()
-            s_b, v_1, v_2 = np.where(p_breakpoint == prob)
-            s_b = s_b[0]
-            v_1 = v_1[0]
-            v_2 = v_2[0]
-            
+            s_b = p_breakpoint.argmax()
             brk_cn.append(np.asarray(self.model.brk_states)[s_b])
             
         brk_cn = dict(zip(self.breakpoints, brk_cn))
