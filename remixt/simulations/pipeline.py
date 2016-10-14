@@ -8,6 +8,7 @@ import remixt.segalg
 import remixt.simulations.experiment
 import remixt.simulations.haplotype
 import remixt.simulations.seqread
+import remixt.simulations.balanced
 import remixt.utils
 
 
@@ -486,6 +487,11 @@ def evaluate_brk_cn_results(genome_mixture, brk_cn_table, order_true, order_pred
     for m in xrange(1, M):
         true_cols.append('true_cn_{}'.format(m))
 
+    # List of column names for minimized known true copy number
+    min_true_cols = []
+    for m in xrange(1, M):
+        min_true_cols.append('min_true_cn_{}'.format(m))
+
     # List of column names for predicted copy number
     pred_cols = []
     for m in xrange(1, M):
@@ -494,24 +500,28 @@ def evaluate_brk_cn_results(genome_mixture, brk_cn_table, order_true, order_pred
     data = brk_cn_table.copy()
 
     # Add columns for known true copy number
-    for col in true_cols:
+    for col in itertools.chain(true_cols, min_true_cols):
         data[col] = 0
 
     # Default False for is_balanced
     data['is_balanced'] = False
 
     # Annotate each breakpoint with its predicted copy number
-    true_breakpoint_copy_number = genome_mixture.genome_collection.breakpoint_copy_number
+    true_brk_cn = genome_mixture.genome_collection.breakpoint_copy_number
+    min_true_brk_cn = remixt.simulations.balanced.minimize_breakpoint_copies(genome_mixture.adjacencies, true_brk_cn)
     true_balanced_breakpoints = genome_mixture.genome_collection.balanced_breakpoints
     for idx in data.index:
         n_1, side_1, n_2, side_2 = data.loc[idx, ['n_1', 'side_1', 'n_2', 'side_2']].values
         for ell_1 in xrange(2):
             for ell_2 in xrange(2):
                 allele_bp = frozenset([((n_1, ell_1), side_1), ((n_2, ell_2), side_2)])
-                if allele_bp in true_breakpoint_copy_number:
-                    bp_cn = true_breakpoint_copy_number[allele_bp]
+                if allele_bp in true_brk_cn:
+                    bp_cn = true_brk_cn[allele_bp]
                     for m in xrange(1, M):
                         data.loc[idx, 'true_cn_{}'.format(m)] = bp_cn[m]
+                    min_bp_cn = min_true_brk_cn[allele_bp]
+                    for m in xrange(1, M):
+                        data.loc[idx, 'min_true_cn_{}'.format(m)] = min_bp_cn[m]
                 if allele_bp in true_balanced_breakpoints:
                     data.loc[idx, 'is_balanced'] = True
 
@@ -519,7 +529,7 @@ def evaluate_brk_cn_results(genome_mixture, brk_cn_table, order_true, order_pred
     data = data[~data['is_balanced']]
 
     # Ensure true tumour clones are consistent
-    cn_true = data[true_cols].values[:, order_true]
+    cn_true = data[min_true_cols].values[:, order_true]
 
     # Ensure predicted tumour clones are consistent
     cn_pred = data[pred_cols].values[:, order_pred]
@@ -532,9 +542,9 @@ def evaluate_brk_cn_results(genome_mixture, brk_cn_table, order_true, order_pred
 
     # Calculate correctness per prediction
     data['cn_correct'] = cn_correct
-    data['true_present'] = (data[true_cols] > 0).any(axis=1)
+    data['true_present'] = (data[min_true_cols] > 0).any(axis=1)
     data['pred_present'] = (data[pred_cols] > 0).any(axis=1)
-    data['true_subclonal'] = (data[true_cols] == 0).any(axis=1) & data['true_present']
+    data['true_subclonal'] = (data[min_true_cols] == 0).any(axis=1) & data['true_present']
     data['pred_subclonal'] = (data[pred_cols] == 0).any(axis=1) & data['pred_present']
 
     evaluation = dict()
