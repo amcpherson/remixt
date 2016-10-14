@@ -259,6 +259,8 @@ class BreakpointModel(object):
         cn_states = []
         for s in xrange(self.model.num_cn_states):
             cn = np.array([np.asarray(self.model.cn_states[s])] * self.model.num_segments)
+            if self.model.allele_swap_states[s] == 1:
+                cn = cn[:, :, ::-1]
             framelogprob[:, s] = self.log_likelihood(cn)
             cn_states.append(cn)
         cn_states = np.array(cn_states)
@@ -366,7 +368,13 @@ class BreakpointModel(object):
         self.model.update_p_breakpoint()
 
         cn = np.zeros((self.model.num_segments, self.model.num_clones, self.model.num_alleles), dtype=int)
-        self.model.infer_cn(cn)
+        allele_swap = np.zeros((self.model.num_segments,), dtype=int)
+        
+        self.model.infer_cn(cn, allele_swap)
+
+        for n in range(self.model.num_segments):
+            if allele_swap[n] == 1:
+                cn[n, :, :] = cn[n, :, ::-1]
 
         return cn[self.seg_fwd_remap]
 

@@ -238,6 +238,7 @@ cdef class RemixtModel:
     cdef public bint normal_contamination
     cdef public int num_cn_states
     cdef public np.int64_t[:, :, :] cn_states
+    cdef public np.int64_t[:] allele_swap_states
     cdef public int num_brk_states
     cdef public np.int64_t[:, :] brk_states
 
@@ -276,6 +277,11 @@ cdef class RemixtModel:
         self.brk_states = self.create_brk_states(self.num_clones, self.cn_max, self.cn_diff_max)
         self.num_brk_states = self.brk_states.shape[0]
 
+        # Create observed allele states, duplicate cn states
+        self.allele_swap_states = np.array([0] * self.num_cn_states + [1] * self.num_cn_states)
+        self.cn_states = np.concatenate([self.cn_states, self.cn_states])
+        self.num_cn_states = self.cn_states.shape[0]
+
         if is_telomere.shape[0] != num_segments:
             raise ValueError('is_telomere must have length equal to num_segments')
 
@@ -299,7 +305,7 @@ cdef class RemixtModel:
             self.breakpoint_side[n] = sides[self.breakpoint_idx[n]]
             sides[self.breakpoint_idx[n]] += 1
 
-        # Initialize to uniform
+        # Initialize to favour single copy change
         self.p_breakpoint = np.zeros((self.num_breakpoints, self.num_brk_states, self.num_alleles, self.num_alleles))
         for k in range(self.num_breakpoints):
             for s_b in range(self.num_brk_states):
@@ -677,7 +683,7 @@ cdef class RemixtModel:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cpdef void infer_cn(self, np.ndarray[np.int64_t, ndim=3] cn) except*:
+    cpdef void infer_cn(self, np.ndarray[np.int64_t, ndim=3] cn, np.ndarray[np.int64_t, ndim=1] allele_swap) except*:
         """ Infer optimal copy number state sequence.
         """
         cdef np.ndarray[np.int64_t, ndim=1] state_sequence = np.zeros((self.num_segments,), dtype=np.int64)
@@ -689,12 +695,8 @@ cdef class RemixtModel:
                 for ell in range(self.num_alleles):
                     cn[n, m, ell] = self.cn_states[state_sequence[n], m, ell]
 
-    def get_cn(self):
-        """ Get optimal copy number.
-        """
-        cdef np.ndarray[np.int64_t, ndim=3] cn = np.zeros((self.num_segments, self.num_clones, self.num_alleles), dtype=np.int64)
-        self.infer_cn(cn)
-        return cn
+        for n in range(self.num_segments):
+            allele_swap[n] = self.allele_swap_states[state_sequence[n]]
 
 
 @cython.boundscheck(False)

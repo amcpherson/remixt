@@ -1160,8 +1160,8 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
         self.negbin = NegBinDistribution()
         self.negbin_hdel = NegBinDistribution()
 
-        self.betabin = BetaBinUniformDistribution(dist_type=BetaBinReflectedDistribution)
-        self.betabin_loh = BetaBinUniformDistribution(dist_type=BetaBinReflectedDistribution)
+        self.betabin = BetaBinUniformDistribution(dist_type=BetaBinDistribution)
+        self.betabin_loh = BetaBinUniformDistribution(dist_type=BetaBinDistribution)
 
     @property
     def h_param(self):
