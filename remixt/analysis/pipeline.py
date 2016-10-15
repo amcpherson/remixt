@@ -182,7 +182,8 @@ def store_fit_results(store, experiment, fit_results, key_prefix):
 def store_optimal_solution(stats, store, config):
     max_prop_diverge = remixt.config.get_param(config, 'max_prop_diverge')
 
-    stats = stats[stats['proportion_divergent'] < max_prop_diverge].copy()
+    if (stats['proportion_divergent'] < max_prop_diverge).any():
+        stats = stats[stats['proportion_divergent'] < max_prop_diverge].copy()
     stats.sort_values('elbo', ascending=False, inplace=True)
     solution_idx = stats.loc[stats.index[0], 'init_id']
 
