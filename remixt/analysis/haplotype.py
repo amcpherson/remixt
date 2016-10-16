@@ -83,7 +83,7 @@ def read_snp_counts(seqdata_filename, chromosome, num_rows=1000000):
     snp_counts = pd.concat(snp_counts, ignore_index=True)
 
     if len(snp_counts.index) == 0:
-        return pd.DataFrame(columns=['position', 'ref_count', 'alt_count'], dtype=int)
+        return pd.DataFrame(columns=['position', 'ref_count', 'alt_count']).astype(int)
 
     # Consolodate positions split by chunking
     snp_counts = snp_counts.groupby('position').sum().reset_index()
@@ -118,7 +118,7 @@ def infer_snp_genotype_from_normal(snp_genotype_filename, seqdata_filename, chro
     snp_counts_df = read_snp_counts(seqdata_filename, chromosome)
     infer_snp_genotype(snp_counts_df, sequencing_base_call_error, het_snp_call_threshold)
     
-    snp_counts_df.to_csv(snp_genotype_filename, sep='\t', cols=['position', 'AA', 'AB', 'BB'], index=False)
+    snp_counts_df.to_csv(snp_genotype_filename, sep='\t', columns=['position', 'AA', 'AB', 'BB'], index=False)
 
 
 def infer_snp_genotype_from_tumour(snp_genotype_filename, seqdata_filenames, chromosome, config):
@@ -143,19 +143,10 @@ def infer_snp_genotype_from_tumour(snp_genotype_filename, seqdata_filenames, chr
     homozygous_p_value_threshold = remixt.config.get_param(config, 'homozygous_p_value_threshold')
     
     # Calculate total reference alternate read counts in all tumours
-    snp_counts_df = None
+    snp_counts_df = pd.DataFrame(columns=['position', 'ref_count', 'alt_count']).astype(int)
     for tumour_id, seqdata_filename in seqdata_filenames.iteritems():
-        if snp_counts_df is None:
-            snp_counts_df = read_snp_counts(seqdata_filename, chromosome)
-
-        else:
-            snp_counts_df = snp_counts_df.merge(
-                read_snp_counts(seqdata_filename, chromosome),
-                on='position', how='outer', suffixes=('', '_other'))
-
-            snp_counts_df['ref_count'] += snp_counts_df['ref_count_other']
-            snp_counts_df['alt_count'] += snp_counts_df['alt_count_other']
-            snp_counts_df.drop(['ref_count', 'alt_count'], axis=1, inplace=True)
+        snp_counts_df = pd.concat([snp_counts_df, read_snp_counts(seqdata_filename, chromosome)], ignore_index=True)
+        snp_counts_df = snp_counts_df.groupby('position').sum().reset_index()
 
     snp_counts_df['total_count'] = snp_counts_df['alt_count'] + snp_counts_df['ref_count']
     
@@ -173,9 +164,9 @@ def infer_snp_genotype_from_tumour(snp_genotype_filename, seqdata_filenames, chr
     
     snp_counts_df['AA'] = (snp_counts_df['prob_AA'] >= homozygous_p_value_threshold) * 1
     snp_counts_df['BB'] = (snp_counts_df['prob_BB'] >= homozygous_p_value_threshold) * 1
-    snp_counts_df['AB'] = ((snp_counts_df['AA'] == 0) & (snp_counts_df['AA'] == 0)) * 1
+    snp_counts_df['AB'] = ((snp_counts_df['AA'] == 0) & (snp_counts_df['BB'] == 0)) * 1
     
-    snp_counts_df.to_csv(snp_genotype_filename, sep='\t', cols=['position', 'AA', 'AB', 'BB'], index=False)
+    snp_counts_df.to_csv(snp_genotype_filename, sep='\t', columns=['position', 'AA', 'AB', 'BB'], index=False)
 
 
 def infer_haps(haps_filename, snp_genotype_filename, chromosome, temp_directory, config, ref_data_dir):
