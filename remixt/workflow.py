@@ -364,14 +364,20 @@ def create_remixt_seqdata_workflow(
     workflow = pypeliner.workflow.Workflow()
 
     workflow.setobj(
+        obj=mgd.OutputChunks('sample_id'),
+        value=sample_ids,
+    )
+
+    workflow.setobj(
         obj=mgd.OutputChunks('tumour_id'),
-        value=tumour_seqdata_filenames.keys(),
+        value=tumour_ids,
     )
 
     workflow.subworkflow(
         name='infer_haps_workflow',
         func=remixt.workflow.create_infer_haps_workflow,
         args=(
+            mgd.InputFile('seqdata', 'sample_id', fnames=tumour_seqdata_filenames),
             mgd.OutputFile(haplotypes_filename),
             config,
             ref_data_dir,
