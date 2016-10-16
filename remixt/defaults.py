@@ -74,6 +74,7 @@ bam_max_soft_clipped                        = 8
 # Heterozygous snp calling
 sequencing_base_call_error                  = 0.01
 het_snp_call_threshold                      = 0.9
+homozygous_p_value_threshold                = 0.01
 
 # Shapeit haplotype block resolution
 shapeit_num_samples                         = 100

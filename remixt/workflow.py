@@ -58,16 +58,52 @@ def create_extract_seqdata_workflow(
 
 
 def create_infer_haps_workflow(
-    normal_seqdata_filename,
+    seqdata_filenames,
     haps_filename,
     config,
     ref_data_dir,
+    normal_id=None,
 ):
     chromosomes = remixt.config.get_chromosomes(config, ref_data_dir)
 
     workflow = pypeliner.workflow.Workflow()
 
     workflow.setobj(obj=mgd.OutputChunks('chromosome'), value=chromosomes)
+
+    if normal_id is not None:
+        normal_seqdata_filename = seqdata_filenames[normal_id]
+        
+        workflow.transform(
+            name='infer_snp_genotype_from_normal',
+            axes=('chromosome',),
+            ctx={'mem': 16},
+            func=remixt.analysis.haplotype.infer_snp_genotype_from_normal,
+            args=(
+                mgd.TempOutputFile('snp_genotype.tsv', 'chromosome'),
+                mgd.InputFile(normal_seqdata_filename),
+                mgd.InputInstance('chromosome'),
+                config,
+            ),
+        )
+    
+    else:
+        workflow.setobj(
+            obj=mgd.OutputChunks('tumour_id'),
+            value=seqdata_filenames.keys(),
+        )
+
+        workflow.transform(
+            name='infer_snp_genotype_from_tumour',
+            axes=('chromosome',),
+            ctx={'mem': 16},
+            func=remixt.analysis.haplotype.infer_snp_genotype_from_tumour,
+            args=(
+                mgd.TempOutputFile('snp_genotype.tsv', 'chromosome'),
+                mgd.InputFile('tumour_seqdata', 'tumour_id', fnames=seqdata_filenames),
+                mgd.InputInstance('chromosome'),
+                config,
+            ),
+        )
 
     workflow.transform(
         name='infer_haps',
@@ -76,7 +112,7 @@ def create_infer_haps_workflow(
         func=remixt.analysis.haplotype.infer_haps,
         args=(
             mgd.TempOutputFile('haps.tsv', 'chromosome'),
-            mgd.InputFile(normal_seqdata_filename),
+            mgd.InputFile(snp_genotype_filename),
             mgd.InputInstance('chromosome'),
             mgd.TempSpace('haplotyping', 'chromosome'),
             config,
@@ -305,15 +341,20 @@ def create_fit_model_workflow(
 def create_remixt_seqdata_workflow(
     segment_filename,
     breakpoint_filename,
-    tumour_seqdata_filenames,
-    normal_seqdata_filename,
+    seqdata_filenames,
     results_filenames,
     raw_data_directory,
     config,
     ref_data_dir,
+    normal_id=None,
 ):
-    sample_ids = tumour_seqdata_filenames.keys()
-    results_filenames = dict([(sample_id, results_filenames[sample_id]) for sample_id in sample_ids])
+    sample_ids = seqdata_filenames.keys()
+    
+    tumour_ids = seqdata_filenames.keys()
+    if normal_id is not None:
+        tumour_ids.remove(normal_id)
+
+    results_filenames = dict([(tumour_id, results_filenames[tumour_id]) for tumour_id in tumour_ids])
 
     haplotypes_filename = os.path.join(raw_data_directory, 'haplotypes.tsv')
     counts_table_template = os.path.join(raw_data_directory, 'counts', 'sample_{tumour_id}.tsv')
@@ -331,11 +372,13 @@ def create_remixt_seqdata_workflow(
         name='infer_haps_workflow',
         func=remixt.workflow.create_infer_haps_workflow,
         args=(
-            mgd.InputFile(normal_seqdata_filename),
             mgd.OutputFile(haplotypes_filename),
             config,
             ref_data_dir,
         ),
+        kwargs={
+            'normal_id': normal_id,
+        }
     )
 
     workflow.subworkflow(
@@ -407,45 +450,42 @@ def create_remixt_seqdata_workflow(
 def create_remixt_bam_workflow(
     segment_filename,
     breakpoint_filename,
-    tumour_bam_filenames,
-    normal_bam_filename,
-    normal_id,
+    bam_filenames,
     results_filenames,
     raw_data_directory,
     config,
     ref_data_dir,
+    normal_id=None,
 ):
-    sample_ids = tumour_bam_filenames.keys()
-    results_filenames = dict([(sample_id, results_filenames[sample_id]) for sample_id in sample_ids])
+    sample_ids = bam_filenames.keys()
+    
+    tumour_ids = bam_filenames.keys()
+    if normal_id is not None:
+        tumour_ids.remove(normal_id)
 
-    tumour_seqdata_template = os.path.join(raw_data_directory, 'seqdata', 'sample_{tumour_id}.h5')
-    normal_seqdata_filename = os.path.join(raw_data_directory, 'seqdata', 'sample_{}.h5'.format(normal_id))
+    seqdata_template = os.path.join(raw_data_directory, 'seqdata', 'sample_{sample_id}.h5')
+
+    results_filenames = dict([(tumour_id, results_filenames[tumour_id]) for tumour_id in tumour_ids])
 
     workflow = pypeliner.workflow.Workflow()
 
     workflow.setobj(
+        obj=mgd.OutputChunks('sample_id'),
+        value=sample_ids,
+    )
+
+    workflow.setobj(
         obj=mgd.OutputChunks('tumour_id'),
-        value=tumour_bam_filenames.keys(),
+        value=tumour_ids,
     )
 
     workflow.subworkflow(
-        name='extract_seqdata_workflow_normal',
+        name='extract_seqdata_workflow',
+        axes=('sample_id',),
         func=remixt.workflow.create_extract_seqdata_workflow,
         args=(
-            mgd.InputFile(normal_bam_filename),
-            mgd.OutputFile(normal_seqdata_filename),
-            config,
-            ref_data_dir,
-        ),
-    )
-
-    workflow.subworkflow(
-        name='extract_seqdata_workflow_tumour',
-        axes=('tumour_id',),
-        func=remixt.workflow.create_extract_seqdata_workflow,
-        args=(
-            mgd.InputFile('bam', 'tumour_id', fnames=tumour_bam_filenames),
-            mgd.OutputFile('seqdata', 'tumour_id', template=tumour_seqdata_template),
+            mgd.InputFile('bam', 'sample_id', fnames=bam_filenames),
+            mgd.OutputFile('seqdata', 'sample_id', template=seqdata_template),
             config,
             ref_data_dir,
         ),
@@ -457,13 +497,15 @@ def create_remixt_bam_workflow(
         args=(
             mgd.InputFile(segment_filename),
             mgd.InputFile(breakpoint_filename),
-            mgd.InputFile('seqdata', 'tumour_id', template=tumour_seqdata_template),
-            mgd.InputFile(normal_seqdata_filename),
+            mgd.InputFile('seqdata', 'sample_id', template=seqdata_template),
             mgd.OutputFile('results', 'tumour_id', fnames=results_filenames, axes_origin=[]),
             raw_data_directory,
             config,
             ref_data_dir,
         ),
+        kwargs={
+            'normal_id': normal_id,
+        },
     )
 
     return workflow

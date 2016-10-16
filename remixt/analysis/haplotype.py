@@ -92,13 +92,98 @@ def read_snp_counts(seqdata_filename, chromosome, num_rows=1000000):
 
     return snp_counts
 
+
+def infer_snp_genotype_from_normal(snp_genotype_filename, seqdata_filename, chromosome, config):
+    """ Infer SNP genotype from normal sample.
     
-def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, config, ref_data_dir):
+    Args:
+        snp_genotype_filename (str): output snp genotype file
+        seqdata_filename (str): input sequence data file
+        chromosome (str): id of chromosome for which haplotype blocks will be inferred
+        config (dict): relavent shapeit parameters including thousand genomes paths
+
+    The output snp genotype file will contain the following columns:
+
+        'position': het snp position
+        'AA': binary indicator for homozygous reference
+        'AB': binary indicator for heterozygous
+        'BB': binary indicator for homozygous alternate
+
+    """
+
+    sequencing_base_call_error = remixt.config.get_param(config, 'sequencing_base_call_error')
+    het_snp_call_threshold = remixt.config.get_param(config, 'het_snp_call_threshold')
+    
+    # Call snps based on reference and alternate read counts from normal
+    snp_counts_df = read_snp_counts(seqdata_filename, chromosome)
+    infer_snp_genotype(snp_counts_df, sequencing_base_call_error, het_snp_call_threshold)
+    
+    snp_counts_df.to_csv(snp_genotype_filename, sep='\t', cols=['position', 'AA', 'AB', 'BB'], index=False)
+
+
+def infer_snp_genotype_from_tumour(snp_genotype_filename, seqdata_filenames, chromosome, config):
+    """ Infer SNP genotype from tumour samples.
+    
+    Args:
+        snp_genotype_filename (str): output snp genotype file
+        seqdata_filenames (str): input tumour sequence data files
+        chromosome (str): id of chromosome for which haplotype blocks will be inferred
+        config (dict): relavent shapeit parameters including thousand genomes paths
+
+    The output snp genotype file will contain the following columns:
+
+        'position': het snp position
+        'AA': binary indicator for homozygous reference
+        'AB': binary indicator for heterozygous
+        'BB': binary indicator for homozygous alternate
+
+    """
+
+    sequencing_base_call_error = remixt.config.get_param(config, 'sequencing_base_call_error')
+    homozygous_p_value_threshold = remixt.config.get_param(config, 'homozygous_p_value_threshold')
+    
+    # Calculate total reference alternate read counts in all tumours
+    snp_counts_df = None
+    for tumour_id, seqdata_filename in seqdata_filenames.iteritems():
+        if snp_counts_df is None:
+            snp_counts_df = read_snp_counts(seqdata_filename, chromosome)
+
+        else:
+            snp_counts_df = snp_counts_df.merge(
+                read_snp_counts(seqdata_filename, chromosome),
+                on='position', how='outer', suffixes=('', '_other'))
+
+            snp_counts_df['ref_count'] += snp_counts_df['ref_count_other']
+            snp_counts_df['alt_count'] += snp_counts_df['alt_count_other']
+            snp_counts_df.drop(['ref_count', 'alt_count'], axis=1, inplace=True)
+
+    snp_counts_df['total_count'] = snp_counts_df['alt_count'] + snp_counts_df['ref_count']
+    
+    binom_test_ref = lambda row: scipy.stats.binom_test(
+        row['ref_count'], row['total_count'],
+        p=sequencing_base_call_error, alternative='greater')
+
+    snp_counts_df['prob_AA'] = snp_counts_df.apply(binom_test_ref, axis=1)
+    
+    binom_test_alt = lambda row: scipy.stats.binom_test(
+        row['alt_count'], row['total_count'],
+        p=sequencing_base_call_error, alternative='greater')
+        
+    snp_counts_df['prob_BB'] = snp_counts_df.apply(binom_test_alt, axis=1)
+    
+    snp_counts_df['AA'] = (snp_counts_df['prob_AA'] >= homozygous_p_value_threshold) * 1
+    snp_counts_df['BB'] = (snp_counts_df['prob_BB'] >= homozygous_p_value_threshold) * 1
+    snp_counts_df['AB'] = ((snp_counts_df['AA'] == 0) & (snp_counts_df['AA'] == 0)) * 1
+    
+    snp_counts_df.to_csv(snp_genotype_filename, sep='\t', cols=['position', 'AA', 'AB', 'BB'], index=False)
+
+
+def infer_haps(haps_filename, snp_genotype_filename, chromosome, temp_directory, config, ref_data_dir):
     """ Infer haplotype blocks for a chromosome using shapeit
 
     Args:
         haps_filename (str): output haplotype data file
-        seqdata_filename (str): input sequence data file
+        snp_genotype_filename (str): input snp genotype file
         chromosome (str): id of chromosome for which haplotype blocks will be inferred
         temp_directory (str): directory in which shapeit temp files will be stored
         config (dict): relavent shapeit parameters including thousand genomes paths
@@ -138,20 +223,14 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
     hap_filename = remixt.config.get_filename(config, ref_data_dir, 'haplotypes', chromosome=phased_chromosome)
     legend_filename = remixt.config.get_filename(config, ref_data_dir, 'legend', chromosome=phased_chromosome)
 
-    # Call snps based on reference and alternate read counts from normal
-    snp_counts_df = read_snp_counts(seqdata_filename, chromosome)
+    snp_genotype_df = pd.read_csv(snp_genotype_filename, sep='\t')
 
-    if len(snp_counts_df) == 0:
+    if len(snp_genotype_df) == 0:
         write_null()
         return
 
-    sequencing_base_call_error = remixt.config.get_param(config, 'sequencing_base_call_error')
-    het_snp_call_threshold = remixt.config.get_param(config, 'het_snp_call_threshold')
-
-    infer_snp_genotype(snp_counts_df, sequencing_base_call_error, het_snp_call_threshold)
-
     # Remove ambiguous positions
-    snp_counts_df = snp_counts_df[(snp_counts_df['AA'] == 1) | (snp_counts_df['AB'] == 1) | (snp_counts_df['BB'] == 1)]
+    snp_genotype_df = snp_genotype_df[(snp_genotype_df['AA'] == 1) | (snp_genotype_df['AB'] == 1) | (snp_genotype_df['BB'] == 1)]
 
     # Read snp positions from legend
     snps_df = pd.read_csv(legend_filename, compression='gzip', sep=' ', usecols=['position', 'a0', 'a1'])
@@ -160,7 +239,7 @@ def infer_haps(haps_filename, seqdata_filename, chromosome, temp_directory, conf
     snps_df = snps_df[(snps_df['a0'].isin(['A', 'C', 'T', 'G'])) & (snps_df['a1'].isin(['A', 'C', 'T', 'G']))]
 
     # Merge data specific inferred genotype
-    snps_df = snps_df.merge(snp_counts_df[['position', 'AA', 'AB', 'BB']], on='position', how='inner', sort=False)
+    snps_df = snps_df.merge(snp_genotype_df[['position', 'AA', 'AB', 'BB']], on='position', how='inner', sort=False)
 
     # Create genotype file required by shapeit
     snps_df['chr'] = chromosome
