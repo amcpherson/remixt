@@ -376,6 +376,9 @@ cdef class RemixtModel:
 
             if not np.all(cn[1:, :].max(axis=0) - cn[1:, :].min(axis=0) <= cn_diff_max):
                 continue
+                
+            if np.all(cn[:, 0] >= cn[:, 1]) and np.any(cn[1:, 0] > cn[1:, 1]):
+                continue
 
             cn_states.append(cn)
 
