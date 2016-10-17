@@ -95,7 +95,7 @@ def calculate_candidate_h_monoclonal(minor_modes, h_normal=None, h_tumour=None):
         h_normal = minor_modes.min()
         
     if h_tumour is not None:
-        return np.array([h_normal, h_tumour])
+        return np.array([[h_normal, h_tumour]])
     
     h_candidates = list()
 
