@@ -149,22 +149,27 @@ def infer_snp_genotype_from_tumour(snp_genotype_filename, seqdata_filenames, chr
         snp_counts_df = snp_counts_df.groupby('position').sum().reset_index()
 
     snp_counts_df['total_count'] = snp_counts_df['alt_count'] + snp_counts_df['ref_count']
+
+    snp_counts_df = snp_counts_df[snp_counts_df['total_count'] > 50]
     
     binom_test_ref = lambda row: scipy.stats.binom_test(
         row['ref_count'], row['total_count'],
         p=sequencing_base_call_error, alternative='greater')
 
-    snp_counts_df['prob_AA'] = snp_counts_df.apply(binom_test_ref, axis=1)
+    snp_counts_df['prob_no_A'] = snp_counts_df.apply(binom_test_ref, axis=1)
     
     binom_test_alt = lambda row: scipy.stats.binom_test(
         row['alt_count'], row['total_count'],
         p=sequencing_base_call_error, alternative='greater')
         
-    snp_counts_df['prob_BB'] = snp_counts_df.apply(binom_test_alt, axis=1)
-    
-    snp_counts_df['AA'] = (snp_counts_df['prob_AA'] >= homozygous_p_value_threshold) * 1
-    snp_counts_df['BB'] = (snp_counts_df['prob_BB'] >= homozygous_p_value_threshold) * 1
-    snp_counts_df['AB'] = ((snp_counts_df['AA'] == 0) & (snp_counts_df['BB'] == 0)) * 1
+    snp_counts_df['prob_no_B'] = snp_counts_df.apply(binom_test_alt, axis=1)
+
+    snp_counts_df['has_A'] = snp_counts_df['prob_no_A'] < homozygous_p_value_threshold
+    snp_counts_df['has_B'] = snp_counts_df['prob_no_B'] < homozygous_p_value_threshold
+
+    snp_counts_df['AA'] = (snp_counts_df['has_A'] & ~snp_counts_df['has_B']) * 1
+    snp_counts_df['BB'] = (snp_counts_df['has_B'] & ~snp_counts_df['has_A']) * 1
+    snp_counts_df['AB'] = (snp_counts_df['has_A'] & snp_counts_df['has_B']) * 1
     
     snp_counts_df.to_csv(snp_genotype_filename, sep='\t', columns=['position', 'AA', 'AB', 'BB'], index=False)
 
