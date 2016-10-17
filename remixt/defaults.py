@@ -103,6 +103,11 @@ tumour_mix_fractions                        = [0.45, 0.3, 0.2, 0.1]
 min_ploidy                                  = 0.5
 max_ploidy                                  = 5.0
 
+# Force haploid normal and or tumour to specific values, useful
+# for very poor samples for which estimation fails
+h_normal                                    = None
+h_tumour                                    = None
+
 # Maximum proportion of segments with divergent copy number
 # for filtering improbable solutions
 max_prop_diverge                            = 0.5

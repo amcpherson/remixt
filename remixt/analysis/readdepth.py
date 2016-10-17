@@ -77,17 +77,25 @@ def calculate_minor_modes(read_depth):
     return means
 
 
-def calculate_candidate_h_monoclonal(minor_modes):
+def calculate_candidate_h_monoclonal(minor_modes, h_normal=None, h_tumour=None):
     """ Calculate possible haploid tumour depth from modes of minor allele depth.
 
     Args:
         minor_modes (list): minor read depth modes
 
+    KwArgs:
+        h_normal (float): fix haploid normal at this value
+        h_tumour (float): fix haploid tumour at this value
+
     Returns:
         list: haploid depths
     """
 
-    h_normal = minor_modes.min()
+    if h_normal is None:
+        h_normal = minor_modes.min()
+        
+    if h_tumour is not None:
+        return np.array([h_normal, h_tumour])
     
     h_candidates = list()
 

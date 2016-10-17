@@ -17,6 +17,8 @@ def init(
 ):
     min_ploidy = remixt.config.get_param(config, 'min_ploidy')
     max_ploidy = remixt.config.get_param(config, 'max_ploidy')
+    h_normal = remixt.config.get_param(config, 'h_normal')
+    h_tumour = remixt.config.get_param(config, 'h_tumour')
     tumour_mix_fractions = remixt.config.get_param(config, 'tumour_mix_fractions')
     divergence_weights = remixt.config.get_param(config, 'divergence_weights')
 
@@ -27,7 +29,8 @@ def init(
     # tumour clone based on modes of the minor allele depth
     read_depth = remixt.analysis.readdepth.calculate_depth(experiment)
     minor_modes = remixt.analysis.readdepth.calculate_minor_modes(read_depth)
-    init_h_mono = remixt.analysis.readdepth.calculate_candidate_h_monoclonal(minor_modes)
+    init_h_mono = remixt.analysis.readdepth.calculate_candidate_h_monoclonal(minor_modes,
+        h_normal=h_normal, h_tumour=h_tumour)
 
     # Calculate candidate haploid depths for normal contamination and multiple clones
     init_h_params = []
