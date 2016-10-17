@@ -112,7 +112,7 @@ def create_infer_haps_workflow(
         func=remixt.analysis.haplotype.infer_haps,
         args=(
             mgd.TempOutputFile('haps.tsv', 'chromosome'),
-            mgd.InputFile(snp_genotype_filename),
+            mgd.TempInputFile('snp_genotype.tsv', 'chromosome'),
             mgd.InputInstance('chromosome'),
             mgd.TempSpace('haplotyping', 'chromosome'),
             config,
@@ -298,7 +298,7 @@ def create_fit_model_workflow(
 ):
     config = remixt.config.get_sample_config(config, tumour_id)
     
-    workflow = pypeliner.workflow.Workflow(default_ctx={'mem': 8})
+    workflow = pypeliner.workflow.Workflow(default_ctx={'mem': 16})
 
     workflow.transform(
         name='init',
@@ -377,7 +377,7 @@ def create_remixt_seqdata_workflow(
         name='infer_haps_workflow',
         func=remixt.workflow.create_infer_haps_workflow,
         args=(
-            mgd.InputFile('seqdata', 'sample_id', fnames=tumour_seqdata_filenames),
+            mgd.InputFile('seqdata', 'sample_id', fnames=seqdata_filenames),
             mgd.OutputFile(haplotypes_filename),
             config,
             ref_data_dir,
@@ -393,7 +393,7 @@ def create_remixt_seqdata_workflow(
         args=(
             mgd.InputFile(segment_filename),
             mgd.InputFile(haplotypes_filename),
-            mgd.InputFile('seqdata', 'tumour_id', fnames=tumour_seqdata_filenames),
+            mgd.InputFile('seqdata', 'tumour_id', fnames=seqdata_filenames),
             mgd.TempOutputFile('rawcounts', 'tumour_id', axes_origin=[]),
             config,
         ),
@@ -404,7 +404,7 @@ def create_remixt_seqdata_workflow(
         axes=('tumour_id',),
         func=remixt.workflow.create_calc_bias_workflow,
         args=(
-            mgd.InputFile('seqdata', 'tumour_id', fnames=tumour_seqdata_filenames),
+            mgd.InputFile('seqdata', 'tumour_id', fnames=seqdata_filenames),
             mgd.TempInputFile('rawcounts', 'tumour_id'),
             mgd.OutputFile('counts', 'tumour_id', template=counts_table_template),
             config,
