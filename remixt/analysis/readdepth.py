@@ -68,6 +68,12 @@ def calculate_minor_modes(read_depth):
     kmm.fit(rd_samples.reshape((rd_samples.size, 1)))
     means = kmm.cluster_centers_[:,0]
 
+    # Filter insigificant clusters
+    cluster_idx = kmm.predict(rd_samples.reshape((rd_samples.size, 1)))
+    cluster_counts = np.bincount(cluster_idx)
+    cluster_prop = cluster_counts.astype(float) / cluster_counts.sum()
+    means = means[cluster_prop >= 0.01]
+
     return means
 
 
