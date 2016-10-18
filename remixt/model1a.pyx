@@ -376,8 +376,11 @@ cdef class RemixtModel:
 
             if not np.all(cn[1:, :].max(axis=0) - cn[1:, :].min(axis=0) <= cn_diff_max):
                 continue
-                
-            if np.all(cn[:, 0] >= cn[:, 1]) and np.any(cn[1:, 0] > cn[1:, 1]):
+
+            # Discard states for which minor copy number is greater than or
+            # equal to major copy number for all clones, and minor is strictly
+            # greater than major for at least one clone
+            if np.all(cn[1:, 1] >= cn[1:, 0]) and np.any(cn[1:, 1] > cn[1:, 0]):
                 continue
 
             cn_states.append(cn)
