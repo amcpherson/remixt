@@ -214,16 +214,22 @@ class BreakpointModel(object):
         self.prev_elbo_diff = None
         self.num_update_iter = 1
         
-    
+        # Indicator variables for allele swaps
+        # Initalize to uniform over 2 states
+        self.p_allele_swap = np.ones((self.N1, 2)) * 0.5
+        
+        self.cn_states = np.concatenate([
+            np.asarray(self.model.cn_states),
+            np.asarray(self.model.cn_states)[:, :, ::-1]])
+        
+
     @property
     def likelihood_params(self):
         return [
-            self.emission.h_param,
-            # self.emission.r_param,
-            # self.emission.M_param,
-            # self.emission.z_param,
-            # self.emission.hdel_mu_param,
-            # self.emission.loh_p_param,
+            self.emission.h_param(self.cn_states),
+            self.emission.z_param(self.cn_states),
+            self.emission.hdel_mu_param(self.cn_states),
+            self.emission.loh_p_param(self.cn_states),
         ]
 
 
@@ -253,28 +259,40 @@ class BreakpointModel(object):
                 setattr(self.model, a, data[a])
                 
                 
-    def log_likelihood(self, cn):
+    def log_likelihood(self, s):
+        cn = self.cn_states[s, :, :][np.newaxis, :, :]
         return self.emission.log_likelihood(cn) + self.prior.log_prior(cn)
         
-        
-    def posterior_marginals(self):
+    
+    def calculate_framelogprob(self, allele_swap):
         framelogprob = np.zeros((self.model.num_segments, self.model.num_cn_states))
         
-        cn_states = []
         for s in xrange(self.model.num_cn_states):
             cn = np.array([np.asarray(self.model.cn_states[s])] * self.model.num_segments)
-            framelogprob[:, s] = self.log_likelihood(cn)
-            cn_states.append(cn)
-        cn_states = np.array(cn_states)
-            
+            if allele_swap == 1:
+                cn = cn[:, :, ::-1]
+            framelogprob[:, s] = self.emission.log_likelihood(cn) + self.prior.log_prior(cn)
+        
+        return framelogprob
+
+
+    def posterior_marginals(self):
+        framelogprob = (
+            self.p_allele_swap[:, 0][:, np.newaxis] * self.calculate_framelogprob(0) + 
+            self.p_allele_swap[:, 1][:, np.newaxis] * self.calculate_framelogprob(1))
+        
         self.model.framelogprob = framelogprob
 
         for num_iter in xrange(self.num_update_iter):
             self.update()
+            
+        posterior_marginals = np.asarray(self.model.posterior_marginals)
         
-        posterior_marginals = np.asarray(self.model.posterior_marginals).T
+        posterior_marginals = np.concatenate([
+            (posterior_marginals * self.p_allele_swap[:, 0][:, np.newaxis]).T,
+            (posterior_marginals * self.p_allele_swap[:, 1][:, np.newaxis]).T])
         
-        return self.prev_elbo, cn_states, posterior_marginals
+        return self.prev_elbo, posterior_marginals
 
 
     def _check_elbo(self, prev_elbo, name):
@@ -309,7 +327,17 @@ class BreakpointModel(object):
 
         if check_elbo:
             elbo = self._check_elbo(elbo, 'p_breakpoint')
+            
+        print 'update_p_allele_swap'
+        posterior_marginals = np.asarray(self.model.posterior_marginals)
+        log_p_allele_swap = np.zeros(self.p_allele_swap.shape)
+        log_p_allele_swap[:, 0] = (posterior_marginals * self.calculate_framelogprob(0)).sum(axis=1)
+        log_p_allele_swap[:, 1] = (posterior_marginals * self.calculate_framelogprob(1)).sum(axis=1)
+        self.p_allele_swap = np.exp(log_p_allele_swap - scipy.misc.logsumexp(log_p_allele_swap, axis=1)[:, np.newaxis])
 
+        if check_elbo:
+            elbo = self._check_elbo(elbo, 'update_p_allele_swap')
+            
         print 'done'
         
         if not check_elbo:
@@ -368,9 +396,16 @@ class BreakpointModel(object):
         cn = np.zeros((self.model.num_segments, self.model.num_clones, self.model.num_alleles), dtype=int)
         
         self.model.infer_cn(cn)
+        
+        # Swap alleles as required
+        swap_alleles = self.p_allele_swap[:, 1] > self.p_allele_swap[:, 0]
+        cn[swap_alleles, :, :] = cn[swap_alleles, :, ::-1]
+        
+        # Remap to original segmentation
+        cn = cn[self.seg_fwd_remap]
 
-        return cn[self.seg_fwd_remap]
-
+        return cn
+        
     def optimal_brk_cn(self):
         brk_cn = []
         
@@ -467,4 +502,3 @@ def decode_breakpoints_naive(cn, adjacencies, breakpoints):
     brk_cn = pd.DataFrame(brk_cn, columns=edge_cols+cn_cols)
 
     return brk_cn
-

@@ -26,14 +26,13 @@ class ExpectationMaximizationEstimator(object):
 
         self.em_iter = None
 
-    def evaluate_q(self, value, model, states, weights, params, idxs):
+    def evaluate_q(self, value, model, weights, params, idxs):
         """ Evaluate q function, expected value of complete data log likelihood
         with respect to conditional, given specific parameter value
         
         Args:
             value (numpy.array): parameter value
             model (object): probabilistic model to optimize
-            states (numpy.array): variable state matrix
             weights (numpy.array): state weights matrix
             params (list): name of parameter of model to optimize
             idxs (list): list of start indices of params
@@ -48,25 +47,24 @@ class ExpectationMaximizationEstimator(object):
 
         q_value = 0.0
         
-        for s, w in zip(states, weights):
+        for s, w in enumerate(weights):
             log_likelihood = w * model.log_likelihood(s)
             log_likelihood[w == 0] = 0
 
             for n in zip(*np.where(np.isnan(log_likelihood))):
-                raise OptimizeError('ll is nan', value=value, state=s[n], resp=w[n])
+                raise OptimizeError('ll is nan', value=value, state=s, resp=w[n])
 
             q_value += np.sum(log_likelihood)
 
         return -q_value
 
-    def evaluate_q_derivative(self, value, model, states, weights, params, idxs):
+    def evaluate_q_derivative(self, value, model, weights, params, idxs):
         """ Evaluate derivative of q function, expected complete data
         with respect to conditional, given specific parameter value
         
         Args:
             value (numpy.array): parameter value
             model (object): probabilistic model to optimize
-            states (numpy.array): variable state matrix
             weights (numpy.array): state weights matrix
             params (list): list of parameters of model to optimize
             idxs (list): list of start indices of params
@@ -81,12 +79,12 @@ class ExpectationMaximizationEstimator(object):
         
         q_derivative = np.zeros(value.shape)
 
-        for s, w in zip(states, weights):
+        for s, w in enumerate(weights):
             for p, idx in zip(params, idxs):
                 log_likelihood_partial = (w[:, np.newaxis] * p.log_likelihood_partial(s))
 
                 for n in zip(*np.where(np.isnan(log_likelihood_partial))):
-                    raise OptimizeError('ll partial is nan', value=value, state=s[n], resp=w[n])
+                    raise OptimizeError('ll partial is nan', value=value, state=s, resp=w[n])
 
                 q_derivative[idx:idx+p.length] += np.sum(log_likelihood_partial, axis=0)
 
@@ -100,26 +98,23 @@ class ExpectationMaximizationEstimator(object):
         
         Returns:
             numpy.array: log likelihood
-            numpy.array: variable state matrix
             numpy.array: state weights matrix
 
-        States matrix has shape (S,N,...) for N variables with S states
         Weights matrix has shape (S,N) for N variables with S states
 
         Weights are interpreted as posterior marginal probabilities.
 
         """
 
-        log_likelihood, states, weights = model.posterior_marginals()
+        log_likelihood, weights = model.posterior_marginals()
 
-        return log_likelihood, states, weights
+        return log_likelihood, weights
 
-    def maximization_step(self, model, states, weights, params):
+    def maximization_step(self, model, weights, params):
         """ Maximization Step.  Maximize Q with respect to a parameter.
 
         Args:
             model (object): probabilistic model to optimize
-            states (numpy.array): variable state matrix
             weights (numpy.array): state weights matrix
             params (list): list of parameters of model to optimize
 
@@ -132,8 +127,8 @@ class ExpectationMaximizationEstimator(object):
         value = np.concatenate([p.value for p in params])
         idxs = np.array([p.length for p in params]).cumsum() - np.array([p.length for p in params])
 
-        print 'lower bound:', -self.evaluate_q(value, model, states, weights, params, idxs)
-        q_derivative = -self.evaluate_q_derivative(value, model, states, weights, params, idxs)
+        print 'lower bound:', -self.evaluate_q(value, model, weights, params, idxs)
+        q_derivative = -self.evaluate_q_derivative(value, model, weights, params, idxs)
         print 'lower bound derivatives:'
         for p, idx in zip(params, idxs):
             print ' ', p.name, q_derivative[idx:idx+p.length]
@@ -143,7 +138,7 @@ class ExpectationMaximizationEstimator(object):
             value,
             method='L-BFGS-B',
             jac=self.evaluate_q_derivative,
-            args=(model, states, weights, params, idxs),
+            args=(model, weights, params, idxs),
             bounds=bounds,
             options={'ftol':1e-3},
         )
@@ -151,8 +146,9 @@ class ExpectationMaximizationEstimator(object):
         if not result.success:
             value = np.concatenate([p.value for p in params])
             print 'parameter values: ', value
-            print 'analytic derivative: ', self.evaluate_q_derivative(value, model, states, weights, params, idxs)
-            print 'numerical derivative: ', statsmodels.tools.numdiff.approx_fprime_cs(value, self.evaluate_q, args=(model, states, weights, params, idxs))
+            print 'analytic derivative: ', self.evaluate_q_derivative(value, model, weights, params, idxs)
+            print 'numerical derivative: ', statsmodels.tools.numdiff.approx_fprime_cs(value, self.evaluate_q, args=(model, weights, params, idxs))
+            print result
             raise OptimizeError(repr(result))
 
         for p, idx in zip(params, idxs):
@@ -188,7 +184,7 @@ class ExpectationMaximizationEstimator(object):
             print 'iteration:', self.em_iter
 
             # Maximize Log likelihood with respect to copy number
-            log_likelihood, states, weights = self.expectation_step(model)
+            log_likelihood, weights = self.expectation_step(model)
 
             print 'log likelihood:', log_likelihood
             if log_likelihood_prev is not None:
@@ -200,7 +196,7 @@ class ExpectationMaximizationEstimator(object):
 
             # Maximize Log likelihood with respect to haploid read depth
             try:
-                q_value = self.maximization_step(model, states, weights, params)
+                q_value = self.maximization_step(model, weights, params)
             except OptimizeError as e:
                 self.error_message = 'error during m step: ' + str(e)
                 return log_likelihood
@@ -281,5 +277,3 @@ class HardAssignmentEstimator(ExpectationMaximizationEstimator):
         log_likelihood, state = model.optimal_state()
 
         return log_likelihood, state
-
-

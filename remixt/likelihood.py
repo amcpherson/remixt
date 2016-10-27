@@ -35,7 +35,7 @@ class OptimizeParameter(object):
         self._get_value = fget
         self._set_value = fset
         self._bounds = bounds
-        self.log_likelihood_partial = log_likelihood_partial
+        self._log_likelihood_partial = log_likelihood_partial
 
     def get_value(self):
         return self._get_value()
@@ -52,6 +52,13 @@ class OptimizeParameter(object):
     @property
     def bounds(self):
         return [self._bounds] * self.length
+        
+    def log_likelihood_partial(self, s):
+        return self._log_likelihood_partial(self.cn_states[s][np.newaxis, :, :])
+        
+    def __call__(self, cn_states):
+        self.cn_states = cn_states
+        return self
 
 
 allele_measurement_matrix = np.array([[1, 0, 1], [0, 1, 1]])
@@ -631,6 +638,103 @@ class NegBinDistribution(object):
 
 
 
+class NegBinMixtureDistribution(object):
+
+    def __init__(self, **kwargs):
+        """ Negative binomial 2 component mixture distribution for read count data.
+
+        Attributes:
+            r (float): negative binomial read counts over-dispersion
+            r_noise (float): negative binomial read counts over-dispersion for noise component
+            z (float): mixture proportion for noise compoinent
+
+        """
+
+        self.negbin = NegBinDistribution()
+        
+        self.negbin_noise = NegBinDistribution()
+        self.negbin_noise.r = 10.
+
+        self.z = 0.01
+
+
+    @property
+    def r(self):
+        return self.negbin.r
+    @r.setter
+    def r(self, value):
+        self.negbin.r = value
+
+
+    @property
+    def r_noise(self):
+        return self.negbin_noise.r
+    @r_noise.setter
+    def r_noise(self, value):
+        self.negbin_noise.r = value
+
+
+    def log_likelihood(self, x, mu):
+        """ Calculate negative binomial mixture read count log likelihood.
+        
+        Args:
+            x (numpy.array): observed read counts
+            mu (numpy.array): expected read counts
+        
+        Returns:
+            float: log likelihood per segment
+            
+        The pmf of the negative binomial mixture is:
+
+            (1 - z) * NBin(x, mu) + z * NBin(x, mu)
+
+        """
+        
+        ll = np.array([
+            np.log(1. - self.z) + self.negbin.log_likelihood(x, mu),
+            np.log(self.z) + self.negbin_noise.log_likelihood(x, mu),
+        ])
+
+        ll = scipy.misc.logsumexp(ll, axis=0)
+
+        return ll
+
+    def log_likelihood_partial_mu(self, x, mu):
+        """ Calculate the partial derivative of the negative binomial mixture read count
+        log likelihood with respect to mu
+
+        Args:
+            x (numpy.array): observed read counts
+            mu (numpy.array): expected read counts
+        
+        Returns:
+            numpy.array: log likelihood derivative per segment
+            
+        The partial derivative of the log pmf of the negative binomial with 
+        respect to mu is:
+        
+            x / mu - (r + x) / (r + mu)
+
+        """
+        
+        partial_mu = (
+            (1 - self.z) *
+            np.exp(self.negbin.log_likelihood(x, mu)) *
+            self.negbin.log_likelihood_partial_mu(x, mu))
+        
+        partial_mu_noise = (
+            self.z *
+            np.exp(self.negbin_noise.log_likelihood(x, mu)) *
+            self.negbin_noise.log_likelihood_partial_mu(x, mu))
+        
+        partial_mu_mixture = (
+            (partial_mu + partial_mu_noise) / 
+            self.log_likelihood(x, mu))
+            
+        return partial_mu_mixture
+
+
+
 class NegBinLikelihood(IndepAlleleLikelihood):
 
     def __init__(self, **kwargs):
@@ -953,67 +1057,9 @@ class BetaBinDistribution(object):
         return partial_M
 
 
-class BetaBinReflectedDistribution(object):
-    def __init__(self, **kwargs):
-        """ Reflected beta binomial distribution for allele count data.
-
-        Attributes:
-            M (numpy.array): beta binomial allele counts over-dispersion
-
-        """
-
-        self.betabin = BetaBinDistribution()
-
-    @property
-    def M(self):
-        return self.betabin.M
-    @M.setter
-    def M(self, value):
-        self.betabin.M = value
-
-    def log_likelihood(self, k, n, p):
-        """ Calculate reflected beta binomial allele count log likelihood.
-        """
-
-        ll = np.array([
-            self.betabin.log_likelihood(k, n, p),
-            self.betabin.log_likelihood(n-k, n, p),
-        ])
-
-        ll = scipy.misc.logsumexp(ll, axis=0)
-
-        return ll
-
-    def log_likelihood_partial_p(self, k, n, p):
-        """ Calculate the partial derivative with respect to p of the reflected
-        beta binomial allele count log likelihood.
-
-        """
-        ll = self.log_likelihood(k, n, p)
-
-        partial_p = (
-            self.betabin.log_likelihood_partial_p(k, n, p) * np.exp(self.betabin.log_likelihood(k, n, p) - ll) +
-            self.betabin.log_likelihood_partial_p(n-k, n, p) * np.exp(self.betabin.log_likelihood(n-k, n, p) - ll))
-
-        return partial_p
-
-    def log_likelihood_partial_M(self, k, n, p):
-        """ Calculate the partial derivative with respect to p of the reflected
-        beta binomial allele count log likelihood.
-
-        """
-        ll = self.log_likelihood(k, n, p)
-
-        partial_M = (
-            self.betabin.log_likelihood_partial_M(k, n, p) * np.exp(self.betabin.log_likelihood(k, n, p) - ll) +
-            self.betabin.log_likelihood_partial_M(n-k, n, p) * np.exp(self.betabin.log_likelihood(n-k, n, p) - ll))
-
-        return partial_M
-
-
 class BetaBinUniformDistribution(object):
 
-    def __init__(self, dist_type=BetaBinDistribution, **kwargs):
+    def __init__(self, **kwargs):
         """ Beta binomial / uniform mixture distribution for allele count data.
 
         Attributes:
@@ -1021,7 +1067,7 @@ class BetaBinUniformDistribution(object):
 
         """
 
-        self.betabin = dist_type()
+        self.betabin = BetaBinDistribution()
 
         self.z = 0.01
 
@@ -1157,11 +1203,11 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
         self.hdel_mu = np.array([1e-6])
         self.loh_p = np.array([1e-3])
 
-        self.negbin = NegBinDistribution()
-        self.negbin_hdel = NegBinDistribution()
+        self.negbin = NegBinMixtureDistribution()
+        self.negbin_hdel = NegBinMixtureDistribution()
 
-        self.betabin = BetaBinUniformDistribution(dist_type=BetaBinDistribution)
-        self.betabin_loh = BetaBinUniformDistribution(dist_type=BetaBinDistribution)
+        self.betabin = BetaBinUniformDistribution()
+        self.betabin_loh = BetaBinUniformDistribution()
 
     @property
     def h_param(self):
@@ -1528,7 +1574,7 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
 
         x = self.x
 
-        is_loh = np.all(np.any(cn == 0, axis=(2,)), axis=(1,))
+        is_loh = np.all(np.any(cn == 0, axis=(2,)), axis=(1,)) & np.ones(x.shape[0], dtype=bool)
 
         p = self.expected_allele_ratio(cn)
 
@@ -1557,7 +1603,7 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
 
         x = self.x
 
-        is_hdel = np.all(cn == 0, axis=(1, 2))
+        is_hdel = np.all(cn == 0, axis=(1, 2)) & np.ones(x.shape[0], dtype=bool)
 
         partial_hdel_mu = self.negbin_hdel.log_likelihood_partial_mu(x[:, 2], self.hdel_mu)[:, np.newaxis]
         partial_hdel_mu[~is_hdel, :] = 0.
@@ -1579,7 +1625,7 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
 
         x = self.x
 
-        is_loh = np.all(np.any(cn == 0, axis=(2,)), axis=(1,))
+        is_loh = np.all(np.any(cn == 0, axis=(2,)), axis=(1,)) & np.ones(x.shape[0], dtype=bool)
 
         partial_loh_p = self.betabin_loh.log_likelihood_partial_p(x[:, 1], x[:, :2].sum(axis=1), self.loh_p)[:, np.newaxis]
         partial_loh_p[~is_loh, :] = 0.
@@ -1587,5 +1633,3 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
         partial_loh_p = self._log_likelihood_partial_post(partial_loh_p, cn)
 
         return partial_loh_p
-
-
