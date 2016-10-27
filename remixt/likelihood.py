@@ -729,7 +729,7 @@ class NegBinMixtureDistribution(object):
         
         partial_mu_mixture = (
             (partial_mu + partial_mu_noise) / 
-            self.log_likelihood(x, mu))
+            np.exp(self.log_likelihood(x, mu)))
             
         return partial_mu_mixture
 
