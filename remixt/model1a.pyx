@@ -304,6 +304,9 @@ cdef class RemixtModel:
         self.breakpoint_side = np.zeros((self.num_segments,), dtype=np.int64)
         sides = np.zeros((self.num_breakpoints,), dtype=np.int64)
         for n in range(self.num_segments):
+            if self.breakpoint_idx[n] < 0:
+                continue
+                
             self.breakpoint_side[n] = sides[self.breakpoint_idx[n]]
             sides[self.breakpoint_idx[n]] += 1
 
