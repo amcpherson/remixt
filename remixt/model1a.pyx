@@ -414,8 +414,8 @@ cdef class RemixtModel:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef add_log_transmat(self, np.float64_t[:, :] log_transmat, int m, np.float64_t mult_const):
-        """ Add log transition matrix for no breakpoint.
+    cdef add_log_transmat_total(self, np.float64_t[:, :] log_transmat, int m, np.float64_t mult_const):
+        """ Add total copy number log transition matrix for no breakpoint.
         """
 
         cdef int s_1, s_2
@@ -423,6 +423,21 @@ cdef class RemixtModel:
         for s_1 in range(self.num_cn_states):
             for s_2 in range(self.num_cn_states):
                 log_transmat[s_1, s_2] += mult_const * fabs(self.cn_states_total[s_1, m] - self.cn_states_total[s_2, m])
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    cdef add_log_transmat_allele(self, np.float64_t[:, :] log_transmat, int m, np.float64_t mult_const):
+        """ Add allele specific copy number log transition matrix for no breakpoint.
+        """
+
+        cdef int s_1, s_2
+
+        for s_1 in range(self.num_cn_states):
+            for s_2 in range(self.num_cn_states):
+                min_allele_cn_change = min(
+                    fabs(self.cn_states[s_1, m, 0] - self.cn_states[s_2, m, 0]) + fabs(self.cn_states[s_1, m, 1] - self.cn_states[s_2, m, 1]),
+                    fabs(self.cn_states[s_1, m, 0] - self.cn_states[s_2, m, 1]) + fabs(self.cn_states[s_1, m, 1] - self.cn_states[s_2, m, 0]))
+                log_transmat[s_1, s_2] += mult_const * (min_allele_cn_change - fabs(self.cn_states_total[s_1, m] - self.cn_states_total[s_2, m]))
 
     @cython.boundscheck(False)
     @cython.wraparound(True)
@@ -476,7 +491,8 @@ cdef class RemixtModel:
         log_transmat[:] = 0.
 
         for m in range(self.num_clones):
-            self.add_log_transmat(log_transmat, m, -self.transition_penalty)
+            self.add_log_transmat_total(log_transmat, m, -self.transition_penalty)
+            self.add_log_transmat_allele(log_transmat, m, -self.transition_penalty)
         
     @cython.boundscheck(False)
     @cython.wraparound(False)
@@ -492,6 +508,7 @@ cdef class RemixtModel:
                 self.p_breakpoint[self.breakpoint_idx[n], :],
                 self.breakpoint_orient[n],
                 -self.transition_penalty)
+            self.add_log_transmat_allele(log_transmat, m, -self.transition_penalty)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
