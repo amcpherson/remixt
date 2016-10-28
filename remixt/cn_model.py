@@ -86,6 +86,7 @@ class BreakpointModel(object):
             min_segment_length (float): minimum size of segments for segment likelihood mask
             min_proportion_genotyped (float): minimum proportion genotyped reads for segment likelihood mask
             transition_log_prob (float): penalty on transitions, per copy number change
+            disable_breakpoints (bool): disable integrated breakpoint copy number inference 
 
         """
         
@@ -105,6 +106,7 @@ class BreakpointModel(object):
         self.min_segment_length = kwargs.get('min_segment_length', 10000)
         self.min_proportion_genotyped = kwargs.get('min_proportion_genotyped', 0.01)
         self.transition_log_prob = kwargs.get('transition_log_prob', 10.)
+        self.disable_breakpoints = kwargs.get('disable_breakpoints', False)
 
         # The factor graph model for breakpoint copy number allows only a single breakend
         # interposed between each pair of adjacent segments.  Where multiple breakends are
@@ -131,10 +133,12 @@ class BreakpointModel(object):
 
         # New segment refers to an original segment
         self.seg_is_original = np.zeros(self.N1, dtype=bool)
-
-        self.is_telomere = np.ones(self.N1, dtype=int)
-        self.breakpoint_idx = -np.ones(self.N1, dtype=int)
-        self.breakpoint_orient = np.zeros(self.N1, dtype=int)
+        
+        # Create variables required for lower level model object
+        num_breakpoints = len(self.breakpoints)
+        is_telomere = np.ones(self.N1, dtype=int)
+        breakpoint_idx = -np.ones(self.N1, dtype=int)
+        breakpoint_orient = np.zeros(self.N1, dtype=int)
 
         # Index of new segmentation
         n_new = 0
@@ -150,11 +154,11 @@ class BreakpointModel(object):
             if n in breakpoint_segment:
                 for bp_idx, be_idx, orient in breakpoint_segment[n]:
                     # Breakpoint index and orientation based on n_new
-                    self.breakpoint_idx[n_new] = bp_idx
-                    self.breakpoint_orient[n_new] = orient
+                    breakpoint_idx[n_new] = bp_idx
+                    breakpoint_orient[n_new] = orient
 
                     # Breakpoint incident segments cannot be telomeres
-                    self.is_telomere[n_new] = 0
+                    is_telomere[n_new] = 0
 
                     # Next new segment, per introduced breakend
                     n_new += 1
@@ -162,7 +166,7 @@ class BreakpointModel(object):
                 # If a breakend is at a telomere, create an additional new segment to be the telomere
                 if (n, n + 1) not in adjacencies:
                     # Mark as a telomere
-                    self.is_telomere[n_new] = 1
+                    is_telomere[n_new] = 1
 
                     # Next new segment, after telomere
                     n_new += 1
@@ -170,13 +174,13 @@ class BreakpointModel(object):
             elif n >= 0:
                 # If n is not a telomere, n_new is not a telomere
                 if (n, n + 1) in adjacencies:
-                    self.is_telomere[n_new] = 0
+                    is_telomere[n_new] = 0
 
                 # Next new segment
                 n_new += 1
 
-        assert not np.any((self.breakpoint_idx >= 0) & (self.is_telomere == 1))
-        assert np.all(np.bincount(self.breakpoint_idx[self.breakpoint_idx >= 0]) == 2)
+        assert not np.any((breakpoint_idx >= 0) & (is_telomere == 1))
+        assert np.all(np.bincount(breakpoint_idx[breakpoint_idx >= 0]) == 2)
 
         # These should be zero lengthed segments, and zero read counts
         # for dummy segments, but setting lengths and counts to 1 to prevent
@@ -198,15 +202,21 @@ class BreakpointModel(object):
         self.emission.add_amplification_mask(self.max_copy_number)
         self.emission.add_segment_length_mask(self.min_segment_length)
         self.emission.add_proportion_genotyped_mask(self.min_proportion_genotyped)
+        
+        # Optionally disable integrated breakpoint copy number inference
+        if self.disable_breakpoints:
+            num_breakpoints = 0
+            breakpoint_idx = -np.ones(breakpoint_idx.shape, dtype=int)
+            breakpoint_orient = np.zeros(breakpoint_orient.shape, dtype=int)
 
         self.model = remixt.model1a.RemixtModel(
-            self.M, self.N1, len(self.breakpoints),
+            self.M, self.N1, num_breakpoints,
             self.max_copy_number,
             self.max_copy_number_diff,
             self.normal_contamination,
-            self.is_telomere,
-            self.breakpoint_idx,
-            self.breakpoint_orient,
+            is_telomere,
+            breakpoint_idx,
+            breakpoint_orient,
             self.transition_log_prob,
         )
 
@@ -445,6 +455,9 @@ def decode_breakpoints_naive(cn, adjacencies, breakpoints):
             'n_1', 'ell_1', 'side_1', 'n_2', 'ell_2', 'side_2', 'cn_*'
 
     """
+    
+    # Calculate breakpoint copy number based on total copy number transitions
+    cn = cn.sum(axis=-1)
 
     breakend_adj = dict()
     for seg_1, seg_2 in adjacencies:
@@ -455,50 +468,34 @@ def decode_breakpoints_naive(cn, adjacencies, breakpoints):
 
     M = cn.shape[1]
 
-    brk_cn = list()
+    brk_cn = dict()
 
     for breakpoint in breakpoints:
 
-        # Calculate the copy number 'flow' at each breakend for each allele
+        # Calculate the copy number 'flow' at each breakend
         breakend_cn = dict()
 
         for breakend in breakpoint:
-
             n, side = breakend
 
-            for allele in (0, 1):
-                cn_self = cn[n,:,allele]
+            cn_self = cn[n,:]
 
-                if breakend in breakend_adj:
-                    n_adj, side_adj = breakend_adj[breakend]
-                    cn_adj = cn[n_adj,:,allele]
-                else:
-                    cn_adj = 0
+            if breakend in breakend_adj:
+                n_adj, side_adj = breakend_adj[breakend]
+                cn_adj = cn[n_adj, :]
+            else:
+                cn_adj = 0
 
-                cn_residual = np.maximum(cn_self - cn_adj, 0)
+            cn_residual = np.maximum(cn_self - cn_adj, 0)
 
-                breakend_cn[(n, allele, side)] = cn_residual
+            breakend_cn[(n, side)] = cn_residual
 
         ((n_1, side_1), (n_2, side_2)) = breakpoint
 
-        # For each pair of alleles, starting with matching pairs
-        # try to push flow through the breakpoint edge, essentially
-        # take the minimum of residual at each breakend for each
-        # edge, and update the breakend residual
-        for allele_1, allele_2 in ((0, 0), (1, 1), (0, 1), (1, 0)):
+        breakpoint_cn = np.minimum(
+            breakend_cn[(n_1, side_1)],
+            breakend_cn[(n_2, side_2)])
 
-            breakpoint_cn = np.minimum(
-                breakend_cn[(n_1, allele_1, side_1)],
-                breakend_cn[(n_2, allele_2, side_2)])
-
-            breakend_cn[(n_1, allele_1, side_1)] -= breakpoint_cn
-            breakend_cn[(n_2, allele_2, side_2)] -= breakpoint_cn
-
-            brk_cn.append([n_1, allele_1, side_1, n_2, allele_2, side_2] + list(breakpoint_cn))
-
-    edge_cols = ['n_1', 'ell_1', 'side_1', 'n_2', 'ell_2', 'side_2']
-    cn_cols = ['cn_{0}'.format(m) for m in xrange(M)]
-
-    brk_cn = pd.DataFrame(brk_cn, columns=edge_cols+cn_cols)
+        brk_cn[breakpoint] = breakpoint_cn
 
     return brk_cn

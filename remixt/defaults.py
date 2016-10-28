@@ -134,3 +134,6 @@ num_em_iter                                 = 10
 # Number of iterations of Variational Inference per EM iteration
 num_update_iter                             = 5
 
+# Disable breakpoints for benchmarking purposes
+disable_breakpoints                         = False
+

@@ -118,6 +118,7 @@ def fit(experiment, init_params, config):
     min_proportion_genotyped = remixt.config.get_param(config, 'likelihood_min_proportion_genotyped')
     num_em_iter = remixt.config.get_param(config, 'num_em_iter')
     num_update_iter = remixt.config.get_param(config, 'num_update_iter')
+    disable_breakpoints = remixt.config.get_param(config, 'disable_breakpoints')
 
     model = remixt.cn_model.BreakpointModel(
         h_init,
@@ -130,6 +131,7 @@ def fit(experiment, init_params, config):
         divergence_weight=divergence_weight,
         min_segment_length=min_segment_length,
         min_proportion_genotyped=min_proportion_genotyped,
+        disable_breakpoints=disable_breakpoints,
     )
     model.num_update_iter = num_update_iter
 
@@ -142,7 +144,13 @@ def fit(experiment, init_params, config):
 
     fit_results['h'] = model.h
     fit_results['cn'] = model.optimal_cn()
-    fit_results['brk_cn'] = model.optimal_brk_cn()
+    
+    if not disable_breakpoints:
+        fit_results['brk_cn'] = model.optimal_brk_cn()
+
+    else:
+        fit_results['brk_cn'] = remixt.cn_model.decode_breakpoints_naive(
+            fit_results['cn'], experiment.adjacencies, experiment.breakpoints)
 
     # Save estimation statistics
     fit_results['stats'] = dict()
