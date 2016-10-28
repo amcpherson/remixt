@@ -717,21 +717,23 @@ class NegBinMixtureDistribution(object):
 
         """
         
+        coeff_base = (
+            np.log(1 - self.z) +
+            self.negbin.log_likelihood(x, mu) -
+            self.log_likelihood(x, mu)
+        )
+        
+        coeff_noise = (
+            np.log(self.z) +
+            self.negbin_noise.log_likelihood(x, mu) -
+            self.log_likelihood(x, mu)
+        )
+        
         partial_mu = (
-            (1 - self.z) *
-            np.exp(self.negbin.log_likelihood(x, mu)) *
-            self.negbin.log_likelihood_partial_mu(x, mu))
+            np.exp(coeff_base) * self.negbin.log_likelihood_partial_mu(x, mu) +
+            np.exp(coeff_noise) * self.negbin_noise.log_likelihood_partial_mu(x, mu))
         
-        partial_mu_noise = (
-            self.z *
-            np.exp(self.negbin_noise.log_likelihood(x, mu)) *
-            self.negbin_noise.log_likelihood_partial_mu(x, mu))
-        
-        partial_mu_mixture = (
-            (partial_mu + partial_mu_noise) / 
-            np.exp(self.log_likelihood(x, mu)))
-            
-        return partial_mu_mixture
+        return partial_mu
 
 
 
