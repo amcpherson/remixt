@@ -55,7 +55,7 @@ def nll_negbin_r(param, negbin, x, l, g):
     return result.fun
 
 
-def learn_negbin_r_adjacent(negbin, x, l, min_length=10000., perc=90., bias=2.0):
+def learn_negbin_r_adjacent(negbin, x, l, min_length=0., perc=None, bias=2.0):
     """ Learn the negative binomial dispersion parameter with the
     adjacent data points similarity assumption.
 
@@ -80,24 +80,27 @@ def learn_negbin_r_adjacent(negbin, x, l, min_length=10000., perc=90., bias=2.0)
     x = x[:resize]
     l = l[:resize]
 
+    # Outlier removal based on initial log likelihood
+    if perc is not None:
+        
+        # Intial parameter estimate
+        g0 = _sum_adjacent(x / l) / 2.
+        r0 = 100.
+
+        # Initial estimate of negative log likelihood per pair
+        negbin.r = r0
+        adj_nll = -negbin.log_likelihood(x, l * np.repeat(g0, 2))
+        adj_nll = _sum_adjacent(adj_nll)
+        
+        # Outliers as percentile of log likelihood
+        outliers = (adj_nll > np.percentile(adj_nll, perc))
+        outliers = np.repeat(outliers, 2)
+        
+        # Remove outliers
+        x = x[~outliers]
+        l = l[~outliers]
+
     # Intial parameter estimate
-    g0 = _sum_adjacent(x / l) / 2.
-    r0 = 100.
-
-    # Initial estimate of negative log likelihood per pair
-    negbin.r = r0
-    adj_nll = -negbin.log_likelihood(x, l * np.repeat(g0, 2))
-    adj_nll = _sum_adjacent(adj_nll)
-    
-    # Outliers as percentile of log likelihood
-    outliers = (adj_nll > np.percentile(adj_nll, perc))
-    outliers = np.repeat(outliers, 2)
-    
-    # Remove outliers
-    x = x[~outliers]
-    l = l[~outliers]
-
-    # Redo intial parameter estimate
     g = _sum_adjacent(x / l) / 2.
     
     result = scipy.optimize.minimize_scalar(
@@ -139,7 +142,7 @@ def nll_betabin_partial_param(param, betabin, k, n):
     return -np.concatenate([ll_partial_p, [ll_partial_M]])
 
 
-def learn_betabin_M_adjacent(betabin, k, n, min_readcount=1000., perc=90., bias=2.0):
+def learn_betabin_M_adjacent(betabin, k, n, min_readcount=1., perc=None, bias=2.0):
     """ Learn the beta binomial dispersion parameter with the
     adjacent data points similarity assumption.
 
@@ -164,24 +167,27 @@ def learn_betabin_M_adjacent(betabin, k, n, min_readcount=1000., perc=90., bias=
     k = k[:resize]
     n = n[:resize]
 
+    # Outlier removal based on initial log likelihood
+    if perc is not None:
+        
+        # Intial parameter estimate
+        p0 = _sum_adjacent(k.astype(float) / n.astype(float)) / 2.
+        M0 = 100.
+
+        # Initial estimate of negative log likelihood per pair
+        betabin.M = M0
+        adj_nll = -betabin.log_likelihood(k, n, np.repeat(p0, 2))
+        adj_nll = _sum_adjacent(adj_nll)
+
+        # Outliers as percentile of log likelihood
+        outliers = (adj_nll > np.percentile(adj_nll, perc))
+        outliers = np.repeat(outliers, 2)
+
+        # Remove outliers
+        k = k[~outliers]
+        n = n[~outliers]
+
     # Intial parameter estimate
-    p0 = _sum_adjacent(k.astype(float) / n.astype(float)) / 2.
-    M0 = 100.
-
-    # Initial estimate of negative log likelihood per pair
-    betabin.M = M0
-    adj_nll = -betabin.log_likelihood(k, n, np.repeat(p0, 2))
-    adj_nll = _sum_adjacent(adj_nll)
-
-    # Outliers as percentile of log likelihood
-    outliers = (adj_nll > np.percentile(adj_nll, perc))
-    outliers = np.repeat(outliers, 2)
-
-    # Remove outliers
-    k = k[~outliers]
-    n = n[~outliers]
-
-    # Redo intial parameter estimate
     p0 = _sum_adjacent(k.astype(float) / n.astype(float)) / 2.
     M0 = 100.
     param0 = np.concatenate([p0, [M0]])
