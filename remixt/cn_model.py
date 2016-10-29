@@ -2,8 +2,6 @@ import itertools
 import collections
 import numpy as np
 import pandas as pd
-import scipy
-import scipy.optimize
 import scipy.misc
 import pickle
 
@@ -194,6 +192,9 @@ class BreakpointModel(object):
         # Create emission / prior / copy number models
         self.emission = remixt.likelihood.NegBinBetaBinLikelihood(self.x1, self.l1)
         self.emission.h = h_init
+        
+        # Learn parameters from the data
+        self.emission.learn_parameters(self.x1, self.l1)
 
         # Create prior probability model
         self.prior = remixt.cn_model.CopyNumberPrior(self.l1, divergence_weight=self.divergence_weight)
@@ -231,7 +232,6 @@ class BreakpointModel(object):
         self.cn_states = np.concatenate([
             np.asarray(self.model.cn_states),
             np.asarray(self.model.cn_states)[:, :, ::-1]])
-        
 
     @property
     def likelihood_params(self):
@@ -241,7 +241,6 @@ class BreakpointModel(object):
             self.emission.hdel_mu_param(self.cn_states),
             self.emission.loh_p_param(self.cn_states),
         ]
-
 
     def get_model_data(self):
         data = {}
@@ -256,24 +255,20 @@ class BreakpointModel(object):
                 data[a] = getattr(self.model, a)
         return data
 
-
     def _write_model(self, model_filename):
         data = self.get_model_data()
         pickle.dump(data, open(model_filename, 'w'))
-
 
     def _read_model(self, model_filename):
         data = pickle.load(open(model_filename, 'r'))
         for a in dir(self.model):
             if a in data:
                 setattr(self.model, a, data[a])
-                
-                
+
     def log_likelihood(self, s):
         cn = self.cn_states[s, :, :][np.newaxis, :, :]
         return self.emission.log_likelihood(cn) + self.prior.log_prior(cn)
-        
-    
+
     def calculate_framelogprob(self, allele_swap):
         framelogprob = np.zeros((self.model.num_segments, self.model.num_cn_states))
         
@@ -284,7 +279,6 @@ class BreakpointModel(object):
             framelogprob[:, s] = self.emission.log_likelihood(cn) + self.prior.log_prior(cn)
         
         return framelogprob
-
 
     def posterior_marginals(self):
         framelogprob = (
@@ -304,7 +298,6 @@ class BreakpointModel(object):
         
         return self.prev_elbo, posterior_marginals
 
-
     def _check_elbo(self, prev_elbo, name):
         threshold = -1e-6
         elbo = self.model.calculate_elbo()
@@ -314,8 +307,7 @@ class BreakpointModel(object):
             raise Exception('elbo error for step {}!'.format(name))
         prev_elbo = elbo
         return elbo
-        
-        
+
     def update(self, check_elbo=False):
         """ Single update of all variational parameters.
         """
@@ -356,51 +348,6 @@ class BreakpointModel(object):
             
         self.prev_elbo_diff = self.prev_elbo - elbo
         self.prev_elbo = elbo
-
-
-    def optimize(self, h_init, elbo_diff_threshold=1e-6, max_update_iter=5, max_update_var_iter=5):
-        
-        M = h_init.shape[0]
-
-        elbo = self.model.calculate_elbo()
-
-        elbo_prev = None
-        self.num_iter = 0
-        self.converged = False
-        self.prev_elbo_diff = None
-        
-        for self.num_iter in xrange(1, max_update_iter + 1):
-            # import pstats, cProfile
-            # cProfile.runctx("self.model.update()", globals(), locals(), "Profile.prof")
-            # s = pstats.Stats("Profile.prof")
-            # s.strip_dirs().sort_stats("cumtime").print_stats()
-            # raise
-            elbo = self.update(update_variance=False)
-            print 'elbo', elbo
-            print 'h', np.asarray(self.model.h)
-            print self.model.calculate_elbo()
-            if elbo_prev is not None:
-                self.prev_elbo_diff = elbo - elbo_prev
-                print 'diff:', self.prev_elbo_diff
-                if self.prev_elbo_diff < elbo_diff_threshold:
-                    self.converged = True
-                    break
-            elbo_prev = elbo
-
-        for self.num_iter in xrange(1, max_update_var_iter + 1):
-            elbo = self.update(update_variance=True)
-            print 'elbo', elbo
-            print 'h', np.asarray(self.model.h)
-            print self.model.calculate_elbo()
-            if elbo_prev is not None:
-                self.prev_elbo_diff = elbo - elbo_prev
-                print 'diff:', self.prev_elbo_diff
-                if self.prev_elbo_diff < elbo_diff_threshold:
-                    self.converged = True
-                    break
-            elbo_prev = elbo
-
-        return elbo
 
     def optimal_cn(self):
         cn = np.zeros((self.model.num_segments, self.model.num_clones, self.model.num_alleles), dtype=int)
