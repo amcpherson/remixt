@@ -90,7 +90,6 @@ class BreakpointModel(object):
         
         # Observed data should be ordered as major, minor, total
         assert np.all(x[:, 1] <= x[:, 0])
-        assert np.all(x[:, 0] <= x[:, 2])
 
         self.M = h_init.shape[0]
         self.N = x.shape[0]
