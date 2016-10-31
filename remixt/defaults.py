@@ -35,7 +35,7 @@ gap_url_template                            = 'http://hgdownload.soe.ucsc.edu/go
 gap_table_template                          = '{ref_data_dir}/{ucsc_genome_version}_gap.txt.gz'
 
 # Segment length for automatically generated segments
-segment_length                              = int(3e6)
+segment_length                              = int(5e5)
 
 # Length of simulated reads used to calculate mappability
 mappability_length                          = 100
