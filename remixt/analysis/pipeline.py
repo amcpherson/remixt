@@ -157,6 +157,7 @@ def fit(experiment, init_params, config):
     fit_results['stats']['elbo'] = elbo
     fit_results['stats']['elbo_diff'] = model.prev_elbo_diff
     fit_results['stats']['error_message'] = ''
+    fit_results['stats'].update(model.get_likelihood_param_values())
 
     cn = fit_results['cn']
     ploidy = (cn[:,1:,:].mean(axis=1).T * experiment.l).sum() / experiment.l.sum()

@@ -30,7 +30,7 @@ class ProbabilityError(ValueError):
 
 
 class OptimizeParameter(object):
-    def __init__(self, name, attr, bounds, is_scalar, log_likelihood_partial):
+    def __init__(self, name, attr, bounds, is_scalar, log_likelihood_partial=None):
         self.name = name
         self._attr = attr
         self._bounds = bounds
@@ -1233,7 +1233,6 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
             attr=(self.negbin, 'r'),
             bounds=(10., 5000.),
             is_scalar=True,
-            log_likelihood_partial=self.log_likelihood_partial_r,
         )
 
     @property
@@ -1243,7 +1242,6 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
             attr=(self.negbin_hdel, 'r'),
             bounds=(10., 5000.),
             is_scalar=True,
-            log_likelihood_partial=self.log_likelihood_partial_r,
         )
 
     @property
@@ -1253,7 +1251,6 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
             attr=(self.betabin, 'M'),
             bounds=(10., 5000.),
             is_scalar=True,
-            log_likelihood_partial=self.log_likelihood_partial_M,
         )
 
     @property
@@ -1263,7 +1260,6 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
             attr=(self.betabin_loh, 'M'),
             bounds=(10., 5000.),
             is_scalar=True,
-            log_likelihood_partial=self.log_likelihood_partial_M,
         )
 
     @property
@@ -1273,7 +1269,6 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
             attr=(self.betabin, 'z'),
             bounds=(1e-16, 1.-1e-16),
             is_scalar=True,
-            log_likelihood_partial=self.log_likelihood_partial_z,
         )
 
     @property
@@ -1283,7 +1278,6 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
             attr=(self.betabin_loh, 'z'),
             bounds=(1e-16, 1.-1e-16),
             is_scalar=True,
-            log_likelihood_partial=self.log_likelihood_partial_z,
         )
 
     @property
@@ -1293,7 +1287,6 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
             attr=(self.negbin, 'z'),
             bounds=(1e-16, 1.-1e-16),
             is_scalar=True,
-            log_likelihood_partial=self.log_likelihood_partial_z,
         )
 
     @property
@@ -1303,7 +1296,6 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
             attr=(self.negbin_hdel, 'z'),
             bounds=(1e-16, 1.-1e-16),
             is_scalar=True,
-            log_likelihood_partial=self.log_likelihood_partial_z,
         )
 
     @property
@@ -1313,7 +1305,6 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
             attr=(self, 'hdel_mu'),
             bounds=(1e-16, 10.),
             is_scalar=True,
-            log_likelihood_partial=self.log_likelihood_partial_hdel_mu,
         )
 
     @property
@@ -1323,7 +1314,6 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
             attr=(self, 'loh_p'),
             bounds=(1e-16, 0.5),
             is_scalar=True,
-            log_likelihood_partial=self.log_likelihood_partial_loh_p,
         )
 
     def learn_parameters(self, x, l):
@@ -1362,7 +1352,7 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
 
         negbin_ll = np.where(
             is_hdel,
-            self.negbin_hdel.log_likelihood(x[:, 2], self.hdel_mu * l * l),
+            self.negbin_hdel.log_likelihood(x[:, 2], self.hdel_mu * l),
             self.negbin.log_likelihood(x[:, 2], mu)
         )
 
@@ -1492,7 +1482,7 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
 
         negbin_partial_mu = np.where(
             is_hdel,
-            self.negbin_hdel.log_likelihood_partial_mu(x[:, 2], self.hdel_mu * l * l),
+            self.negbin_hdel.log_likelihood_partial_mu(x[:, 2], self.hdel_mu * l),
             self.negbin.log_likelihood_partial_mu(x[:, 2], mu),
         )
 
@@ -1530,7 +1520,7 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
         mu = self.expected_total_read_count(l, cn)
 
         partial_r = np.array([
-            self.negbin_hdel.log_likelihood_partial_r(x[:, 2], self.hdel_mu * l * l),
+            self.negbin_hdel.log_likelihood_partial_r(x[:, 2], self.hdel_mu * l),
             self.negbin.log_likelihood_partial_r(x[:, 2], mu),
         ]).T
 

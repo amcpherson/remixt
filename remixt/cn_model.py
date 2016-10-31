@@ -240,16 +240,36 @@ class BreakpointModel(object):
         ]
 
         if not self.normal_contamination:
-            params.append([
+            params += [
+                self.emission.hdel_mu_param(self.cn_states),
+                self.emission.loh_p_param(self.cn_states),
                 self.emission.r_hdel_param(self.cn_states),
                 self.emission.M_loh_param(self.cn_states),
-                self.emission.betabin_loh_mix(self.cn_states),
-                self.emission.negbin_hdel_mix(self.cn_states),
-                self.emission.hdel_mu(self.cn_states),
-                self.emission.loh_p(self.cn_states),
-            ])
+                self.emission.negbin_hdel_mix_param(self.cn_states),
+                self.emission.betabin_loh_mix_param(self.cn_states),
+            ]
 
         return params
+    
+    def get_likelihood_param_values(self):
+        param_values = {
+            'negbin_r': self.emission.r_param.value,
+            'betabin_M': self.emission.M_param.value,
+            'negbin_mix': self.emission.negbin_mix_param.value,
+            'betabin_mix': self.emission.betabin_mix_param.value,
+        }
+
+        if not self.normal_contamination:
+            param_values.update({
+                'negbin_hdel_r': self.emission.r_hdel_param.value,
+                'betabin_loh_M': self.emission.M_loh_param.value,
+                'negbin_hdel_mix': self.emission.negbin_hdel_mix_param.value,
+                'betabin_loh_mix': self.emission.betabin_loh_mix_param.value,
+                'hdel_mu': self.emission.hdel_mu_param.value,
+                'loh_p': self.emission.loh_p_param.value,
+            })
+
+        return param_values
 
     def get_model_data(self):
         data = {}
