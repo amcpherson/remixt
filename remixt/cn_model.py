@@ -192,9 +192,6 @@ class BreakpointModel(object):
         # Create emission / prior / copy number models
         self.emission = remixt.likelihood.NegBinBetaBinLikelihood(self.x1, self.l1)
         self.emission.h = h_init
-        
-        # Learn parameters from the data
-        self.emission.learn_parameters(self.x1, self.l1)
 
         # Create prior probability model
         self.prior = remixt.cn_model.CopyNumberPrior(self.l1, divergence_weight=self.divergence_weight)
@@ -235,12 +232,25 @@ class BreakpointModel(object):
 
     @property
     def likelihood_params(self):
-        return [
+        params = [
             self.emission.h_param(self.cn_states),
-            self.emission.z_param(self.cn_states),
-            self.emission.hdel_mu_param(self.cn_states),
-            self.emission.loh_p_param(self.cn_states),
+            self.emission.r_param(self.cn_states),
+            self.emission.M_param(self.cn_states),
+            self.emission.betabin_mix_param(self.cn_states),
+            self.emission.negbin_mix_param(self.cn_states),
         ]
+
+        if not self.normal_contamination:
+            params.append([
+                self.emission.r_hdel_param(self.cn_states),
+                self.emission.M_loh_param(self.cn_states),
+                self.emission.betabin_loh_mix(self.cn_states),
+                self.emission.negbin_hdel_mix(self.cn_states),
+                self.emission.hdel_mu(self.cn_states),
+                self.emission.loh_p(self.cn_states),
+            ])
+
+        return params
 
     def get_model_data(self):
         data = {}

@@ -26,7 +26,7 @@ class ExpectationMaximizationEstimator(object):
 
         self.em_iter = None
 
-    def evaluate_q(self, value, model, weights, params, idxs):
+    def evaluate_q(self, value, model, weights, param):
         """ Evaluate q function, expected value of complete data log likelihood
         with respect to conditional, given specific parameter value
         
@@ -34,16 +34,16 @@ class ExpectationMaximizationEstimator(object):
             value (numpy.array): parameter value
             model (object): probabilistic model to optimize
             weights (numpy.array): state weights matrix
-            params (list): name of parameter of model to optimize
-            idxs (list): list of start indices of params
+            param (OptimizeParameter): parameter to optimize
 
         Returns:
             numpy.array: expected value of complete data log likelihood
 
         """
+        if param.is_scalar and (value < param.bounds[0] or value > param.bounds[1]):
+            return np.inf
 
-        for p, idx in zip(params, idxs):
-            p.value = value[idx:idx+p.length]
+        param.value = value
 
         q_value = 0.0
         
@@ -58,7 +58,7 @@ class ExpectationMaximizationEstimator(object):
 
         return -q_value
 
-    def evaluate_q_derivative(self, value, model, weights, params, idxs):
+    def evaluate_q_derivative(self, value, model, weights, param):
         """ Evaluate derivative of q function, expected complete data
         with respect to conditional, given specific parameter value
         
@@ -66,27 +66,24 @@ class ExpectationMaximizationEstimator(object):
             value (numpy.array): parameter value
             model (object): probabilistic model to optimize
             weights (numpy.array): state weights matrix
-            params (list): list of parameters of model to optimize
-            idxs (list): list of start indices of params
+            param (OptimizeParameter): parameter to optimize
 
         Returns:
             numpy.array: partial derivative of expected value of complete data log likelihood
 
         """
 
-        for p, idx in zip(params, idxs):
-            p.value = value[idx:idx+p.length]
+        param.value = value
         
         q_derivative = np.zeros(value.shape)
 
         for s, w in enumerate(weights):
-            for p, idx in zip(params, idxs):
-                log_likelihood_partial = (w[:, np.newaxis] * p.log_likelihood_partial(s))
+            log_likelihood_partial = (w[:, np.newaxis] * param.log_likelihood_partial(s))
 
-                for n in zip(*np.where(np.isnan(log_likelihood_partial))):
-                    raise OptimizeError('ll partial is nan', value=value, state=s, resp=w[n])
+            for n in zip(*np.where(np.isnan(log_likelihood_partial))):
+                raise OptimizeError('ll partial is nan', value=value, state=s, resp=w[n])
 
-                q_derivative[idx:idx+p.length] += np.sum(log_likelihood_partial, axis=0)
+            q_derivative += np.sum(log_likelihood_partial, axis=0)
 
         return -q_derivative
 
@@ -122,41 +119,51 @@ class ExpectationMaximizationEstimator(object):
             numpy.array: optimal parameter maximizing Q
 
         """
+        
+        for param in params:
+            print 'optimizing:', param.name,
+            print 'init:', param.value,
+            print 'is_scalar:', param.is_scalar,
+            print 'bounds:', param.bounds
+            
+            if param.is_scalar:
+                result = scipy.optimize.minimize_scalar(
+                    self.evaluate_q,
+                    args=(model, weights, param),
+                    bounds=param.bounds,
+                    method='Bounded',
+                )
 
-        bounds = np.concatenate([p.bounds for p in params])
-        value = np.concatenate([p.value for p in params])
-        idxs = np.array([p.length for p in params]).cumsum() - np.array([p.length for p in params])
+                if not result.success:
+                    value = param.value
+                    print 'parameter values: ', value
+                    print result
+                    raise OptimizeError(repr(result))
 
-        print 'lower bound:', -self.evaluate_q(value, model, weights, params, idxs)
-        q_derivative = -self.evaluate_q_derivative(value, model, weights, params, idxs)
-        print 'lower bound derivatives:'
-        for p, idx in zip(params, idxs):
-            print ' ', p.name, q_derivative[idx:idx+p.length]
+                param.value = result.x
+                q_value = -result.fun
 
-        result = scipy.optimize.minimize(
-            self.evaluate_q,
-            value,
-            method='L-BFGS-B',
-            jac=self.evaluate_q_derivative,
-            args=(model, weights, params, idxs),
-            bounds=bounds,
-            options={'ftol':1e-3},
-        )
+            else:
+                result = scipy.optimize.minimize(
+                    self.evaluate_q,
+                    param.value,
+                    method='L-BFGS-B',
+                    jac=self.evaluate_q_derivative,
+                    args=(model, weights, param),
+                    bounds=param.bounds,
+                )
 
-        if not result.success:
-            value = np.concatenate([p.value for p in params])
-            print 'parameter values: ', value
-            print 'analytic derivative: ', self.evaluate_q_derivative(value, model, weights, params, idxs)
-            print 'numerical derivative: ', statsmodels.tools.numdiff.approx_fprime_cs(value, self.evaluate_q, args=(model, weights, params, idxs))
-            print result
-            raise OptimizeError(repr(result))
+                param.value = result.x
+                q_value = -result.fun
 
-        for p, idx in zip(params, idxs):
-            p.value = result.x[idx:idx+p.length]
-
-        q_value = -result.fun
-
-        print 'new lower bound:', q_value
+                if not result.success:
+                    print 'parameter values: ', param.value
+                    print 'analytic derivative: ', self.evaluate_q_derivative(param.value, model, weights, param)
+                    print 'numerical derivative: ', statsmodels.tools.numdiff.approx_fprime_cs(param.value, self.evaluate_q, args=(model, weights, param))
+                    print result
+                    raise OptimizeError(repr(result))
+            
+            print 'result:', param.value
 
         return q_value
 
