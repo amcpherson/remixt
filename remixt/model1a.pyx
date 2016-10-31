@@ -417,7 +417,7 @@ cdef class RemixtModel:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef add_log_transmat_total(self, np.float64_t[:, :] log_transmat, int m, np.float64_t mult_const):
+    cdef void add_log_transmat_total(self, np.float64_t[:, :] log_transmat, int m, np.float64_t mult_const) except*:
         """ Add total copy number log transition matrix for no breakpoint.
         """
 
@@ -429,24 +429,32 @@ cdef class RemixtModel:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef add_log_transmat_allele(self, np.float64_t[:, :] log_transmat, int m, np.float64_t mult_const):
+    cdef void add_log_transmat_allele(self, np.float64_t[:, :] log_transmat, np.float64_t mult_const) except*:
         """ Add allele specific copy number log transition matrix for no breakpoint.
         """
 
-        cdef int s_1, s_2
+        cdef int s_1, s_2, flip, m, allele
+        cdef np.ndarray[np.float64_t, ndim=1] allele_cn_change = np.zeros((2,))
 
         for s_1 in range(self.num_cn_states):
             for s_2 in range(self.num_cn_states):
-                min_allele_cn_change = min(
-                    fabs(self.cn_states[s_1, m, 0] - self.cn_states[s_2, m, 0]) + fabs(self.cn_states[s_1, m, 1] - self.cn_states[s_2, m, 1]),
-                    fabs(self.cn_states[s_1, m, 0] - self.cn_states[s_2, m, 1]) + fabs(self.cn_states[s_1, m, 1] - self.cn_states[s_2, m, 0]))
-                log_transmat[s_1, s_2] += mult_const * (min_allele_cn_change - fabs(self.cn_states_total[s_1, m] - self.cn_states_total[s_2, m]))
+                for flip in range(2):
+                    allele_cn_change[flip] = 0.
+                    for m in range(self.num_clones):
+                        for allele in range(self.num_alleles):
+                            if flip == 1:
+                                other_allele = 1 - allele
+                            else:
+                                other_allele = allele
+                            allele_cn_change[flip] += fabs(self.cn_states[s_1, m, allele] - self.cn_states[s_2, m, other_allele])
+                        allele_cn_change[flip] -= fabs(self.cn_states_total[s_1, m] - self.cn_states_total[s_2, m])
+                log_transmat[s_1, s_2] += mult_const * min(allele_cn_change[0], allele_cn_change[1])
 
     @cython.boundscheck(False)
     @cython.wraparound(True)
-    cdef add_log_transmat_expectation_brk(self, np.float64_t[:, :] log_transmat, int m,
+    cdef void add_log_transmat_expectation_brk(self, np.float64_t[:, :] log_transmat, int m,
                                           np.float64_t[:] p_breakpoint, int breakpoint_orient,
-                                          np.float64_t mult_const):
+                                          np.float64_t mult_const) except*:
         """ Add expected log transition matrix wrt breakpoint
         probability for the total copy number case.
         """
@@ -466,8 +474,8 @@ cdef class RemixtModel:
 
     @cython.boundscheck(False)
     @cython.wraparound(True)
-    cdef add_log_breakpoint_p_expectation_cn(self, np.float64_t[:] log_breakpoint_p, np.float64_t[:, :] p_cn,
-                                             int m, int breakpoint_orient, np.float64_t mult_const):
+    cdef void add_log_breakpoint_p_expectation_cn(self, np.float64_t[:] log_breakpoint_p, np.float64_t[:, :] p_cn,
+                                             int m, int breakpoint_orient, np.float64_t mult_const) except*:
         """ Calculate the expected log transition matrix wrt pairwise
         copy number probability.
         """
@@ -488,18 +496,19 @@ cdef class RemixtModel:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef void calculate_log_transmat_regular(self, int n, np.float64_t[:, :] log_transmat):
+    cdef void calculate_log_transmat_regular(self, int n, np.float64_t[:, :] log_transmat) except*:
         cdef int m
 
         log_transmat[:] = 0.
 
         for m in range(self.num_clones):
             self.add_log_transmat_total(log_transmat, m, -self.transition_penalty)
-            self.add_log_transmat_allele(log_transmat, m, -self.transition_penalty)
-        
+
+        self.add_log_transmat_allele(log_transmat, -self.transition_penalty)
+
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef void calculate_log_transmat_breakpoint(self, int n, np.float64_t[:, :] log_transmat):
+    cdef void calculate_log_transmat_breakpoint(self, int n, np.float64_t[:, :] log_transmat) except*:
         cdef int m
         cdef np.float64_t mult_const
 
@@ -511,11 +520,12 @@ cdef class RemixtModel:
                 self.p_breakpoint[self.breakpoint_idx[n], :],
                 self.breakpoint_orient[n],
                 -self.transition_penalty)
-            self.add_log_transmat_allele(log_transmat, m, -self.transition_penalty)
+
+        self.add_log_transmat_allele(log_transmat, -self.transition_penalty)
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef void calculate_log_transmat(self, int n, np.float64_t[:, :] log_transmat):
+    cdef void calculate_log_transmat(self, int n, np.float64_t[:, :] log_transmat) except*:
         """ Calculate the log transition matrix given current breakpoint and
         allele probabilities.
         """
@@ -602,7 +612,7 @@ cdef class RemixtModel:
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cpdef np.float64_t calculate_variational_entropy(self):
+    cpdef np.float64_t calculate_variational_entropy(self) except*:
         """ Calculate the entropy of the approximating distribution.
         """
 
