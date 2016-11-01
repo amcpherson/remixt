@@ -127,21 +127,15 @@ class ExpectationMaximizationEstimator(object):
             print 'bounds:', param.bounds
             
             if param.is_scalar:
-                result = scipy.optimize.minimize_scalar(
+                result = scipy.optimize.brute(
                     self.evaluate_q,
                     args=(model, weights, param),
-                    bounds=param.bounds,
-                    method='Bounded',
+                    ranges=[param.bounds],
+                    full_output=True,
                 )
 
-                if not result.success:
-                    value = param.value
-                    print 'parameter values: ', value
-                    print result
-                    raise OptimizeError(repr(result))
-
-                param.value = result.x
-                q_value = -result.fun
+                param.value = result[0]
+                q_value = -result[1]
 
             else:
                 result = scipy.optimize.minimize(
