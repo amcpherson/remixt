@@ -1303,7 +1303,7 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
         return OptimizeParameter(
             name='hdel_mu',
             attr=(self, 'hdel_mu'),
-            bounds=(1e-16, 10.),
+            bounds=(1e-7, 1e-2),
             is_scalar=True,
         )
 
@@ -1312,7 +1312,7 @@ class NegBinBetaBinLikelihood(ReadCountLikelihood):
         return OptimizeParameter(
             name='loh_p',
             attr=(self, 'loh_p'),
-            bounds=(1e-16, 0.5),
+            bounds=(1e-5, 0.01),
             is_scalar=True,
         )
 
