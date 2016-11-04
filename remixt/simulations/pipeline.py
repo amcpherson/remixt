@@ -1,6 +1,7 @@
 import itertools
 import pickle
 import yaml
+import collections
 import pandas as pd
 import numpy as np
 
@@ -664,27 +665,33 @@ def merge_evaluations(merged_filename, sim_defs, evaluation_filenames, key_names
         evaluation_filenames (dict of str): hdf filename of evaluation per simulation per tool
 
     """
+    
+    merged_store = pd.HDFStore(merged_filename, 'w')
 
     sim_defs_table = pd.DataFrame(
         sim_defs.values(),
         index=pd.Index(sim_defs.keys(), name='sim_id'),
     ).reset_index()
 
-    evaluations_table = []
+    merged_store['/simulations'] = sim_defs_table
+
+    tables = collections.defaultdict(list)
     for key, evaluation_filename in evaluation_filenames.iteritems():
-        with pd.HDFStore(evaluation_filename, 'r') as store:
-            evaluation = store['/evaluation']
+        store = pd.HDFStore(evaluation_filename, 'r')
 
-        for value, name in zip(key, key_names):
-            evaluation[name] = value
+        if not isinstance(key, tuple):
+            key = (key,)
 
-        evaluations_table.append(evaluation)
+        for table_name in ('/cn_evaluation', '/brk_cn_evaluation', '/mix_results'):
+            table = store[table_name]
+            for value, name in zip(key, key_names):
+                table[name] = value
+            tables[table_name].append(table)
 
-    evaluations_table = pd.concat(evaluations_table, ignore_index=True)
-
-    with pd.HDFStore(merged_filename, 'w') as merged_store:
-        merged_store['/simulations'] = sim_defs_table
-        merged_store['/evaluations'] = evaluations_table
+        merged_store['/brk_cn_table/' + '/'.join(key)] = store['/brk_cn_table']
+    
+    for table_name, table in tables.iteritems():
+        merged_store[table_name] = pd.DataFrame(table)
 
 
 def create_tool_workflow(
