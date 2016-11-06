@@ -42,6 +42,11 @@ class ExpectationMaximizationEstimator(object):
         """
         if param.is_scalar and (value < param.bounds[0] or value > param.bounds[1]):
             return np.inf
+        
+        elif not param.is_scalar:
+            for i in range(len(value)):
+                if (value[i] < param.bounds[i][0] or value[i] > param.bounds[i][1]):
+                    return np.inf
 
         param.value = value
 
@@ -72,6 +77,10 @@ class ExpectationMaximizationEstimator(object):
             numpy.array: partial derivative of expected value of complete data log likelihood
 
         """
+        if not param.is_scalar:
+            for i in range(len(value)):
+                if (value[i] < param.bounds[i][0] or value[i] > param.bounds[i][1]):
+                    return np.inf
 
         param.value = value
         
