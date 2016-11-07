@@ -11,7 +11,6 @@ from scipy.special import gammaln, betaln
 import statsmodels.tools.numdiff
 
 import remixt.simulations.simple
-import remixt.likelihood as likelihood
 import remixt.tests.unopt.likelihood as likelihood_unopt
 import remixt.likelihood
 import remixt.paramlearn
@@ -39,11 +38,7 @@ class likelihood_unittest(unittest.TestCase):
         # Add a 0 copy segment
         cn[0,1:,:] = 0
 
-        likelihood_model = likelihood.ReadCountLikelihood()
-        likelihood_model.h = h
-        likelihood_model.phi = phi
-
-        mu = likelihood_model.expected_read_count(l, cn)
+        mu = remixt.likelihood.expected_read_count(l, cn, h, phi)
 
         nb_p = mu / (r + mu)
 
@@ -475,5 +470,3 @@ class likelihood_unittest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
-
