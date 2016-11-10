@@ -1,9 +1,9 @@
 # cython: profile=True
-# cython: initializedcheck=True
-# cython: boundscheck=True
-# cython: wraparound=True
-# cython: cdivision=False
-from libc.math cimport exp, log, fabs, lgamma
+# cython: initializedcheck=False
+# cython: boundscheck=False
+# cython: wraparound=False
+# cython: cdivision=True
+from libc.math cimport exp, log, fabs, lgamma, isnan
 import numpy as np
 import scipy
 import itertools
@@ -257,7 +257,8 @@ cdef np.float64_t negbin_log_likelihood(np.float64_t x, np.float64_t mu, np.floa
     ll = (lgamma(x + r) - lgamma(x + 1) - lgamma(r)
         + x * log(nb_p) + r * log(1 - nb_p))
 
-    assert not np.isnan(ll)
+    if isnan(ll):
+        raise ValueError('ll is nan for x: {}, mu: {}, r: {}'.format(x, mu, r))
 
     return ll
 
@@ -285,7 +286,8 @@ cdef np.float64_t negbin_log_likelihood_partial_mu(np.float64_t x, np.float64_t 
 
     partial_mu = x / mu - (r + x) / (r + mu)
 
-    assert not np.isnan(partial_mu)
+    if isnan(partial_mu):
+        raise ValueError('partial_mu is nan for x: {}, mu: {}, r: {}'.format(x, mu, r))
 
     return partial_mu
 
@@ -330,7 +332,8 @@ cdef np.float64_t betabin_log_likelihood(np.float64_t k, np.float64_t n, np.floa
         - lgamma(M * p) - lgamma(M * (1 - p))
         + lgamma(M))
 
-    assert not np.isnan(ll)
+    if isnan(ll):
+        raise ValueError('ll is nan for k: {}, n: {}, p: {}, M: {}'.format(k, n, p, M))
 
     return ll
 
@@ -376,7 +379,8 @@ cdef np.float64_t betabin_log_likelihood_partial_p(np.float64_t k, np.float64_t 
         - M * digamma(M * p)
         - (-M) * digamma(M * (1 - p)))
 
-    assert not np.isnan(partial_p)
+    if isnan(partial_p):
+        raise ValueError('partial_p is nan for k: {}, n: {}, p: {}, M: {}'.format(k, n, p, M))
 
     return partial_p
 
@@ -490,13 +494,17 @@ cdef class RemixtModel:
 
     cdef public np.float64_t[:] h
 
-    cdef public np.float64_t[:] negbin_r
+    cdef public np.float64_t negbin_r_0
+    cdef public np.float64_t negbin_r_1
     cdef public np.float64_t negbin_hdel_mu
-    cdef public np.float64_t[:] negbin_hdel_r
+    cdef public np.float64_t negbin_hdel_r_0
+    cdef public np.float64_t negbin_hdel_r_1
 
-    cdef public np.float64_t[:] betabin_M
+    cdef public np.float64_t betabin_M_0
+    cdef public np.float64_t betabin_M_1
     cdef public np.float64_t betabin_loh_p
-    cdef public np.float64_t[:] betabin_loh_M
+    cdef public np.float64_t betabin_loh_M_0
+    cdef public np.float64_t betabin_loh_M_1
 
     def __cinit__(self,
         int num_clones, int num_segments,
@@ -596,8 +604,6 @@ cdef class RemixtModel:
 
         # Indicator for allele swapping
         self.p_allele_swap = np.ones((self.num_segments, 2)) * 0.5
-        self.p_allele_swap[:, 1] = 0.01
-        self.p_allele_swap[:, 0] = 0.99
 
         # Indicator for outlier states, and prior
         self.prior_outlier_total = 0.01
@@ -614,22 +620,17 @@ cdef class RemixtModel:
         self.p_outlier_allele[:, 1] = self.prior_outlier_allele
 
         # Initialize likelihood parameters
-        self.negbin_r = np.zeros((2,))
-        self.negbin_hdel_r = np.zeros((2,))
-        self.betabin_M = np.zeros((2,))
-        self.betabin_loh_M = np.zeros((2,))
-
-        self.negbin_r[0] = 500.
-        self.negbin_r[1] = 10.
+        self.negbin_r_0 = 500.
+        self.negbin_r_1 = 10.
         self.negbin_hdel_mu = 1e-5
-        self.negbin_hdel_r[0] = 500.
-        self.negbin_hdel_r[1] = 10.
+        self.negbin_hdel_r_0 = 500.
+        self.negbin_hdel_r_1 = 10.
 
-        self.betabin_M[0] = 500.
-        self.betabin_M[1] = 10.
+        self.betabin_M_0 = 500.
+        self.betabin_M_1 = 10.
         self.betabin_loh_p = 1e-3
-        self.betabin_loh_M[0] = 500.
-        self.betabin_loh_M[1] = 10.
+        self.betabin_loh_M_0 = 500.
+        self.betabin_loh_M_1 = 10.
 
     def __reduce__(self):
         state = (
@@ -861,7 +862,8 @@ cdef class RemixtModel:
             minor_depth += self.h[m] * self.cn_states[s, m, 0]
             total_depth += self.h[m] * self.cn_states_total[s, m]
 
-        assert total_depth > 0
+        if total_depth <= 0:
+            raise ValueError('total_depth <= 0 for s: {}'.format(s))
 
         return minor_depth / total_depth
 
@@ -877,7 +879,8 @@ cdef class RemixtModel:
             minor_depth += self.h[m] * self.cn_states[s, m, 0]
             total_depth += self.h[m] * self.cn_states_total[s, m]
 
-        assert total_depth > 0
+        if total_depth <= 0:
+            raise ValueError('total_depth <= 0 for s: {}'.format(s))
 
         for m in range(self.num_clones):
             partial_h[m] = (
@@ -901,11 +904,19 @@ cdef class RemixtModel:
 
         if not self.normal_contamination and self.is_hdel[s] == 1:
             mu = self.negbin_hdel_mu
-            r = self.negbin_hdel_r[u]
-            
+
+            if u == 0:
+                r = self.negbin_hdel_r_0
+            else:
+                r = self.negbin_hdel_r_1
+
         else:
             mu = self.calculate_expected_total_reads(n, s)
-            r = self.negbin_r[u]
+
+            if u == 0:
+                r = self.negbin_r_0
+            else:
+                r = self.negbin_r_1
 
         return negbin_log_likelihood(self.x[n], mu, r)
 
@@ -927,7 +938,11 @@ cdef class RemixtModel:
             
         else:
             mu = self.calculate_expected_total_reads(n, s)
-            r = self.negbin_r[u]
+
+            if u == 0:
+                r = self.negbin_r_0
+            else:
+                r = self.negbin_r_1
 
         log_likelihood_partial_mu = negbin_log_likelihood_partial_mu(self.x[n], mu, r)
 
@@ -947,11 +962,19 @@ cdef class RemixtModel:
 
         if not self.normal_contamination and self.is_loh[s] == 1:
             p = self.betabin_loh_p
-            M = self.betabin_loh_M[v]
+
+            if v == 0:
+                M = self.betabin_loh_M_0
+            else:
+                M = self.betabin_loh_M_1
 
         else:
             p = self.calculate_expected_allele_ratio(s)
-            M = self.betabin_M[v]
+
+            if v == 0:
+                M = self.betabin_M_0
+            else:
+                M = self.betabin_M_1
 
         allelic_readcount = self.y[n, 0] + self.y[n, 1]
 
@@ -981,7 +1004,11 @@ cdef class RemixtModel:
 
         else:
             p = self.calculate_expected_allele_ratio(s)
-            M = self.betabin_M[v]
+
+            if v == 0:
+                M = self.betabin_M_0
+            else:
+                M = self.betabin_M_1
 
         allelic_readcount = self.y[n, 0] + self.y[n, 1]
 
