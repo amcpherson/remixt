@@ -5,7 +5,6 @@ import pandas as pd
 
 import remixt.config
 import remixt.cn_model
-import remixt.em
 import remixt.analysis.experiment
 import remixt.analysis.readdepth
 
@@ -133,12 +132,11 @@ def fit(experiment, init_params, config):
         min_proportion_genotyped=min_proportion_genotyped,
         disable_breakpoints=disable_breakpoints,
     )
+    
+    model.num_em_iter = num_em_iter
     model.num_update_iter = num_update_iter
-
-    # Estimate haploid depths and other likelihood parameters
-    estimator = remixt.em.ExpectationMaximizationEstimator()
-    estimator.num_em_iter = num_em_iter
-    elbo = estimator.learn_param(model, *model.likelihood_params)
+    
+    model.fit()
 
     fit_results = dict()
 
@@ -154,7 +152,7 @@ def fit(experiment, init_params, config):
 
     # Save estimation statistics
     fit_results['stats'] = dict()
-    fit_results['stats']['elbo'] = elbo
+    fit_results['stats']['elbo'] = model.prev_elbo
     fit_results['stats']['elbo_diff'] = model.prev_elbo_diff
     fit_results['stats']['error_message'] = ''
     fit_results['stats'].update(model.get_likelihood_param_values())

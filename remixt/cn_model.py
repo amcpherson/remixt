@@ -21,50 +21,6 @@ def _get_brkend_seg_orient(breakend):
     return n_left, orient
 
 
-class CopyNumberPrior(object):
-
-    def __init__(self, l, max_divergence=1, divergence_weight=1e-7):
-        """ Create a copy number prior.
-
-        Args:
-            l (numpy.array): observed lengths of segments
-
-        KwArgs:
-            max_divergence (int): maxmimum allowed divergence between segments
-            divergence_weight (float): prior length scaled weight on divergent segments
-
-        """
-        
-        self.l = l
-
-        self.max_divergence = max_divergence
-        self.divergence_weight = divergence_weight
-
-        if divergence_weight < 0.:
-            raise ValueError('divergence weight should be positive, was {}'.format(divergence_weight))
-
-
-    def log_prior(self, cn):
-        """ Evaluate log prior probability of segment copy number.
-        
-        Args:
-            cn (numpy.array): copy number state of segments
-
-        Returns:
-            numpy.array: log prior per segment
-
-        """
-
-        subclonal = (cn[:,1:,:].max(axis=1) != cn[:,1:,:].min(axis=1)) * 1
-        lp = -1.0 * np.sum(subclonal, axis=1) * self.l * self.divergence_weight
-
-        subclonal_divergence = (cn[:,1:,:].max(axis=1) - cn[:,1:,:].min(axis=1)) * 1
-        invalid_divergence = (subclonal_divergence > self.max_divergence).any(axis=1)
-        lp -= np.where(invalid_divergence, 1000., 0.)
-
-        return lp
-
-
 class BreakpointModel(object):
 
     def __init__(self, h_init, x, l, adjacencies, breakpoints, **kwargs):
@@ -182,8 +138,8 @@ class BreakpointModel(object):
         # These should be zero lengthed segments, and zero read counts
         # for dummy segments, but setting lengths and counts to 1 to prevent
         # NaNs should have little effect
-        self.x1 = np.ones((self.N1, x.shape[1]), dtype=x.dtype)
-        self.l1 = np.ones((self.N1,), dtype=l.dtype)
+        self.x1 = np.ones((self.N1, x.shape[1]), dtype=float)
+        self.l1 = np.ones((self.N1,), dtype=float)
 
         self.x1[self.seg_fwd_remap, :] = x
         self.l1[self.seg_fwd_remap] = l
@@ -191,9 +147,6 @@ class BreakpointModel(object):
         # Create emission / prior / copy number models
         self.emission = remixt.likelihood.NegBinBetaBinLikelihood(self.x1, self.l1)
         self.emission.h = h_init
-
-        # Create prior probability model
-        self.prior = remixt.cn_model.CopyNumberPrior(self.l1, divergence_weight=self.divergence_weight)
 
         # Mask amplifications and poorly modelled segments from likelihood
         self.emission.add_amplification_mask(self.max_copy_number)
@@ -211,24 +164,23 @@ class BreakpointModel(object):
             self.max_copy_number,
             self.max_copy_number_diff,
             self.normal_contamination,
+            h_init,
+            self.l1,
+            self.x1[:, 2],
+            self.x1[:, 0:2],
+            self.emission.mask.astype(int),
             is_telomere,
             breakpoint_idx,
             breakpoint_orient,
             self.transition_log_prob,
+            self.divergence_weight,
         )
 
         self.prev_elbo = None
         self.prev_elbo_diff = None
+        self.num_em_iter = 1
         self.num_update_iter = 1
         
-        # Indicator variables for allele swaps
-        # Initalize to uniform over 2 states
-        self.p_allele_swap = np.ones((self.N1, 2)) * 0.5
-        
-        self.cn_states = np.concatenate([
-            np.asarray(self.model.cn_states),
-            np.asarray(self.model.cn_states)[:, :, ::-1]])
-
     @property
     def likelihood_params(self):
         params = [
@@ -294,38 +246,14 @@ class BreakpointModel(object):
             if a in data:
                 setattr(self.model, a, data[a])
 
-    def log_likelihood(self, s):
-        cn = self.cn_states[s, :, :][np.newaxis, :, :]
-        return self.emission.log_likelihood(cn) + self.prior.log_prior(cn)
-
-    def calculate_framelogprob(self, allele_swap):
-        framelogprob = np.zeros((self.model.num_segments, self.model.num_cn_states))
-        
-        for s in xrange(self.model.num_cn_states):
-            cn = np.array([np.asarray(self.model.cn_states[s])] * self.model.num_segments)
-            if allele_swap == 1:
-                cn = cn[:, :, ::-1]
-            framelogprob[:, s] = self.emission.log_likelihood(cn) + self.prior.log_prior(cn)
-        
-        return framelogprob
-
-    def posterior_marginals(self):
-        framelogprob = (
-            self.p_allele_swap[:, 0][:, np.newaxis] * self.calculate_framelogprob(0) + 
-            self.p_allele_swap[:, 1][:, np.newaxis] * self.calculate_framelogprob(1))
-        
-        self.model.framelogprob = framelogprob
-
-        for num_iter in xrange(self.num_update_iter):
-            self.update()
-            
-        posterior_marginals = np.asarray(self.model.posterior_marginals)
-        
-        posterior_marginals = np.concatenate([
-            (posterior_marginals * self.p_allele_swap[:, 0][:, np.newaxis]).T,
-            (posterior_marginals * self.p_allele_swap[:, 1][:, np.newaxis]).T])
-        
-        return self.prev_elbo, posterior_marginals
+    def fit(self):
+        """ Fit the model with a series of updates.
+        """
+        for _ in xrange(self.num_em_iter):
+            for _ in xrange(self.num_update_iter):
+                self.variational_update()
+            self.em_update_h()
+            self.em_update_params()
 
     def _check_elbo(self, prev_elbo, name):
         threshold = -1e-6
@@ -337,39 +265,39 @@ class BreakpointModel(object):
         prev_elbo = elbo
         return elbo
 
-    def update(self, check_elbo=False):
+    def variational_update(self, check_elbo=True):
         """ Single update of all variational parameters.
         """
-
         if self.prev_elbo is None:
             self.prev_elbo = self.model.calculate_elbo()
             print 'elbo: {:.10f}'.format(self.prev_elbo)
 
         elbo = self.prev_elbo
 
+        print 'update_p_allele_swap'
+        self.model.update_p_allele_swap()
+        if check_elbo:
+            elbo = self._check_elbo(elbo, 'update_p_allele_swap')
+            
         print 'update_p_cn'
         self.model.update_p_cn()
-
         if check_elbo:
             elbo = self._check_elbo(elbo, 'p_cn')
 
         print 'update_p_breakpoint'
         self.model.update_p_breakpoint()
-
         if check_elbo:
             elbo = self._check_elbo(elbo, 'p_breakpoint')
-            
-        print 'update_p_allele_swap'
-        posterior_marginals = np.asarray(self.model.posterior_marginals)
-        log_p_allele_swap = np.zeros(self.p_allele_swap.shape)
-        log_p_allele_swap[:, 0] = (posterior_marginals * self.calculate_framelogprob(0)).sum(axis=1)
-        log_p_allele_swap[:, 1] = (posterior_marginals * self.calculate_framelogprob(1)).sum(axis=1)
-        self.p_allele_swap = np.exp(log_p_allele_swap - scipy.misc.logsumexp(log_p_allele_swap, axis=1)[:, np.newaxis])
 
+        print 'update_p_outlier_total'
+        self.model.update_p_outlier_total()
         if check_elbo:
-            elbo = self._check_elbo(elbo, 'update_p_allele_swap')
-            
-        print 'done'
+            elbo = self._check_elbo(elbo, 'p_outlier_total')
+
+        print 'update_p_outlier_allele'
+        self.model.update_p_outlier_allele()
+        if check_elbo:
+            elbo = self._check_elbo(elbo, 'p_outlier_allele')
         
         if not check_elbo:
             elbo = self.model.calculate_elbo()
@@ -378,15 +306,118 @@ class BreakpointModel(object):
         self.prev_elbo_diff = self.prev_elbo - elbo
         self.prev_elbo = elbo
 
+    def em_update_h(self, check_elbo=True):
+        """ Single EM update of haploid read depth parameter.
+        """
+        if self.prev_elbo is None:
+            self.prev_elbo = self.model.calculate_elbo()
+            print 'elbo: {:.10f}'.format(self.prev_elbo)
+
+        elbo = self.prev_elbo
+
+        print 'update_h'
+        self.update_h()
+        if check_elbo:
+            elbo = self._check_elbo(elbo, 'update_h')
+
+        if not check_elbo:
+            elbo = self.model.calculate_elbo()
+            print 'elbo: {:.10f}'.format(elbo)
+            
+        self.prev_elbo_diff = self.prev_elbo - elbo
+        self.prev_elbo = elbo
+
+    def em_update_params(self, check_elbo=True):
+        """ Single EM update of likelihood parameters.
+        """
+        if self.prev_elbo is None:
+            self.prev_elbo = self.model.calculate_elbo()
+            print 'elbo: {:.10f}'.format(self.prev_elbo)
+
+        elbo = self.prev_elbo
+        
+        params = [
+            ('negbin_r_0', (10., 2000.)),
+            ('negbin_r_1', (1., 2000.)),
+            ('betabin_M_0', (10., 2000.)),
+            ('betabin_M_1', (1., 2000.)),
+        ]
+        
+        if not self.normal_contamination:
+            params.extend([
+                ('negbin_hdel_mu', (1e-9, 1e-4)),
+                ('negbin_hdel_r_0', (10., 2000.)),
+                ('negbin_hdel_r_1', (1., 2000.)),
+                ('betabin_loh_p', (1e-5, 1e-2)),
+                ('betabin_loh_M_0', (10., 2000.)),
+                ('betabin_loh_M_1', (1., 2000.)),
+            ])
+
+        for name, bound in params:
+            print 'update_' + name
+            self.update_param(name, bound)
+            if check_elbo:
+                elbo = self._check_elbo(elbo, 'update_' + name)
+
+        if not check_elbo:
+            elbo = self.model.calculate_elbo()
+            print 'elbo: {:.10f}'.format(elbo)
+            
+        self.prev_elbo_diff = self.prev_elbo - elbo
+        self.prev_elbo = elbo
+
+    def update_h(self):
+        """ Update haploid depths by optimizing expected likelihood.
+        """
+        def calculate_nll(h, model):
+            model.h = h
+            nll = -model.calculate_expected_log_likelihood()
+            return nll
+
+        def calculate_nll_partial_h(h, model):
+            model.h = h
+            partial_h = np.zeros((model.num_clones,))
+            model.calculate_expected_log_likelihood_partial_h(partial_h)
+            return -partial_h
+
+        result = scipy.optimize.minimize(
+            calculate_nll,
+            self.model.h,
+            method='L-BFGS-B',
+            jac=calculate_nll_partial_h,
+            bounds=[(1e-8, 10.)] * self.model.num_clones,
+            args=(self.model,),
+        )
+
+        if not result.success:
+            raise ValueError('optimization failed\n{}'.format(result))
+
+        self.model.h = result.x
+
+    def update_param(self, name, bounds):
+        """ Update named param by optimizing expected likelihood.
+        """
+        def calculate_nll(value, model, name, bounds):
+            if value < bounds[0] or value > bounds[1]:
+                return np.inf
+            setattr(model, name, value)
+            nll = -model.calculate_expected_log_likelihood()
+            return nll
+
+        result = scipy.optimize.brute(
+            calculate_nll,
+            args=(self.model, name, bounds),
+            ranges=[bounds],
+            full_output=True,
+        )
+
+        setattr(self.model, name, result[0])
+
     def optimal_cn(self):
         cn = np.zeros((self.model.num_segments, self.model.num_clones, self.model.num_alleles), dtype=int)
-        
+
         self.model.infer_cn(cn)
-        
-        # Swap alleles as required
-        swap_alleles = self.p_allele_swap[:, 1] > self.p_allele_swap[:, 0]
-        cn[swap_alleles, :, :] = cn[swap_alleles, :, ::-1]
-        
+
         # Remap to original segmentation
         cn = cn[self.seg_fwd_remap]
 
