@@ -158,6 +158,27 @@ def calculate_mean_cn(h, x, l):
 
 
 
+def calculate_mean_total_cn(h, x, l):
+    """ Calculate the mean raw copy number.
+
+    Args:
+        h (numpy.array): haploid read depths, h[0] for normal
+        x (numpy.array): major, minor, and total read counts
+        l (numpy.array): segment lengths
+
+    Returns:
+        numpy.array: N * L dim array, per segment per allele mean copy number
+
+    """
+
+    depth = x[:, 2] / l
+
+    mean_cn = (depth - h[0]) / h[1:].sum()
+
+    return mean_cn
+
+
+
 class ReadCountLikelihood(object):
 
     def __init__(self, x, l, **kwargs):
@@ -190,11 +211,11 @@ class ReadCountLikelihood(object):
 
         """
 
-        dom_cn = calculate_mean_cn(self.h, self.x, self.l)
+        dom_cn = calculate_mean_total_cn(self.h, self.x, self.l)
         dom_cn[np.isnan(dom_cn)] = np.inf
         dom_cn = np.clip(dom_cn.round().astype(int), 0, int(1e6))
 
-        self.mask &= np.all(dom_cn <= cn_max, axis=1)
+        self.mask &= (dom_cn <= cn_max)
 
     def add_segment_length_mask(self, min_segment_length):
         """ Add a mask for short segments.
