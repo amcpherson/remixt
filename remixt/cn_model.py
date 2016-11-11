@@ -265,7 +265,7 @@ class BreakpointModel(object):
         prev_elbo = elbo
         return elbo
 
-    def variational_update(self, check_elbo=True):
+    def variational_update(self, check_elbo=False):
         """ Single update of all variational parameters.
         """
         if self.prev_elbo is None:
@@ -306,7 +306,7 @@ class BreakpointModel(object):
         self.prev_elbo_diff = self.prev_elbo - elbo
         self.prev_elbo = elbo
 
-    def em_update_h(self, check_elbo=True):
+    def em_update_h(self, check_elbo=False):
         """ Single EM update of haploid read depth parameter.
         """
         if self.prev_elbo is None:
@@ -327,7 +327,7 @@ class BreakpointModel(object):
         self.prev_elbo_diff = self.prev_elbo - elbo
         self.prev_elbo = elbo
 
-    def em_update_params(self, check_elbo=True):
+    def em_update_params(self, check_elbo=False):
         """ Single EM update of likelihood parameters.
         """
         if self.prev_elbo is None:
