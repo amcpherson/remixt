@@ -1,4 +1,4 @@
-# cython: profile=True
+# cython: profile=False
 # cython: initializedcheck=False
 # cython: boundscheck=False
 # cython: wraparound=False
@@ -677,7 +677,7 @@ cdef class RemixtModel:
         else:
             normal_cn = (0, 0)
 
-        cn_states = list()
+        cn_states = dict()
         for cn in itertools.product(range(cn_max + 1), repeat=num_tumour_vars):
             cn = np.array(normal_cn + cn).reshape((num_clones, num_alleles))
 
@@ -687,15 +687,13 @@ cdef class RemixtModel:
             if not np.all(cn[1:, :].max(axis=0) - cn[1:, :].min(axis=0) <= cn_diff_max):
                 continue
 
-            # Discard states for which minor copy number is greater than or
-            # equal to major copy number for all clones, and minor is strictly
-            # greater than major for at least one clone
-            if np.all(cn[1:, 1] >= cn[1:, 0]) and np.any(cn[1:, 1] > cn[1:, 0]):
-                continue
+            # Ensure states are non-redundant under swapping
+            cn_key = tuple(cn.flatten())
+            cn_swapped_key = tuple(cn[:, ::-1].flatten())
 
-            cn_states.append(cn)
+            cn_states[frozenset([cn_key, cn_swapped_key])] = cn
 
-        cn_states = np.array(cn_states)
+        cn_states = np.array(cn_states.values())
 
         return cn_states
 
@@ -1262,7 +1260,7 @@ cdef class RemixtModel:
 
         return self.calculate_variational_energy() - self.calculate_variational_entropy()
 
-    cpdef np.float64_t calculate_expected_log_likelihood(self) except *:
+    cpdef np.float64_t calculate_expected_log_likelihood(self, np.int64_t[:] sample) except *:
         """ Calculate the expectation of the log likelihood wrt the
         approximating distribution.
         """
@@ -1272,6 +1270,8 @@ cdef class RemixtModel:
         
         # Total likelihood factors
         for n in range(self.num_segments):
+            if sample[n] == 0:
+                continue
             for s in range(self.num_cn_states):
                 for u in range(2):
                     energy += (
@@ -1281,6 +1281,8 @@ cdef class RemixtModel:
 
         # Allele likelihood factors
         for n in range(self.num_segments):
+            if sample[n] == 0:
+                continue
             for s in range(self.num_cn_states):
                 for v in range(2):
                     for w in range(2):
@@ -1292,7 +1294,7 @@ cdef class RemixtModel:
 
         return energy
 
-    cpdef void calculate_expected_log_likelihood_partial_h(self, np.float64_t[:] partial_h) except *:
+    cpdef void calculate_expected_log_likelihood_partial_h(self, np.int64_t[:] sample, np.float64_t[:] partial_h) except *:
         """ Calculate the expectation of the log likelihood wrt the
         approximating distribution.
         """
@@ -1304,6 +1306,8 @@ cdef class RemixtModel:
 
         # Total likelihood factors
         for n in range(self.num_segments):
+            if sample[n] == 0:
+                continue
             for s in range(self.num_cn_states):
                 for u in range(2):
                     self.calculate_log_likelihood_total_partial_h(n, s, u, segment_ll_partial_h)
@@ -1315,6 +1319,8 @@ cdef class RemixtModel:
 
         # Allele likelihood factors
         for n in range(self.num_segments):
+            if sample[n] == 0:
+                continue
             for s in range(self.num_cn_states):
                 for v in range(2):
                     for w in range(2):
