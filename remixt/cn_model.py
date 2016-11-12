@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 import scipy.misc
 import pickle
+import contextlib
+import datetime
 
 import remixt.model1a
 import remixt.model2
@@ -19,6 +21,10 @@ def _get_brkend_seg_orient(breakend):
         n_left = n - 1
         orient = -1
     return n_left, orient
+
+
+def _gettime():
+    return datetime.datetime.now().time().isoformat()
 
 
 class BreakpointModel(object):
@@ -176,52 +182,49 @@ class BreakpointModel(object):
             self.divergence_weight,
         )
 
+        self.check_elbo = True
         self.prev_elbo = None
         self.prev_elbo_diff = None
         self.num_em_iter = 1
         self.num_update_iter = 1
         
-    @property
-    def likelihood_params(self):
-        params = [
-            self.emission.h_param(self.cn_states),
-            self.emission.r_param(self.cn_states),
-            self.emission.M_param(self.cn_states),
-            self.emission.betabin_mix_param(self.cn_states),
-            self.emission.negbin_mix_param(self.cn_states),
+        self.likelihood_params = [
+            'negbin_r_0',
+            'negbin_r_1',
+            'betabin_M_0',
+            'betabin_M_1',
         ]
-
+        
         if not self.normal_contamination:
-            params += [
-                self.emission.hdel_mu_param(self.cn_states),
-                self.emission.loh_p_param(self.cn_states),
-                self.emission.r_hdel_param(self.cn_states),
-                self.emission.M_loh_param(self.cn_states),
-                self.emission.negbin_hdel_mix_param(self.cn_states),
-                self.emission.betabin_loh_mix_param(self.cn_states),
-            ]
+            self.likelihood_params.extend([
+                'negbin_hdel_mu',
+                'negbin_hdel_r_0',
+                'negbin_hdel_r_1',
+                'betabin_loh_p',
+                'betabin_loh_M_0',
+                'betabin_loh_M_1',
+            ])
 
-        return params
-    
-    def get_likelihood_param_values(self):
-        param_values = {
-            'negbin_r': self.emission.r_param.value,
-            'betabin_M': self.emission.M_param.value,
-            'negbin_mix': self.emission.negbin_mix_param.value,
-            'betabin_mix': self.emission.betabin_mix_param.value,
+        self.likelihood_param_bounds = {
+            'negbin_r_0': (10., 2000.),
+            'negbin_r_1': (1., 2000.),
+            'betabin_M_0': (10., 2000.),
+            'betabin_M_1': (1., 2000.),
+            'negbin_hdel_mu': (1e-9, 1e-4),
+            'negbin_hdel_r_0': (10., 2000.),
+            'negbin_hdel_r_1': (1., 2000.),
+            'betabin_loh_p': (1e-5, 1e-2),
+            'betabin_loh_M_0': (10., 2000.),
+            'betabin_loh_M_1': (1., 2000.),
         }
 
-        if not self.normal_contamination:
-            param_values.update({
-                'negbin_hdel_r': self.emission.r_hdel_param.value,
-                'betabin_loh_M': self.emission.M_loh_param.value,
-                'negbin_hdel_mix': self.emission.negbin_hdel_mix_param.value,
-                'betabin_loh_mix': self.emission.betabin_loh_mix_param.value,
-                'hdel_mu': self.emission.hdel_mu_param.value,
-                'loh_p': self.emission.loh_p_param.value,
-            })
-
-        return param_values
+    def get_likelihood_param_values(self):
+        """ Get current likelihood parameter values.
+        """
+        likelihood_param_values = {}
+        for name in self.likelihood_params:
+            likelihood_param_values[name] = getattr(self.model, name)
+        return likelihood_param_values
 
     def get_model_data(self):
         data = {}
@@ -246,139 +249,125 @@ class BreakpointModel(object):
             if a in data:
                 setattr(self.model, a, data[a])
 
+    def get_param_sample_weight(self, name):
+        """ Get segment specific weight for resampling segments
+        for stochastic parameter estimation.
+        """
+        if name == 'negbin_r_0':
+            weights = np.asarray(self.model.p_outlier_total[:, 0])
+        elif name == 'negbin_r_1':
+            weights = np.asarray(self.model.p_outlier_total[:, 1])
+        elif name == 'betabin_M_0':
+            weights = np.asarray(self.model.p_outlier_allele[:, 0])
+        elif name == 'betabin_M_1':
+            weights = np.asarray(self.model.p_outlier_allele[:, 1])
+        elif name == 'negbin_hdel_mu':
+            return
+        elif name == 'negbin_hdel_r_0':
+            return
+        elif name == 'negbin_hdel_r_1':
+            return
+        elif name == 'betabin_loh_p':
+            return
+        elif name == 'betabin_loh_M_0':
+            return
+        elif name == 'betabin_loh_M_1':
+            return
+        return weights / weights.sum()
+
     def fit(self):
         """ Fit the model with a series of updates.
         """
-        for _ in xrange(self.num_em_iter):
-            for _ in xrange(self.num_update_iter):
+        if self.prev_elbo is None:
+            self.prev_elbo = self.model.calculate_elbo()
+
+        for i in xrange(self.num_em_iter):
+            for j in xrange(self.num_update_iter):
                 self.variational_update()
+
             self.em_update_h()
+
             self.em_update_params()
 
-    def _check_elbo(self, prev_elbo, name):
-        threshold = -1e-6
-        elbo = self.model.calculate_elbo()
-        print 'elbo: {:.10f}'.format(elbo)
-        print 'elbo diff: {:.10f}'.format(elbo - prev_elbo)
-        if elbo - prev_elbo < threshold:
-            raise Exception('elbo error for step {}!'.format(name))
-        prev_elbo = elbo
-        return elbo
+            elbo = self.model.calculate_elbo()
 
-    def variational_update(self, check_elbo=False):
+            self.prev_elbo_diff = elbo - self.prev_elbo
+            self.prev_elbo = elbo
+
+            print '[{}] completed iteration {}'.format(_gettime(), i)
+            print '[{}]     elbo: {:.10f}'.format(_gettime(), self.prev_elbo)
+            print '[{}]     elbo diff: {:.10f}'.format(_gettime(), self.prev_elbo_diff)
+
+    @contextlib.contextmanager
+    def elbo_check(self, name, threshold=-1e-6):
+        print '[{}] optimizing {}'.format(_gettime(), name)
+        if not self.check_elbo:
+            yield
+            return
+        elbo_before = self.model.calculate_elbo()
+        yield
+        elbo_after = self.model.calculate_elbo()
+        print '[{}]     elbo: {:.10f}'.format(_gettime(), elbo_after)
+        print '[{}]     elbo diff: {:.10f}'.format(_gettime(), elbo_after - elbo_before)
+        if elbo_after - elbo_before < threshold:
+            raise Exception('elbo error for step {}!'.format(name))
+
+    def variational_update(self):
         """ Single update of all variational parameters.
         """
-        if self.prev_elbo is None:
-            self.prev_elbo = self.model.calculate_elbo()
-            print 'elbo: {:.10f}'.format(self.prev_elbo)
+        with self.elbo_check('update_p_allele_swap'):
+            self.model.update_p_allele_swap()
 
-        elbo = self.prev_elbo
+        with self.elbo_check('p_cn'):
+            self.model.update_p_cn()
 
-        print 'update_p_allele_swap'
-        self.model.update_p_allele_swap()
-        if check_elbo:
-            elbo = self._check_elbo(elbo, 'update_p_allele_swap')
-            
-        print 'update_p_cn'
-        self.model.update_p_cn()
-        if check_elbo:
-            elbo = self._check_elbo(elbo, 'p_cn')
+        with self.elbo_check('p_breakpoint'):
+            self.model.update_p_breakpoint()
 
-        print 'update_p_breakpoint'
-        self.model.update_p_breakpoint()
-        if check_elbo:
-            elbo = self._check_elbo(elbo, 'p_breakpoint')
+        with self.elbo_check('p_outlier_total'):
+            self.model.update_p_outlier_total()
 
-        print 'update_p_outlier_total'
-        self.model.update_p_outlier_total()
-        if check_elbo:
-            elbo = self._check_elbo(elbo, 'p_outlier_total')
+        with self.elbo_check('p_outlier_allele'):
+            self.model.update_p_outlier_allele()
 
-        print 'update_p_outlier_allele'
-        self.model.update_p_outlier_allele()
-        if check_elbo:
-            elbo = self._check_elbo(elbo, 'p_outlier_allele')
-        
-        if not check_elbo:
-            elbo = self.model.calculate_elbo()
-            print 'elbo: {:.10f}'.format(elbo)
-            
-        self.prev_elbo_diff = self.prev_elbo - elbo
-        self.prev_elbo = elbo
-
-    def em_update_h(self, check_elbo=False):
+    def em_update_h(self):
         """ Single EM update of haploid read depth parameter.
         """
-        if self.prev_elbo is None:
-            self.prev_elbo = self.model.calculate_elbo()
-            print 'elbo: {:.10f}'.format(self.prev_elbo)
+        with self.elbo_check('h'):
+            self.update_h()
 
-        elbo = self.prev_elbo
-
-        print 'update_h'
-        self.update_h()
-        if check_elbo:
-            elbo = self._check_elbo(elbo, 'update_h')
-
-        if not check_elbo:
-            elbo = self.model.calculate_elbo()
-            print 'elbo: {:.10f}'.format(elbo)
-            
-        self.prev_elbo_diff = self.prev_elbo - elbo
-        self.prev_elbo = elbo
-
-    def em_update_params(self, check_elbo=False):
+    def em_update_params(self):
         """ Single EM update of likelihood parameters.
         """
-        if self.prev_elbo is None:
-            self.prev_elbo = self.model.calculate_elbo()
-            print 'elbo: {:.10f}'.format(self.prev_elbo)
+        for name in self.likelihood_params:
+            with self.elbo_check(name):
+                self.update_param(name)
 
-        elbo = self.prev_elbo
-        
-        params = [
-            ('negbin_r_0', (10., 2000.)),
-            ('negbin_r_1', (1., 2000.)),
-            ('betabin_M_0', (10., 2000.)),
-            ('betabin_M_1', (1., 2000.)),
-        ]
-        
-        if not self.normal_contamination:
-            params.extend([
-                ('negbin_hdel_mu', (1e-9, 1e-4)),
-                ('negbin_hdel_r_0', (10., 2000.)),
-                ('negbin_hdel_r_1', (1., 2000.)),
-                ('betabin_loh_p', (1e-5, 1e-2)),
-                ('betabin_loh_M_0', (10., 2000.)),
-                ('betabin_loh_M_1', (1., 2000.)),
-            ])
-
-        for name, bound in params:
-            print 'update_' + name
-            self.update_param(name, bound)
-            if check_elbo:
-                elbo = self._check_elbo(elbo, 'update_' + name)
-
-        if not check_elbo:
-            elbo = self.model.calculate_elbo()
-            print 'elbo: {:.10f}'.format(elbo)
-            
-        self.prev_elbo_diff = self.prev_elbo - elbo
-        self.prev_elbo = elbo
+    def _create_sample(self, weights=None):
+        sample_size = min(200, self.model.num_segments / 10)
+        sample_idxs = np.random.choice(self.model.num_segments, size=sample_size, replace=False, p=weights)
+        sample = np.zeros((self.model.num_segments,), dtype=int)
+        sample[sample_idxs] = 1
+        return sample
 
     def update_h(self):
         """ Update haploid depths by optimizing expected likelihood.
         """
-        def calculate_nll(h, model):
+        def calculate_nll(h, model, sample):
             model.h = h
-            nll = -model.calculate_expected_log_likelihood()
+            nll = -model.calculate_expected_log_likelihood(sample)
             return nll
 
-        def calculate_nll_partial_h(h, model):
+        def calculate_nll_partial_h(h, model, sample):
             model.h = h
             partial_h = np.zeros((model.num_clones,))
-            model.calculate_expected_log_likelihood_partial_h(partial_h)
+            model.calculate_expected_log_likelihood_partial_h(sample, partial_h)
             return -partial_h
+
+        h_before = self.model.h
+        elbo_before = self.model.calculate_elbo()
+
+        sample = self._create_sample()
 
         result = scipy.optimize.minimize(
             calculate_nll,
@@ -386,32 +375,52 @@ class BreakpointModel(object):
             method='L-BFGS-B',
             jac=calculate_nll_partial_h,
             bounds=[(1e-8, 10.)] * self.model.num_clones,
-            args=(self.model,),
+            args=(self.model, sample),
         )
 
         if not result.success:
             raise ValueError('optimization failed\n{}'.format(result))
 
-        self.model.h = result.x
+        elbo_after = self.model.calculate_elbo()
+        if elbo_after < elbo_before:
+            print '[{}] h rejected, elbo before: {}, after: {}'.format(_gettime(), elbo_before, elbo_after)
+            self.model.h = h_before
 
-    def update_param(self, name, bounds):
+        else:
+            self.model.h = result.x
+
+    def update_param(self, name):
         """ Update named param by optimizing expected likelihood.
         """
-        def calculate_nll(value, model, name, bounds):
+        bounds = self.likelihood_param_bounds[name]
+        weights = self.get_param_sample_weight(name)
+
+        def calculate_nll(value, model, name, bounds, sample):
             if value < bounds[0] or value > bounds[1]:
                 return np.inf
             setattr(model, name, value)
-            nll = -model.calculate_expected_log_likelihood()
+            nll = -model.calculate_expected_log_likelihood(sample)
             return nll
+
+        value_before = getattr(self.model, name)
+        elbo_before = self.model.calculate_elbo()
+
+        sample = self._create_sample(weights)
 
         result = scipy.optimize.brute(
             calculate_nll,
-            args=(self.model, name, bounds),
+            args=(self.model, name, bounds, sample),
             ranges=[bounds],
             full_output=True,
         )
 
-        setattr(self.model, name, result[0])
+        elbo_after = self.model.calculate_elbo()
+        if elbo_after < elbo_before:
+            print '[{}] {} rejected, elbo before: {}, after: {}'.format(_gettime(), name, elbo_before, elbo_after)
+            setattr(self.model, name, value_before)
+
+        else:
+            setattr(self.model, name, result[0])
 
     def optimal_cn(self):
         cn = np.zeros((self.model.num_segments, self.model.num_clones, self.model.num_alleles), dtype=int)
