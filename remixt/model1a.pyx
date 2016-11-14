@@ -551,7 +551,7 @@ cdef class RemixtModel:
         # Create is subclonal and cn state indicators for convenience
         self.num_alleles_subclonal = np.sum((np.asarray(self.cn_states)[:, 1:, :].max(axis=-2) != np.asarray(self.cn_states)[:, 1:, :].min(axis=-2)), axis=-1)
         self.is_hdel = np.all(np.asarray(self.cn_states) == 0, axis=(1, 2)) * 1
-        self.is_loh = np.all(np.any(np.asarray(self.cn_states) == 0, axis=(2,)), axis=(1,)) * 1
+        self.is_loh = np.any(np.asarray(self.cn_states).sum(axis=-2) == 0, axis=-1) * 1
 
         if h_init.shape[0] != num_clones:
             raise ValueError('h must have length equal to num_clones')
@@ -626,14 +626,14 @@ cdef class RemixtModel:
         self.negbin_r_0 = 500.
         self.negbin_r_1 = 10.
         self.negbin_hdel_mu = 1e-5
-        self.negbin_hdel_r_0 = 500.
-        self.negbin_hdel_r_1 = 10.
+        self.negbin_hdel_r_0 = 10.
+        self.negbin_hdel_r_1 = 1.
 
         self.betabin_M_0 = 500.
         self.betabin_M_1 = 10.
         self.betabin_loh_p = 1e-3
-        self.betabin_loh_M_0 = 500.
-        self.betabin_loh_M_1 = 10.
+        self.betabin_loh_M_0 = 10.
+        self.betabin_loh_M_1 = 1.
 
         # Temporary buffers
         self._p_d = np.zeros(((self.cn_max + 1) * 2,))
@@ -965,8 +965,18 @@ cdef class RemixtModel:
         if self.likelihood_mask[n] == 0:
             return 0.
 
+        if self.is_hdel[s] == 1:
+            p = 0.
+        else:
+            p = self.calculate_expected_allele_ratio(s)
+
         if not self.normal_contamination and self.is_loh[s] == 1:
-            p = self.betabin_loh_p
+            if p == 0.:
+                p = self.betabin_loh_p
+            elif p == 1.:
+                p = 1. - self.betabin_loh_p
+            else:
+                raise ValueError('expected p {} for loh state {}'.format(p, s))
 
             if v == 0:
                 M = self.betabin_loh_M_0
@@ -974,8 +984,6 @@ cdef class RemixtModel:
                 M = self.betabin_loh_M_1
 
         else:
-            p = self.calculate_expected_allele_ratio(s)
-
             if v == 0:
                 M = self.betabin_M_0
             else:
@@ -1140,7 +1148,7 @@ cdef class RemixtModel:
     cpdef void update_p_outlier_allele(self) except *:
         """ Update the allele read count outlier indicator approximating distributions.
         """
-
+        cdef int n, s, v, w
         cdef np.ndarray[np.float64_t, ndim=1] log_p_outlier_allele = np.zeros((2,))
 
         for n in range(self.num_segments):
