@@ -212,10 +212,10 @@ class BreakpointModel(object):
             'betabin_M_1': (1., 2000.),
             'negbin_hdel_mu': (1e-9, 1e-4),
             'negbin_hdel_r_0': (10., 2000.),
-            'negbin_hdel_r_1': (1., 2000.),
+            'negbin_hdel_r_1': (1., 200.),
             'betabin_loh_p': (1e-5, 1e-2),
             'betabin_loh_M_0': (10., 2000.),
-            'betabin_loh_M_1': (1., 2000.),
+            'betabin_loh_M_1': (1., 200.),
         }
 
     def get_likelihood_param_values(self):
@@ -249,6 +249,16 @@ class BreakpointModel(object):
             if a in data:
                 setattr(self.model, a, data[a])
 
+    def _get_hdel_weights(self):
+        states = np.where(np.asarray(self.model.is_hdel) == 1)[0]
+        weights = np.asarray(self.model.posterior_marginals)[:, states].sum(axis=-1)
+        return weights
+
+    def _get_loh_weights(self):
+        states = np.where(np.asarray(self.model.is_loh) == 1)[0]
+        weights = np.asarray(self.model.posterior_marginals)[:, states].sum(axis=-1)
+        return weights
+
     def get_param_sample_weight(self, name):
         """ Get segment specific weight for resampling segments
         for stochastic parameter estimation.
@@ -262,18 +272,23 @@ class BreakpointModel(object):
         elif name == 'betabin_M_1':
             weights = np.asarray(self.model.p_outlier_allele[:, 1])
         elif name == 'negbin_hdel_mu':
-            return
+            weights = self._get_hdel_weights()
         elif name == 'negbin_hdel_r_0':
-            return
+            weights = self._get_hdel_weights() * np.asarray(self.model.p_outlier_total[:, 0])
         elif name == 'negbin_hdel_r_1':
-            return
+            weights = self._get_hdel_weights() * np.asarray(self.model.p_outlier_total[:, 1])
         elif name == 'betabin_loh_p':
-            return
+            weights = self._get_loh_weights()
         elif name == 'betabin_loh_M_0':
-            return
+            weights = self._get_loh_weights() * np.asarray(self.model.p_outlier_allele[:, 0])
         elif name == 'betabin_loh_M_1':
-            return
-        return weights / weights.sum()
+            weights = self._get_loh_weights() * np.asarray(self.model.p_outlier_allele[:, 1])
+        norm = weights.sum()
+        if norm > 0.:
+            return weights / norm
+        else:
+            print 'nothing for ' + name
+            return None
 
     def fit(self):
         """ Fit the model with a series of updates.
@@ -297,6 +312,8 @@ class BreakpointModel(object):
             print '[{}] completed iteration {}'.format(_gettime(), i)
             print '[{}]     elbo: {:.10f}'.format(_gettime(), self.prev_elbo)
             print '[{}]     elbo diff: {:.10f}'.format(_gettime(), self.prev_elbo_diff)
+            for name, value in self.get_likelihood_param_values().iteritems():
+                print '[{}]     {} = {}'.format(_gettime(), name, value)
 
     @contextlib.contextmanager
     def elbo_check(self, name, threshold=-1e-6):
