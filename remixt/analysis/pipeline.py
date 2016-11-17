@@ -20,9 +20,13 @@ def init(
     h_tumour = remixt.config.get_param(config, 'h_tumour')
     tumour_mix_fractions = remixt.config.get_param(config, 'tumour_mix_fractions')
     divergence_weights = remixt.config.get_param(config, 'divergence_weights')
+    max_copy_number = remixt.config.get_param(config, 'max_copy_number')
+    random_seed = config.get('random_seed', 1234)
 
     with open(experiment_filename, 'r') as f:
         experiment = pickle.load(f)
+
+    np.random.seed(random_seed)
 
     # Calculate candidate haploid depths for normal contamination and a single
     # tumour clone based on modes of the minor allele depth
@@ -34,9 +38,12 @@ def init(
     # Calculate candidate haploid depths for normal contamination and multiple clones
     init_h_params = []
     ploidy_estimates = []
+    max_depths = []
     for mode_idx, h_mono in enumerate(init_h_mono):
         estimated_ploidy = remixt.analysis.readdepth.estimate_ploidy(h_mono, experiment)
         assert not np.isinf(estimated_ploidy) and not np.isnan(estimated_ploidy)
+
+        max_depth = 2. * h_mono[0] + (max_copy_number + 0.25) * h_mono[1]
 
         for mix_frac in tumour_mix_fractions:
             params = {
@@ -48,6 +55,7 @@ def init(
 
             init_h_params.append(params)
             ploidy_estimates.append(estimated_ploidy)
+            max_depths.append(max_depth)
 
     # Filter candidates with unacceptable ploidy
     def ploidy_filter_dist(ploidy):
@@ -68,10 +76,22 @@ def init(
     if not any(is_ploidy_filtered):
         ploidy_dists = [ploidy_filter_dist(a) for a in ploidy_estimates]
         is_ploidy_filtered = [a == min(ploidy_dists) for a in ploidy_dists]
-        
-    # Filter ploidy and h initializations
+
+    # Filter ploidy, h initializations, and max depths
     init_h_params = [a for i, a in enumerate(init_h_params) if is_ploidy_filtered[i]]
+    max_depths = [a for i, a in enumerate(max_depths) if is_ploidy_filtered[i]]
     ploidy_estimates = [a for i, a in enumerate(ploidy_estimates) if is_ploidy_filtered[i]]
+
+    # Calculate max depth for all initializations
+    # A common max depth is required to allow for comparison of objective
+    # between initializations
+    max_depth = min(max_depths)
+    
+    # Check if the depth threshold is too strict
+    depth = experiment.x[:, 2] / experiment.l
+    proportion_below_max_depth = np.sum((depth <= max_depth) * experiment.l) / np.sum(experiment.l)
+    if proportion_below_max_depth < 0.75:
+        raise ValueError('Unable to model {} of the genome, consider reducing max ploidy or increasing max copy number'.format(1. - proportion_below_max_depth))
 
     # Attempt several divergence parameters
     init_params = []
@@ -79,6 +99,7 @@ def init(
     for h_p, w_p in itertools.product(init_h_params, divergence_weight_params):
         params = h_p.copy()
         params.update(w_p)
+        params['max_depth'] = max_depth
         init_params.append(params)
 
     with pd.HDFStore(init_results_filename, 'w') as store:
@@ -110,6 +131,7 @@ def fit(experiment, init_params, config):
         init_params['h_tumour'] * (1. - init_params['mix_frac']),
     ])
     divergence_weight = init_params['divergence_weight']
+    max_depth = init_params['max_depth']
 
     normal_contamination = remixt.config.get_param(config, 'normal_contamination')
     max_copy_number = remixt.config.get_param(config, 'max_copy_number')
@@ -130,6 +152,7 @@ def fit(experiment, init_params, config):
         divergence_weight=divergence_weight,
         min_segment_length=min_segment_length,
         min_proportion_genotyped=min_proportion_genotyped,
+        max_depth=max_depth,
         disable_breakpoints=disable_breakpoints,
     )
     

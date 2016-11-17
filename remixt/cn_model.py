@@ -45,6 +45,7 @@ class BreakpointModel(object):
             divergence_weight (float): clone segment divergence prior parameter
             min_segment_length (float): minimum size of segments for segment likelihood mask
             min_proportion_genotyped (float): minimum proportion genotyped reads for segment likelihood mask
+            max_depth (float): maximum depth for segment likelihood mask
             transition_log_prob (float): penalty on transitions, per copy number change
             disable_breakpoints (bool): disable integrated breakpoint copy number inference 
 
@@ -64,8 +65,12 @@ class BreakpointModel(object):
         self.divergence_weight = kwargs.get('divergence_weight', 1e6)
         self.min_segment_length = kwargs.get('min_segment_length', 10000)
         self.min_proportion_genotyped = kwargs.get('min_proportion_genotyped', 0.01)
+        self.max_depth = kwargs.get('max_depth')
         self.transition_log_prob = kwargs.get('transition_log_prob', 10.)
         self.disable_breakpoints = kwargs.get('disable_breakpoints', False)
+
+        if self.max_depth is None:
+            raise ValueError('must specify max depth')
 
         # The factor graph model for breakpoint copy number allows only a single breakend
         # interposed between each pair of adjacent segments.  Where multiple breakends are
@@ -150,15 +155,20 @@ class BreakpointModel(object):
         self.x1[self.seg_fwd_remap, :] = x
         self.l1[self.seg_fwd_remap] = l
 
-        # Create emission / prior / copy number models
-        self.emission = remixt.likelihood.NegBinBetaBinLikelihood(self.x1, self.l1)
-        self.emission.h = h_init
+        # Mask likelihood of poorly modelled segments
+        self.likelihood_mask = np.array([True] * len(self.l1))
 
-        # Mask amplifications and poorly modelled segments from likelihood
-        self.emission.add_amplification_mask(self.max_copy_number)
-        self.emission.add_segment_length_mask(self.min_segment_length)
-        self.emission.add_proportion_genotyped_mask(self.min_proportion_genotyped)
+        # Add segment length mask
+        self.likelihood_mask &= (self.l1 >= self.min_segment_length)
+
+        # Add proportion genotyped mask
+        p = self.x1[:,:2].sum(axis=1).astype(float) / (self.x1[:,2].astype(float) + 1e-16)
+        self.likelihood_mask &= (p >= self.min_proportion_genotyped)
         
+        # Add amplification mask based on max depth
+        depth = self.x1[:,2].astype(float) / (self.l1.astype(float) + 1e-16)
+        self.likelihood_mask &= (depth <= self.max_depth)
+
         # Optionally disable integrated breakpoint copy number inference
         if self.disable_breakpoints:
             num_breakpoints = 0
@@ -174,7 +184,7 @@ class BreakpointModel(object):
             self.l1,
             self.x1[:, 2],
             self.x1[:, 0:2],
-            self.emission.mask.astype(int),
+            self.likelihood_mask.astype(int),
             is_telomere,
             breakpoint_idx,
             breakpoint_orient,
@@ -312,6 +322,7 @@ class BreakpointModel(object):
             print '[{}] completed iteration {}'.format(_gettime(), i)
             print '[{}]     elbo: {:.10f}'.format(_gettime(), self.prev_elbo)
             print '[{}]     elbo diff: {:.10f}'.format(_gettime(), self.prev_elbo_diff)
+            print '[{}]     h = {}'.format(_gettime(), np.asarray(self.model.h))
             for name, value in self.get_likelihood_param_values().iteritems():
                 print '[{}]     {} = {}'.format(_gettime(), name, value)
 
@@ -468,7 +479,7 @@ class BreakpointModel(object):
 
     @property
     def h(self):
-        return np.asarray(self.emission.h)
+        return np.asarray(self.model.h)
 
     @property
     def p_breakpoint(self):
