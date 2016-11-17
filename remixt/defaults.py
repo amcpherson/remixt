@@ -100,8 +100,8 @@ tumour_mix_fractions                        = [0.45, 0.3, 0.2, 0.1]
 
 # Maximum and minimum ploidy of initial haploid depth parameters
 # Ploidy selection can be performed by setting min and max ploidy to a small range
-min_ploidy                                  = 0.5
-max_ploidy                                  = 5.0
+min_ploidy                                  = 1.5
+max_ploidy                                  = 4.0
 
 # Force haploid normal and or tumour to specific values, useful
 # for very poor samples for which estimation fails
@@ -129,7 +129,7 @@ likelihood_min_proportion_genotyped         = 0.01
 divergence_weights                          = [1e-6, 1e-7, 1e-8]
 
 # Number of iterations of EM for parameter optimization
-num_em_iter                                 = 10
+num_em_iter                                 = 5
 
 # Number of iterations of Variational Inference per EM iteration
 num_update_iter                             = 5
