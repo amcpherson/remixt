@@ -588,7 +588,7 @@ cdef class RemixtModel:
         for k in range(self.num_breakpoints):
             for s_b in range(self.num_brk_states):
                 brk = np.array(self.brk_states[s_b])
-                if not (brk.max() == 1 and brk.min() == 0):
+                if brk.max() > 1:
                     continue
                 self.p_breakpoint[k, s_b] = 1.
         self.p_breakpoint /= np.sum(self.p_breakpoint, axis=-1)[:, np.newaxis]
