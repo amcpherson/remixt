@@ -1017,6 +1017,37 @@ class Experiment(object):
         return zip(sorted(chain_start), sorted(chain_end))
 
 
+def _sample_negbin(mu, r):
+    mu += 1e-16
+    inv_p = r / (r + mu)
+    x = np.array([np.random.negative_binomial(r, a) for a in inv_p]).reshape(mu.shape)
+    return x
+
+
+def _sample_negbin_mix(mu, r_0, r_1, mix):    
+    x_0 = _sample_negbin(mu, r_0)
+    x_1 = _sample_negbin(mu, r_1)
+    is_0 = np.random.random(size=x_0.shape) > mix
+    print is_0.sum()
+    x = np.where(is_0, x_0, x_1)
+    return x
+
+
+def _sample_betabin(n, p, M):
+    p_binom = np.random.beta(M * p, M * (1 - p))
+    x = np.random.binomial(n, p_binom)
+    return x
+
+
+def _sample_betabin_mix(n, p, M_0, M_1, mix):
+    x_0 = _sample_betabin(n, p, M_0)
+    x_1 = _sample_betabin(n, p, M_1)
+    is_0 = np.random.random(size=x_0.shape) > mix
+    print is_0.sum()
+    x = np.where(is_0, x_0, x_1)
+    return x
+
+
 class ExperimentSampler(object):
     """ Sampler for sequencing experiments.
     """
@@ -1028,21 +1059,16 @@ class ExperimentSampler(object):
         self.phi_min = params.get('phi_min', 0.05)
         self.phi_max = params.get('phi_max', 0.2)
 
-        self.emission_model = params.get('emission_model', 'negbin')
+        self.emission_model = params.get('emission_model', 'negbin_betabin')
 
-        if self.emission_model not in ('poisson', 'negbin', 'normal', 'full'):
+        if self.emission_model not in ('poisson', 'negbin', 'normal', 'full', 'negbin_betabin'):
             raise ValueError('emission_model must be one of "poisson", "negbin", "normal", "full"')
-
-        self.noise_prior = params.get('noise_prior', 0.01)
-
-        self.negbin_r = np.array([
-            params.get('negbin_r_allele', 500.0),
-            params.get('negbin_r_allele', 500.0),
-            params.get('negbin_r_total', 500.0)])
 
         self.num_false_breakpoints = params.get('num_false_breakpoints', 50)
 
         self.frac_beta_noise_stddev = params.get('frac_beta_noise_stddev', None)
+
+        self.params = params.copy()
 
 
     def sample_experiment(self, genome_mixture):
@@ -1081,6 +1107,28 @@ class ExperimentSampler(object):
             x = np.array([np.random.negative_binomial(self.negbin_r, a) for a in nb_inv_p]).reshape(mu_negbin.shape)
 
             extra_params['negbin_r'] = self.negbin_r
+
+        elif self.emission_model == 'negbin_betabin':
+            x = np.zeros(mu.shape)
+
+            negbin_r_0 = self.params.get('negbin_r_0', 1000.)
+            negbin_r_1 = self.params.get('negbin_r_1', 10.)
+            negbin_mix = self.params.get('negbin_mix', 0.01)
+
+            betabin_M_0 = self.params.get('betabin_M_0', 2000.)
+            betabin_M_1 = self.params.get('betabin_M_1', 10.)
+            betabin_mix = self.params.get('betabin_mix', 0.01)
+
+            x_total = _sample_negbin_mix(mu[:, 2] + 1e-16, negbin_r_0, negbin_r_1, negbin_mix)
+
+            allele_total = (phi * x_total).astype(int)
+            p_true = mu[:, 0] / (mu[:, 0:2].sum(axis=1) + 1e-16)
+            x_allele_1 = _sample_betabin_mix(allele_total, p_true, betabin_M_0, betabin_M_1, betabin_mix)
+            x_allele_2 = allele_total - x_allele_1
+
+            x[:, 2] = x_total
+            x[:, 0] = x_allele_1
+            x[:, 1] = x_allele_2
 
         elif self.emission_model == 'normal':
             x = np.zeros(mu.shape)
