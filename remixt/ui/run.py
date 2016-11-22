@@ -16,23 +16,27 @@ def run(**args):
 
     config = yaml.load(open(args['config']))
 
-    tumour_bam_filenames = dict(zip(args['tumour_sample_ids'], args['tumour_bam_files']))
+    bam_filenames = dict(zip(args['tumour_sample_ids'], args['tumour_bam_files']))
     results_filenames = dict(zip(args['tumour_sample_ids'], args['results_files']))
+    
+    if (args['normal_sample_id'] is None) != (args['normal_bam_file'] is None):
+        raise Exception('--normal_sample_id and --normal_bam_file must be both set or unset')
+
+    if args['normal_sample_id'] is None and args['normal_bam_file'] is None:
+        bam_filenames[args['normal_sample_id']] = args['normal_bam_file']
 
     pypeliner_config = config.copy()
     pypeliner_config.update(args)
     pyp = pypeliner.app.Pypeline([remixt], pypeliner_config)
 
     workflow = remixt.workflow.create_remixt_bam_workflow(
-        args['segment_file'],
         args['breakpoint_file'],
-        tumour_bam_filenames,
-        args['normal_bam_file'],
-        args['normal_sample_id'],
+        bam_filenames,
         results_filenames,
         args['raw_data_dir'],
         config,
         args['ref_data_dir'],
+        normal_id=args['normal_sample_id'],
     )
 
     pyp.run(workflow)
@@ -47,14 +51,8 @@ def add_arguments(argparser):
     argparser.add_argument('raw_data_dir',
         help='Output raw data directory')
 
-    argparser.add_argument('segment_file',
-        help='Input segments file')
-
     argparser.add_argument('breakpoint_file',
         help='Input breakpoints filename')
-
-    argparser.add_argument('normal_bam_file',
-        help='Input normal bam filenames')
 
     argparser.add_argument('--tumour_sample_ids', nargs='+', required=True,
         help='Identifiers for tumour samples')
@@ -65,8 +63,11 @@ def add_arguments(argparser):
     argparser.add_argument('--results_files', nargs='+', required=True,
         help='Output results filenames')
 
-    argparser.add_argument('--normal_sample_id', default='normal',
+    argparser.add_argument('--normal_sample_id', default=None, required=False,
         help='Normal sample id')
+
+    argparser.add_argument('--normal_bam_file', default=None, required=False,
+        help='Input normal bam filenames')
 
     argparser.add_argument('--config', required=False,
         help='Configuration Filename')

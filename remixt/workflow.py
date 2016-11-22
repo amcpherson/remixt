@@ -7,6 +7,7 @@ import remixt.analysis.gcbias
 import remixt.analysis.haplotype
 import remixt.analysis.pipeline
 import remixt.analysis.readcount
+import remixt.analysis.segment
 import remixt.analysis.stats
 import remixt.cn_plot
 import remixt.seqdataio
@@ -339,7 +340,6 @@ def create_fit_model_workflow(
 
 
 def create_remixt_seqdata_workflow(
-    segment_filename,
     breakpoint_filename,
     seqdata_filenames,
     results_filenames,
@@ -356,6 +356,7 @@ def create_remixt_seqdata_workflow(
 
     results_filenames = dict([(tumour_id, results_filenames[tumour_id]) for tumour_id in tumour_ids])
 
+    segment_filename = os.path.join(raw_data_directory, 'segments.tsv')
     haplotypes_filename = os.path.join(raw_data_directory, 'haplotypes.tsv')
     counts_table_template = os.path.join(raw_data_directory, 'counts', 'sample_{tumour_id}.tsv')
     experiment_template = os.path.join(raw_data_directory, 'experiment', 'sample_{tumour_id}.pickle')
@@ -371,6 +372,19 @@ def create_remixt_seqdata_workflow(
     workflow.setobj(
         obj=mgd.OutputChunks('tumour_id'),
         value=tumour_ids,
+    )
+
+    workflow.transform(
+        name='create_segments',
+        func=remixt.analysis.segment.create_segments,
+        args=(
+            mgd.OutputFile(segment_filename),
+            config,
+            ref_data_dir,
+        ),
+        kwargs={
+            'breakpoint_filename': mgd.InputFile(breakpoint_filename),
+        },
     )
 
     workflow.subworkflow(
@@ -454,7 +468,6 @@ def create_remixt_seqdata_workflow(
 
 
 def create_remixt_bam_workflow(
-    segment_filename,
     breakpoint_filename,
     bam_filenames,
     results_filenames,
@@ -501,7 +514,6 @@ def create_remixt_bam_workflow(
         name='remixt_seqdata_workflow',
         func=create_remixt_seqdata_workflow,
         args=(
-            mgd.InputFile(segment_filename),
             mgd.InputFile(breakpoint_filename),
             mgd.InputFile('seqdata', 'sample_id', template=seqdata_template),
             mgd.OutputFile('results', 'tumour_id', fnames=results_filenames, axes_origin=[]),
@@ -515,4 +527,3 @@ def create_remixt_bam_workflow(
     )
 
     return workflow
-
