@@ -1,4 +1,5 @@
 import argparse
+import yaml
 
 import pypeliner
 
@@ -13,16 +14,14 @@ def run(**args):
     if len(args['results_files']) != len(args['tumour_sample_ids']):
         raise Exception('--results_files must correspond one to one with --tumour_sample_ids')
 
-    config = {}
-    if args['config'] is not None:
-        execfile(args['config'], {}, config)
-
-    config.update(args)
+    config = yaml.load(open(args['config']))
 
     tumour_bam_filenames = dict(zip(args['tumour_sample_ids'], args['tumour_bam_files']))
     results_filenames = dict(zip(args['tumour_sample_ids'], args['results_files']))
 
-    pyp = pypeliner.app.Pypeline([remixt], config)
+    pypeliner_config = config.copy()
+    pypeliner_config.update(args)
+    pyp = pypeliner.app.Pypeline([remixt], pypeliner_config)
 
     workflow = remixt.workflow.create_remixt_bam_workflow(
         args['segment_file'],

@@ -1,5 +1,6 @@
 import argparse
 import os
+import yaml
 
 import remixt.ref_data
 
@@ -7,9 +8,7 @@ import remixt.ref_data
 def run(**args):
     ref_data_dir = args['ref_data_dir']
 
-    config = {}
-    if args['config'] is not None:
-        execfile(args['config'], {}, config)
+    config = yaml.load(open(args['config']))
 
     ref_data_sentinal = os.path.join(ref_data_dir, 'sentinal')
 
