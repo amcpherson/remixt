@@ -7,9 +7,7 @@ import pickle
 import contextlib
 import datetime
 
-import remixt.model1a
-import remixt.model2
-import remixt.model3
+import remixt.bpmodel
 
 
 def _get_brkend_seg_orient(breakend):
@@ -175,7 +173,7 @@ class BreakpointModel(object):
             breakpoint_idx = -np.ones(breakpoint_idx.shape, dtype=int)
             breakpoint_orient = np.zeros(breakpoint_orient.shape, dtype=int)
 
-        self.model = remixt.model1a.RemixtModel(
+        self.model = remixt.bpmodel.RemixtModel(
             self.M, self.N1, num_breakpoints,
             self.max_copy_number,
             self.max_copy_number_diff,

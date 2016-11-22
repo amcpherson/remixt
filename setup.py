@@ -37,25 +37,10 @@ extensions = [
         libraries=['z', 'bz2'],
     ),
     Extension(
-        name='remixt.model1',
-        sources=['remixt/model1.pyx'],
-        include_dirs=[numpy.get_include()],
-    ),
-    Extension(
-        name='remixt.model1a',
-        sources=['remixt/model1a.pyx'],
+        name='remixt.bpmodel',
+        sources=['remixt/bpmodel.pyx'],
         include_dirs=[numpy.get_include()],
         extra_compile_args=["-Wno-unused-function"],
-    ),
-    Extension(
-        name='remixt.model2',
-        sources=['remixt/model2.pyx'],
-        include_dirs=[numpy.get_include()],
-    ),
-    Extension(
-        name='remixt.model3',
-        sources=['remixt/model3.pyx'],
-        include_dirs=[numpy.get_include()],
     ),
 ]
 
