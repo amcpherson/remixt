@@ -72,14 +72,5 @@ setup(
     keywords=['scientific', 'sequence analysis', 'cancer'],
     classifiers=[],
     ext_modules=cythonize(extensions),
-    scripts=[
-        'remixt/run/remixt_calc_bias.py',
-        'remixt/run/remixt_extract_seqdata.py',
-        'remixt/run/remixt_fit_model.py',
-        'remixt/run/remixt_infer_haps.py',
-        'remixt/run/remixt_prepare_counts.py',
-        'remixt/run/remixt_run.py',
-        'remixt/setup/remixt_create_ref_data.py',
-        'remixt/setup/remixt_mappability_bwa.py',
-    ],
+    entry_points={'console_scripts': ['remixt = remixt.ui.main:main']},
 )
