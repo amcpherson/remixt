@@ -9,7 +9,9 @@ import remixt.mappability.bwa.workflow
 def run(**args):
     ref_data_dir = args['ref_data_dir']
 
-    config = yaml.load(open(args['config']))
+    config = {}
+    if args['config'] is not None:
+        config = yaml.load(open(args['config']))
 
     pypeliner_config = config.copy()
     pypeliner_config.update(args)

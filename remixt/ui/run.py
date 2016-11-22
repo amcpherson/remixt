@@ -14,7 +14,9 @@ def run(**args):
     if len(args['results_files']) != len(args['tumour_sample_ids']):
         raise Exception('--results_files must correspond one to one with --tumour_sample_ids')
 
-    config = yaml.load(open(args['config']))
+    config = {}
+    if args['config'] is not None:
+        config = yaml.load(open(args['config']))
 
     bam_filenames = dict(zip(args['tumour_sample_ids'], args['tumour_bam_files']))
     results_filenames = dict(zip(args['tumour_sample_ids'], args['results_files']))
