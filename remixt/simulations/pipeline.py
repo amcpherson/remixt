@@ -723,13 +723,18 @@ def create_tool_workflow(
     if 'kwargs' in tool_info:
         kwargs.update(tool_info['kwargs'])
 
+    seqdata_filenames = {
+        'normal', normal_seqdata_filename,
+        'tumour': tumour_seqdata_filename,
+    }
+
     return workflow_function(
-        normal_seqdata_filename,
-        {'tumour': tumour_seqdata_filename},
+        seqdata_filenames,
         config,
         results_filenames,
         raw_data_directory,
         somatic_breakpoint_file=breakpoints_filename,
+        normal_id='normal',
         **kwargs
     )
 
