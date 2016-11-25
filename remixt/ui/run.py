@@ -24,7 +24,7 @@ def run(**args):
     if (args['normal_sample_id'] is None) != (args['normal_bam_file'] is None):
         raise Exception('--normal_sample_id and --normal_bam_file must be both set or unset')
 
-    if args['normal_sample_id'] is None and args['normal_bam_file'] is None:
+    if args['normal_sample_id'] is not None and args['normal_bam_file'] is not None:
         bam_filenames[args['normal_sample_id']] = args['normal_bam_file']
 
     pypeliner_config = config.copy()
