@@ -1,10 +1,10 @@
 package:
   name: remixt
-  version: '0.4.1'
+  version: '0.5.0'
 
 source:
   git_url: https://dranew@bitbucket.org/dranew/remixt.git
-  git_rev: v0.4.1
+  git_rev: v0.5.0
 
 requirements:
   build:
