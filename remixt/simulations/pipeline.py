@@ -98,7 +98,10 @@ def create_simulations(sim_defs_filename, config, ref_data_dir):
             try:
                 len(sim_config_value)
             except TypeError:
-                sim_config_value = [sim_config_value] * num_simulations
+                sim_config_value = [sim_config_value]
+
+            if len(sim_config_value) == 1:
+                sim_config_value = [sim_config_value[0]] * num_simulations
 
             if len(sim_config_value) != num_simulations:
                 raise TypeError('sim config length mismatch for {}, {}'.format(sim_name, sim_config_name))
@@ -724,7 +727,7 @@ def create_tool_workflow(
         kwargs.update(tool_info['kwargs'])
 
     seqdata_filenames = {
-        'normal', normal_seqdata_filename,
+        'normal': normal_seqdata_filename,
         'tumour': tumour_seqdata_filename,
     }
 
