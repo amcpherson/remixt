@@ -53,4 +53,6 @@ theta:
     chromosome_template: '{ref_data_dir}/theta/chromosomes/Homo_sapiens.GRCh37.70.dna.chromosome.{{}}.fa'
     mappability_url: 'http://compbio.med.harvard.edu/BIC-seq/hg19.CRG.75bp.tar.gz'
     mappability_template: '{ref_data_dir}/theta/hg19.CRG.75bp/hg19.CRC.75mer.chr{{}}.txt'
+    read_length: 100
+    bin_size: 1000
 
