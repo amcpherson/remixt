@@ -410,6 +410,9 @@ def create_brk_cn_table(brk_cn, breakpoint_segment_data):
 
     """
 
+    if len(brk_cn) == 0:
+        return pd.DataFrame(columns=['prediction_id'])
+
     cn_cols = []
     for m in xrange(brk_cn.items()[0][1].shape[0]):
         cn_cols.append('cn_{}'.format(m))
