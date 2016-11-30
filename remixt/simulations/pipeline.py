@@ -587,7 +587,25 @@ def evaluate_results(genome_mixture, cn_table, brk_cn_table, mix_pred):
 
     """
 
+    assert genome_mixture.M == 3
+
+    cn_table = cn_table.copy()
+    brk_cn_table = brk_cn_table.copy()
     mix_true = genome_mixture.frac.copy()
+
+    # Evaluation code assumes 2 tumour clones
+    if 'major_1' in cn_table and 'major_2' not in cn_table:
+        cn_table['major_2'] = cn_table['major_1']
+        cn_table['minor_2'] = cn_table['minor_1']
+
+    if 'total_1' in cn_table and 'total_2' not in cn_table:
+        cn_table['total_2'] = cn_table['total_1']
+
+    if 'cn_2' not in brk_cn_table:
+        brk_cn_table['cn_2'] = brk_cn_table['cn_1']
+
+    if len(mix_pred) == 2:
+        mix_pred = np.concatenate([mix_pred, [0.]])
 
     assert isinstance(mix_pred, np.ndarray)
     assert isinstance(mix_true, np.ndarray)
