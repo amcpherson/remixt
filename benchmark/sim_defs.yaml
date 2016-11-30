@@ -20,7 +20,7 @@ simulations:
     num_ancestral_events: [100]
     num_descendent_events: [50]
     frac_normal: [0.4]
-    frac_clone: [[0.4, 0.2]]
+    frac_clone_1: [0.4]
 
 # simulations:
 #   test_proportion_subclonal:

@@ -889,9 +889,7 @@ class GenomeMixtureSampler(object):
 
         self.frac_normal = params.get('frac_normal', 0.4)
         self.frac_clone_concentration = params.get('frac_clone_concentration', 1.)
-
-        self.frac_clone = params.get('frac_clone', None)
-
+        self.frac_clone_1 = params.get('frac_clone_1', None)
         self.num_false_breakpoints = params.get('num_false_breakpoints', 50)
         self.proportion_breakpoints_detected = params.get('proportion_breakpoints_detected', 0.9)
 
@@ -912,12 +910,14 @@ class GenomeMixtureSampler(object):
         
         frac[0] = self.frac_normal
 
-        if self.frac_clone is None:
+        if self.frac_clone_1 is None:
             frac[1:] = np.random.dirichlet([self.frac_clone_concentration] * (M-1)) * (1 - self.frac_normal)
         else:
-            frac[1:] = np.array(self.frac_clone)
+            frac[1:] = np.array([self.frac_clone_1, 1. - self.frac_normal - self.frac_clone_1])
 
         frac[1:] = np.sort(frac[1:])[::-1]
+
+        assert abs(1. - np.sum(frac)) < 1e-8
 
         num_breakpoints_detected = int(self.proportion_breakpoints_detected * len(genome_collection.breakpoints))
         detected_breakpoints = list(genome_collection.breakpoints)
