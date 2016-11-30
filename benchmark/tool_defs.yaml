@@ -32,6 +32,7 @@ tools:
       gc_wig: '{ref_data_dir}/titan/GRCh37_gc.wig'
       window_size: 1000
       convert_output: True
+      num_clusters: [1, 2]
 
   clonehd:
     name: clonehd
