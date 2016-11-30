@@ -38,8 +38,7 @@ if __name__ == '__main__':
         execfile(args['config'], {}, config)
 
     yaml_text = open(args['tool_defs']).read().format(ref_data_dir=args['ref_data_dir'])
-    tool_defs = yaml.load(yaml_text)
-    del tool_defs['databases']
+    tool_defs = yaml.load(yaml_text)['tools']
 
     pyp = pypeliner.app.Pypeline(config=args)
 

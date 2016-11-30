@@ -33,7 +33,8 @@ if __name__ == '__main__':
 
     yaml_text = open(args['tool_defs']).read().format(ref_data_dir=args['ref_data_dir'])
     tool_defs = yaml.load(yaml_text)
-    databases = tool_defs.pop('databases')
+    databases = tool_defs['databases']
+    tool_defs = tool_defs['tools']
 
     if 'tmpdir' not in args:
         args['tmpdir'] = os.path.join(args['ref_data_dir'], 'setup_tmp')
