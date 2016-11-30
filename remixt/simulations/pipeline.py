@@ -87,7 +87,7 @@ def create_simulations(sim_defs_filename, config, ref_data_dir):
 
         for sim_idx in xrange(num_simulations):
             for rep_idx in xrange(num_replicates):
-                simulations[get_sim_instance_name(sim_name, sim_idx, rep_idx)] = sim_defs['defaults']
+                simulations[get_sim_instance_name(sim_name, sim_idx, rep_idx)] = sim_defs['defaults'].copy()
                 simulations[get_sim_instance_name(sim_name, sim_idx, rep_idx)]['random_seed'] = random_seed
                 random_seed += 1
 
