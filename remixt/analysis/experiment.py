@@ -102,7 +102,7 @@ def find_closest_segment_end(segment_data, breakpoint_data):
         ].copy()
 
         # Must be sorted for find_closest, and reset index to allow for subsequent merge
-        chrom_segment_end = chrom_segment_end.sort('position').reset_index()
+        chrom_segment_end = chrom_segment_end.sort_values('position').reset_index()
 
         idx, dist = find_closest(chrom_segment_end['position'].values, chrom_break_end['position'].values)
 
@@ -401,51 +401,23 @@ def create_cn_table(experiment, cn, h, phi=None):
     return data
 
 
-def create_brk_cn_table(brk_cn, breakpoint_segment_data):
+def create_brk_cn_table(brk_cn):
     """ Create a table of relevant breakpoint copy number data
 
     Args:
         brk_cn (numpy.array): breakpoint copy number
-        breakpoint_segment_data (DataFrame): breakpoint segment mapping
 
     Returns:
         pandas.DataFrame: table of breakpoint copy number information
-
-    The breakpoint_segment_data dataframe must have columns
-    'n_1', 'side_1', 'n_2', 'side_2'
 
     """
 
     if len(brk_cn) == 0:
         return pd.DataFrame(columns=['prediction_id'])
 
-    cn_cols = []
-    for m in xrange(brk_cn.items()[0][1].shape[0]):
-        cn_cols.append('cn_{}'.format(m))
+    brk_cn_table = pd.DataFrame(brk_cn.values(), index=brk_cn.keys())
+    brk_cn_table.columns = ['cn_{}'.format(m) for m in brk_cn_table.columns]
+    brk_cn_table.index.name = 'prediction_id'
 
-    data = list()
-    for breakpoint, cn in brk_cn.iteritems():
-        (n_1, side_1), (n_2, side_2) = sorted(breakpoint)
-        data.append((n_1, side_1, n_2, side_2) + tuple(cn))
-
-    brk_cn_table = pd.DataFrame(
-        data,
-        columns=['n_1', 'side_1', 'n_2', 'side_2'] + cn_cols,
-    )
-
-    # Create copy number table
-    # Account for both orderings of the two breakends
-    column_swap = {
-        'n_1': 'n_2',
-        'side_1': 'side_2',
-        'n_2': 'n_1',
-        'side_2': 'side_1',
-    }
-    brk_cn_table_1 = brk_cn_table.merge(breakpoint_segment_data)
-    brk_cn_table_2 = brk_cn_table.merge(breakpoint_segment_data.rename(columns=column_swap))
-    brk_cn_table = pd.concat([brk_cn_table_1, brk_cn_table_2], ignore_index=True)
-
-    return brk_cn_table
-
-
+    return brk_cn_table.reset_index()
 
