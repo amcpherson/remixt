@@ -26,6 +26,7 @@ tools:
       run_function: create_titan_workflow
       setup_function: create_setup_titan_workflow
     config:
+      chromosomes: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22']
       chrom_info_filename: '{ref_data_dir}/chromInfo.txt.gz'
       mappability_url: 'http://hgdownload.cse.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeMapability/wgEncodeCrgMapabilityAlign100mer.bigWig'
       mappability_wig: '{ref_data_dir}/titan/wgEncodeCrgMapabilityAlign100mer.wig'
