@@ -218,6 +218,15 @@ def create_breakpoint_segment_table(segment_data, breakpoint_data, adjacencies, 
     return breakpoint_segment
 
 
+def convert_breakpoints_to_dict(breakpoint_segment_data):
+    breakpoints = dict()
+    for idx in breakpoint_segment_data.index:
+        prediction_id = breakpoint_segment_data.loc[idx, 'prediction_id']
+        n_1, side_1, n_2, side_2 = breakpoint_segment_data.loc[idx, ['n_1', 'side_1', 'n_2', 'side_2']].values
+        breakpoints[prediction_id] = frozenset([(n_1, side_1), (n_2, side_2)])
+    return breakpoints
+
+
 def create_experiment(count_filename, breakpoint_filename, experiment_filename, max_brk_dist=2000, min_length=None):
     count_data = pd.read_csv(count_filename, sep='\t',
         converters={'chromosome': str})
@@ -297,10 +306,7 @@ class Experiment(object):
 
     @property
     def breakpoints(self):
-        breakpoints = set()
-        for n_1, side_1, n_2, side_2 in self.breakpoint_segment_data[['n_1', 'side_1', 'n_2', 'side_2']].values:
-            breakpoints.add(frozenset([(n_1, side_1), (n_2, side_2)]))
-        return breakpoints
+        return convert_breakpoints_to_dict(self.breakpoint_segment_data)
 
     @property
     def chains(self):
