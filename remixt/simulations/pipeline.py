@@ -529,7 +529,7 @@ def evaluate_brk_cn_results(genome_mixture, brk_cn_table, order_true, order_pred
     data.reset_index(inplace=True)
 
     # Merge predicted breakpoint copies
-    data = data.merge(brk_cn_table[['prediction_id'] + pred_cols], on='prediction_id')
+    data = data.merge(brk_cn_table[['prediction_id'] + pred_cols], on='prediction_id', how='left').fillna(0.0)
 
     # Remove balanced breakpoints
     data = data[~data['is_balanced']]
