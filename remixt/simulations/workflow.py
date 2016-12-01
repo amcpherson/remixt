@@ -24,7 +24,7 @@ def create_segment_simulation_workflow(
 
     workflow.transform(
         name='simulate_mixture',
-        ctx={'mem': 1},
+        ctx={'mem': 4},
         func=remixt.simulations.pipeline.simulate_mixture,
         args=(
             mgd.TempOutputFile('mixture'),
@@ -35,7 +35,7 @@ def create_segment_simulation_workflow(
 
     workflow.transform(
         name='simulate_experiment',
-        ctx={'mem': 1},
+        ctx={'mem': 8},
         func=remixt.simulations.pipeline.simulate_experiment,
         args=(
             mgd.OutputFile(experiment_filename),
