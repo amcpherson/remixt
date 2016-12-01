@@ -35,7 +35,7 @@ class BreakpointModel(object):
             x (numpy.array): observed minor, major, total reads
             l (numpy.array): observed segment lengths
             adjacencies (list of tuple): pairs of adjacent segments
-            breakpoints (list of frozenset of tuples): breakpoints as segment extremity pairs
+            breakpoints (dict of frozenset of tuples): breakpoints as segment extremity pairs
 
         KwArgs:
             max_copy_number (int): maximum copy number of HMM state space
@@ -55,7 +55,7 @@ class BreakpointModel(object):
         self.M = h_init.shape[0]
         self.N = x.shape[0]
 
-        self.breakpoints = list(breakpoints)
+        self.breakpoint_ids, self.breakpoints = zip(*breakpoints.iteritems())
         
         self.max_copy_number = kwargs.get('max_copy_number', 6)
         self.max_copy_number_diff = kwargs.get('max_copy_number_diff', 1)
@@ -465,7 +465,7 @@ class BreakpointModel(object):
             s_b = p_breakpoint.argmax()
             brk_cn.append(np.asarray(self.model.brk_states)[s_b])
             
-        brk_cn = dict(zip(self.breakpoints, brk_cn))
+        brk_cn = dict(zip(self.breakpoint_ids, brk_cn))
 
         return brk_cn
 
@@ -490,7 +490,7 @@ def decode_breakpoints_naive(cn, adjacencies, breakpoints):
     Args:
         cn (numpy.array): copy number matrix
         adjacencies (list of tuple): ordered pairs of segments representing wild type adjacencies
-        breakpoints (list of frozenset of tuple): list of pairs of segment/side pairs representing detected breakpoints
+        breakpoints (dict of frozenset of tuple): list of pairs of segment/side pairs representing detected breakpoints
 
     Returns:
         pandas.DataFrame: table of breakpoint copy number with columns:
@@ -512,7 +512,7 @@ def decode_breakpoints_naive(cn, adjacencies, breakpoints):
 
     brk_cn = dict()
 
-    for breakpoint in breakpoints:
+    for breakpoint_id, breakpoint in breakpoints.iteritems():
 
         # Calculate the copy number 'flow' at each breakend
         breakend_cn = dict()
@@ -538,6 +538,6 @@ def decode_breakpoints_naive(cn, adjacencies, breakpoints):
             breakend_cn[(n_1, side_1)],
             breakend_cn[(n_2, side_2)])
 
-        brk_cn[breakpoint] = breakpoint_cn
+        brk_cn[breakpoint_id] = breakpoint_cn
 
     return brk_cn
