@@ -828,6 +828,8 @@ class GenomeMixture(object):
                     position = self.segment_end[n]
                 else:
                     raise Exception('unexpected side value')
+                breakpoint_info['n_{}'.format(breakend_idx + 1)] = n
+                breakpoint_info['side_{}'.format(breakend_idx + 1)] = side
                 breakpoint_info['chromosome_{}'.format(breakend_idx + 1)] = self.segment_chromosome_id[n]
                 breakpoint_info['position_{}'.format(breakend_idx + 1)] = position
                 breakpoint_info['strand_{}'.format(breakend_idx + 1)] = strand

@@ -204,7 +204,7 @@ def store_fit_results(store, experiment, fit_results, key_prefix):
     # Create copy number table
     cn_table = remixt.analysis.experiment.create_cn_table(experiment, cn, h)
 
-    brk_cn_table = remixt.analysis.experiment.create_brk_cn_table(brk_cn)
+    brk_cn_table = remixt.analysis.experiment.create_brk_cn_table(brk_cn, experiment.breakpoint_segment_data)
 
     store[key_prefix + '/h'] = pd.Series(h, index=xrange(len(h)))
     store[key_prefix + '/cn'] = cn_table

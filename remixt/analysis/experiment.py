@@ -401,14 +401,18 @@ def create_cn_table(experiment, cn, h, phi=None):
     return data
 
 
-def create_brk_cn_table(brk_cn):
+def create_brk_cn_table(brk_cn, breakpoint_segment_data):
     """ Create a table of relevant breakpoint copy number data
 
     Args:
         brk_cn (numpy.array): breakpoint copy number
+        breakpoint_segment_data (DataFrame): breakpoint segment mapping
 
     Returns:
         pandas.DataFrame: table of breakpoint copy number information
+
+    The breakpoint_segment_data dataframe must have columns
+    'prediction_id'
 
     """
 
@@ -418,6 +422,8 @@ def create_brk_cn_table(brk_cn):
     brk_cn_table = pd.DataFrame(brk_cn.values(), index=brk_cn.keys())
     brk_cn_table.columns = ['cn_{}'.format(m) for m in brk_cn_table.columns]
     brk_cn_table.index.name = 'prediction_id'
+    brk_cn_table = brk_cn_table.reset_index()
 
-    return brk_cn_table.reset_index()
+    brk_cn_table = brk_cn_table.merge(breakpoint_segment_data, on='prediction_id').fillna(0.)
 
+    return brk_cn_table
