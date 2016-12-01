@@ -342,33 +342,7 @@ def write_breakpoints(breakpoint_filename, mixture_filename):
     with open(mixture_filename, 'r') as mixture_file:
         mixture = pickle.load(mixture_file)
 
-    breakpoint_table = list()
-
-    for breakpoint in mixture.detected_breakpoints:
-
-        breakpoint_row = dict()
-
-        for idx, breakend in enumerate(breakpoint):
-
-            n, side = breakend
-            chromosome = mixture.segment_chromosome_id[n]
-            if side == 0:
-                strand = '-'
-                position = mixture.segment_start[n]
-            elif side == 1:
-                strand = '+'
-                position = mixture.segment_end[n]
-
-            breakpoint_row['chromosome_{0}'.format(idx+1)] = chromosome
-            breakpoint_row['strand_{0}'.format(idx+1)] = strand
-            breakpoint_row['position_{0}'.format(idx+1)] = position
-
-        breakpoint_table.append(breakpoint_row)
-
-    breakpoint_table = pd.DataFrame(breakpoint_table)
-    breakpoint_table['prediction_id'] = xrange(len(breakpoint_table.index))
-
-    breakpoint_table.to_csv(breakpoint_filename, sep='\t', header=True, index=False)
+    mixture.breakpoint_segment_data.to_csv(breakpoint_filename, sep='\t', header=True, index=False)
 
 
 def evaluate_cn_results(genome_mixture, cn_data_table, order_true, order_pred, allow_swap):
@@ -466,6 +440,29 @@ def evaluate_cn_results(genome_mixture, cn_data_table, order_true, order_pred, a
     return results
 
 
+def _collapse_allele_bp(allele_bp):
+    ((n_1, ell_1), side_1), ((n_2, ell_2), side_2) = allele_bp
+    return frozenset([(n_1, side_1), (n_2, side_2)])
+
+
+def _sum_brk_cn_alleles(allele_brk_cn):
+    total_brk_cn = {}
+    for allele_bp, cn in allele_brk_cn.iteritems():
+        total_bp = _collapse_allele_bp(allele_bp)
+        if total_bp not in total_brk_cn:
+            total_brk_cn[total_bp] = cn
+        else:
+            total_brk_cn[total_bp] += cn
+    return total_brk_cn
+
+
+def _collapse_allele_bps(allele_bps):
+    total_bps = set()
+    for allele_bp in allele_bps:
+        total_bps.add(_collapse_allele_bp(allele_bp))
+    return total_bps
+
+
 def evaluate_brk_cn_results(genome_mixture, brk_cn_table, order_true, order_pred, allow_swap):
     """ Evaluate breakpoint copy number results.
 
@@ -501,7 +498,7 @@ def evaluate_brk_cn_results(genome_mixture, brk_cn_table, order_true, order_pred
     for m in xrange(1, M):
         pred_cols.append('cn_{}'.format(m))
 
-    data = brk_cn_table.copy()
+    data = genome_mixture.breakpoint_segment_data.set_index('prediction_id')
 
     # Add columns for known true copy number
     for col in itertools.chain(true_cols, min_true_cols):
@@ -514,20 +511,25 @@ def evaluate_brk_cn_results(genome_mixture, brk_cn_table, order_true, order_pred
     true_brk_cn = genome_mixture.genome_collection.breakpoint_copy_number
     min_true_brk_cn = remixt.simulations.balanced.minimize_breakpoint_copies(genome_mixture.adjacencies, true_brk_cn)
     true_balanced_breakpoints = genome_mixture.genome_collection.balanced_breakpoints
-    for idx in data.index:
-        n_1, side_1, n_2, side_2 = data.loc[idx, ['n_1', 'side_1', 'n_2', 'side_2']].values
-        for ell_1 in xrange(2):
-            for ell_2 in xrange(2):
-                allele_bp = frozenset([((n_1, ell_1), side_1), ((n_2, ell_2), side_2)])
-                if allele_bp in true_brk_cn:
-                    bp_cn = true_brk_cn[allele_bp]
-                    for m in xrange(1, M):
-                        data.loc[idx, 'true_cn_{}'.format(m)] = bp_cn[m]
-                    min_bp_cn = min_true_brk_cn[allele_bp]
-                    for m in xrange(1, M):
-                        data.loc[idx, 'min_true_cn_{}'.format(m)] = min_bp_cn[m]
-                if allele_bp in true_balanced_breakpoints:
-                    data.loc[idx, 'is_balanced'] = True
+
+    # Collapse combinations for allele non-specific copy numbers
+    true_brk_cn = _sum_brk_cn_alleles(true_brk_cn)
+    min_true_brk_cn = _sum_brk_cn_alleles(min_true_brk_cn)
+    true_balanced_breakpoints = _collapse_allele_bps(true_balanced_breakpoints)
+
+    # Add true copy number and balanced indicator to table
+    for prediction_id, breakpoint in genome_mixture.detected_breakpoints.iteritems():
+        if breakpoint not in true_brk_cn:
+            continue
+        data.loc[prediction_id, true_cols] = true_brk_cn[breakpoint][1:]
+        data.loc[prediction_id, min_true_cols] = min_true_brk_cn[breakpoint][1:]
+        if breakpoint in true_balanced_breakpoints:
+            data.loc[prediction_id, 'is_balanced'] = True
+
+    data.reset_index(inplace=True)
+
+    # Merge predicted breakpoint copies
+    data = data.merge(brk_cn_table[['prediction_id'] + pred_cols], on='prediction_id')
 
     # Remove balanced breakpoints
     data = data[~data['is_balanced']]

@@ -813,6 +813,27 @@ class GenomeMixture(object):
         self.frac = frac
         self.detected_breakpoints = detected_breakpoints
 
+        # Table of breakpoint information including chromosome position
+        # info and prediction ids
+        breakpoint_segment_data = list()
+        for prediction_id, breakpoint in self.detected_breakpoints.iteritems():
+            breakpoint_info = {'prediction_id': prediction_id}
+            for breakend_idx, breakend in enumerate(breakpoint):
+                n, side = breakend
+                if side == 0:
+                    strand = '-'
+                    position = self.segment_start[n]
+                elif side == 1:
+                    strand = '+'
+                    position = self.segment_end[n]
+                else:
+                    raise Exception('unexpected side value')
+                breakpoint_info['chromosome_{}'.format(breakend_idx + 1)] = self.segment_chromosome_id[n]
+                breakpoint_info['position_{}'.format(breakend_idx + 1)] = position
+                breakpoint_info['strand_{}'.format(breakend_idx + 1)] = strand
+            breakpoint_segment_data.append(breakpoint_info)
+        self.breakpoint_segment_data = pd.DataFrame(breakpoint_segment_data)
+
     @property
     def N(self):
         return self.genome_collection.N
@@ -933,6 +954,9 @@ class GenomeMixtureSampler(object):
 
         detected_breakpoints.extend(false_breakpoints)
 
+        # Create a dictionary of detected breakpoints, keyed by a unique id
+        detected_breakpoints = dict(enumerate(detected_breakpoints))
+
         return GenomeMixture(genome_collection, frac, detected_breakpoints)
 
 
@@ -940,39 +964,15 @@ class Experiment(object):
     """ Sequencing experiment read counts.
     """
 
-    def __init__(self, genome_mixture, h, phi, x, breakpoints, h_pred, **kwargs):
+    def __init__(self, genome_mixture, h, phi, x, h_pred, **kwargs):
 
         self.genome_mixture = genome_mixture
         self.h = h
         self.phi = phi
         self.x = x
-        self.breakpoints = breakpoints
         self.h_pred = h_pred
 
         self.__dict__.update(kwargs)
-
-        # Table of breakpoint information including chromosome position
-        # info and prediction ids
-        breakpoint_segment_data = list()
-        for prediction_id, breakpoint in enumerate(sorted(self.breakpoints)):
-            breakpoint_info = {'prediction_id': prediction_id}
-            for breakend_idx, breakend in enumerate(breakpoint):
-                n, side = breakend
-                if side == 0:
-                    strand = '-'
-                    position = self.segment_start[n]
-                elif side == 1:
-                    strand = '+'
-                    position = self.segment_end[n]
-                else:
-                    raise Exception('unexpected side value')
-                breakpoint_info['n_{}'.format(breakend_idx + 1)] = n
-                breakpoint_info['side_{}'.format(breakend_idx + 1)] = side
-                breakpoint_info['chromosome_{}'.format(breakend_idx + 1)] = self.segment_chromosome_id[n]
-                breakpoint_info['position_{}'.format(breakend_idx + 1)] = position
-                breakpoint_info['strand_{}'.format(breakend_idx + 1)] = strand
-            breakpoint_segment_data.append(breakpoint_info)
-        self.breakpoint_segment_data = pd.DataFrame(breakpoint_segment_data)
 
     @property
     def N(self):
@@ -1015,6 +1015,14 @@ class Experiment(object):
                 chain_end.append(idx+1)  # Half-open interval indexing [start, end)
                 chain_start.append(idx+1)
         return zip(sorted(chain_start), sorted(chain_end))
+
+    @property
+    def breakpoints(self):
+        return self.genome_mixture.detected_breakpoints
+
+    @property
+    def breakpoint_segment_data(self):
+        return self.genome_mixture.breakpoint_segment_data
 
 
 def _sample_negbin(mu, r):
@@ -1063,8 +1071,6 @@ class ExperimentSampler(object):
 
         if self.emission_model not in ('poisson', 'negbin', 'normal', 'full', 'negbin_betabin'):
             raise ValueError('emission_model must be one of "poisson", "negbin", "normal", "full"')
-
-        self.num_false_breakpoints = params.get('num_false_breakpoints', 50)
 
         self.frac_beta_noise_stddev = params.get('frac_beta_noise_stddev', None)
 
@@ -1209,30 +1215,6 @@ class ExperimentSampler(object):
 
         extra_params['segment_major_is_allele_a'] = major_is_allele_a * 1
 
-        breakpoints = genome_mixture.breakpoints.copy()
-
-        num_breakpoints = len(breakpoints) + self.num_false_breakpoints
-
-        while len(breakpoints) < num_breakpoints:
-
-            n_1 = np.random.randint(N)
-            n_2 = np.random.randint(N)
-
-            side_1 = np.random.randint(2)
-            side_2 = np.random.randint(2)
-
-            # Do not add wild type adjacencies
-            if (n_1, n_2) in genome_mixture.adjacencies and side_1 == 1 and side_2 == 0:
-                continue
-            if (n_2, n_1) in genome_mixture.adjacencies and side_2 == 1 and side_1 == 0:
-                continue
-
-            # TODO: fold back inversions
-            if (n_1, side_1) == (n_2, side_2):
-                continue
-
-            breakpoints.add(frozenset([(n_1, side_1), (n_2, side_2)]))
-
         def add_beta_noise(mu, var):
             if np.any(var >= mu * (1. - mu)):
                 raise ValueError('var >= mu * (1. - mu)')
@@ -1248,6 +1230,6 @@ class ExperimentSampler(object):
 
         h_pred = frac * self.h_total
 
-        return Experiment(genome_mixture, h, phi, x, breakpoints, h_pred, **extra_params)
+        return Experiment(genome_mixture, h, phi, x, h_pred, **extra_params)
 
 
