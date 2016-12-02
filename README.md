@@ -2,106 +2,63 @@
 
 ReMixT is a tool for joint inference of clone specific segment and breakpoint copy number in whole genome sequencing data.  The input for the tool is a set of segments, a set of breakpoints predicted from the sequencing data, and normal and tumour bam files.  Where multiple tumour samples are available, they can be analyzed jointly for additional benefit.
 
-## Prerequisites
+## Installation
 
-### Python
+### Installing from conda
 
-ReMixT requires python and the numpy/scipy stack.  The recommended way to install python (also the easiest), is to download and install the latest [Anaconda Python](https://store.continuum.io/cshop/anaconda/) from the Continuum website.
+The recommended method of installation for remixt is using `conda`.  First install [anaconda python](https://store.continuum.io/cshop/anaconda/) from the continuum website.  Then add my channel, and the bioconda channel, and install remixt as follows.
 
-#### Python libraries
+    conda config --add channels https://conda.anaconda.org/dranew
+    conda config --add channels 'bioconda'
+    conda install remixt
 
-If you do no use anaconda, you will be required to install the following python libraries.
+### Installing from source
 
-* [numpy/scipy](http://www.numpy.org)
-* [pandas](http://pandas.pydata.org)
-* [matplotlib](http://matplotlib.org)
-* [cython](http://docs.cython.org)
-
-### Samtools
-
-[Samtools](http://www.htslib.org) is required and should be on the path.
-
-### Shapeit
-
-[shapeit2](https://mathgen.stats.ox.ac.uk/genetics_software/shapeit/shapeit.html#download) is required and should be on the path.
-
-### BWA
-
-[BWA](http://bio-bwa.sourceforge.net) is used by the `mappability_bwa.py` script for generating a bwa mappability file, for the users whose bam files were created using BWA.
-
-## Install
-
-### Clone Source Code
+#### Clone Source Code
 
 To install the code, first clone from bitbucket.  A recursive clone is preferred to pull in all submodules.
 
-    git clone --recursive https://bitbucket.org/dranew/remixt.git
+    git clone --recursive git@bitbucket.org:dranew/remixt.git
 
-The following steps will assume you are in the `remixt` directory.
+#### Dependencies
 
-    cd remixt
+To install from source you will need several dependencies.  A list of dependencies can be found in the `conda` `yaml` file in the repo at `conda/remixt/meta.yaml`.
 
-### Install Python Libraries
+#### Build executables and install
 
-There are two options for installing the python libraries.
+To build executables and install the remixt code as a python package run the following command in the remixt repo:
 
-#### Option 1:
-
-A temporary solution is to modify the python path to point to the location of the source code on your system.  If you use bash, the following command will correctly modify your environment.
-
-    source pythonpath.sh
-
-#### Option 2:
-
-A more permanent solution is to install the libraries into your python site packages.  Note that if you are using python installed on your system, you may need admin privileges.
-
-To install remixt:
-
-    python setup.py install
-
-To install pypeliner, a pipeline management system:
-
-    cd pypeliner
     python setup.py install
 
 ## Setup
 
-Download and setup of the reference genome and 1000 genomes dataset is automated.  Select a directory on your system that will contain the reference data, herein referred to as `$ref_data_dir`.  The `$ref_data_dir` directory will be used in many of the subsequent scripts when running remixt.
+### Reference genome
+
+Download and setup of the reference genome is automated.  The default is hg19.  Select a directory on your system that will contain the reference data, herein referred to as `$ref_data_dir`.  The `$ref_data_dir` directory will be used in many of the subsequent scripts when running destruct.
 
 Download the reference data and build the required indexes:
 
-    python setup/create_ref_data.py $ref_data_dir
+    remixt create_ref_data $ref_data_dir
 
-ReMixT also requires a mappability file, which can be time consuming to build.  The script `setup/mappability_bwa.py` will build a mappability file compatible with the bwa aligner.  If your bam files are produced using a different aligner, you may want to consider generating a mappability file for your aligner by writing a modified the `setup/mappability_bwa.py` script.
+### Mappability file
 
-Build the mappability file:
+Additionally, remixt requires a mappability file to be generated.  We have provided a workflow for generating a mappability file based on `bwa` alignments, for other aligners, you may want to create your own mappability workflow, see `remixt/mappability/bwa/workflow.py` as an example.
 
-    python setup/mappability_bwa.py $ref_data_dir --tmpdir $tmp_map
+To create a mappability file for `bwa`, run:
 
-where `$tmp_map` is a unique temporary directory.  If you need to stop and restart the script, using the same temporary directory will allow the script to restart where it left off.
+    remixt mappability_bwa $ref_data_dir
 
-The `setup/mappability_bwa.py` script has options for parallelism, see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
+Note that this workflow will take a considerable amount of time and it is recommended you run this part of remixt setup on a cluster or multicore machine.
 
-## Run
+For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
+
+## Running Remixt
 
 ### Input Data
 
-ReMixT takes the following as input:
+Remixt takes multiple bam files as input.  Bam files should be multiple samples from the same patient, with one bam sequenced from a normal sample from that patient.
 
-* Normal bam file
-* Multiple Tumour bam files from the same individual
-* Segmentation of the genome
-* Breakpoint predictions in the genome
-
-#### Segmentation Input Format
-
-The segmentation should be provided in a tab separated file with the following columns:
-
-* `chromosome`
-* `start`
-* `end`
-
-The first line should be the column names, which should be identical to the above list.  Each subsequent line is a segment.
+Additionally, remixt takes a list of predicted breakpoints detected by paired end sequencing as an additional input.
 
 #### Breakpoint Prediction Input Format
 
@@ -117,7 +74,7 @@ The predicted breakpoints should be provided in a tab separated file with the fo
 
 The first line should be the column names, which should be identical to the above list.  Each subsequent line is a breakpoint prediction.  The `prediction_id` should be unique to each breakpoint prediction.  The `chromosome_`, `strand_` and `position_` columns give the position and orientation of each end of the breakpoint.  The values for `strand_` should be either `+` or `-`.  A value of `+` means that sequence to the right of `chromosome_`, `position_` is preserved in the tumour chromosome containing the breakpoint.  Conversely, a value of `-` means that sequence to the left of `chromosome_`, `position_` is preserved in the tumour chromosome containing the breakpoint.
 
-The following table may assist in understanding the strand of a break-end.  Note that an inversion event produces two breakpoints, the strand configurations for both are shown.
+The following table may assist in understanding the strand of a break-end.  Note that an inversion event produces two breakpoints, the strand configurations for both are shown.  Additionally, for inter-chromosomal events, any strand configuration is possible.
 
 | Structural Variation     | Strand of Leftmost Break-End | Strand of Rightmost Break-End |
 | ------------------------ | ---------------------------- | ----------------------------- |
@@ -126,107 +83,33 @@ The following table may assist in understanding the strand of a break-end.  Note
 | Inversion (Breakpoint A) |              +               |              +                |
 | Inversion (Breakpoint B) |              -               |              -                |
 
-The script `tools/create_segments.py` can be used to generate a regular segmentation of the genome, augmented with additional segment boundaries at break ends of rearrangement breakpoints.
+### Running Remixt
 
-Generate segment file `$segments` from breakpoint file `$breakpoints` using a default segment length (see `remixt.defaults`) as follows:
+Running remixt involves invoking a single command, `remixt run`.  The result of remixt is an [hdf5](https://www.hdfgroup.org) file storing [pandas](http://pandas.pydata.org) tables.
 
-    python tools/create_segments.py $ref_data_dif \
-        $breakpoints $segments
+Suppose we have the following list of inputs:
 
-### Step 1 - Importing the Data
+* Normal sample with ID `123N` and bam filename `$normal_bam`
+* Tumour sample with ID `123A` and bam filename `$tumour_a_bam`
+* Tumour sample with ID `123B` and bam filename `$tumour_b_bam`
+* Breakpoint table in TSV format with filename `$breakpoints`
 
-The first step in the process is to import the relevant concordant read data from each bam file into a ReMixT specific format.  This is accomplished using the `pipeline/extract_seqdata.py` script, which should be applied independently to each input file.  
+Additionally, remixt will generate the following outputs:
 
-To extract data from `$normal_bam` and `$tumour_bam` to `$normal_seqdata` and `$tumour_seqdata` respectively:
+* Results as HDF5 file storing pandas tables with filename `$results_h5`
+* Temporary files and logs stored in directory `$remixt_tmp_dir` (directory created if it doesnt exist)
 
-    python pipeline/extract_seqdata.py $ref_data_dir \
-        $normal_bam $normal_seqdata \
-        --tmpdir $tmp_seq_1
+Given the above inputs and outputs run remixt as follows:
 
-    python pipeline/extract_seqdata.py $ref_data_dir \
-        $tumour_bam $tumour_seqdata \
-        --tmpdir $tmp_seq_2
+    remixt run $ref_data_dir $raw_data_dir $breakpoints \
+        --normal_sample_id 123N \
+        --normal_bam_file $normal_bam \
+        --tumour_sample_ids 123A 123B \
+        --tumour_bam_files $tumour_a_bam $tumour_b_bam \
+        --results_files $results_h5
+        --tmpdir $remixt_tmp_dir
 
-where `$tmp_seq_1` and `$tmp_seq_2` are unique temporary directories.  If you need to stop and restart the script, using the same temporary directory will allow the scripts to restart where it left off.
-
-### Step 2 - Infer haplotype blocks
-
-The second step is to phase blocks of heterozygous SNPs using a 1000 genomes reference panel.  The `pipeline/infer_haps.py` script can be used for this step:
-
-    python pipeline/infer_haps.py $ref_data_dir \
-        $normal_seqdata $haplotypes \
-        --tmpdir $tmp_haps
-
-where `$tmp_haps` is a unique temporary directory.
-
-### Step 3 - Preparing Segment Read Counts
-
-The third step in the process is to prepare major, minor and total read counts per segment.  Read counts are prepared jointly for multiple tumour samples using the `pipeline/prepare_counts.py` script.  Suppose we have two tumour data files `$tumour_1_seqdata` and `$tumour_2_seqdata` produced from the previous step.  The `pipeline/prepare_counts.py` can analyze them jointly, to output one read count file for each tumour dataset, which we will call `$tumour_1_counts` and `$tumour_2_counts`.  This will provide more accurate allele specific read counts.
-
-To create read counts for segments given in segment file `$segments` for normal data `$normal_seqdata` and tumour data `$tumour_1_seqdata` and `$tumour_2_seqdata`:
-
-    python pipeline/prepare_counts.py $ref_data_dir \
-        $segments $haplotypes \
-        --tumour_files $tumour_1_seqdata $tumour_2_seqdata
-        --count_files $tumour_1_counts $tumour_2_counts
-        --tmpdir $tmp_counts
-
-where `$tmp_counts` is a unique temporary directory.  If you need to stop and restart the script, using the same temporary directory will allow the scripts to restart where it left off.
-
-### Step 4 - Calculate segment specific biases
-
-For the fourth step, calculate tumour and segment specific read count biases.  Biases are added to the segment read count table as an additional bias adjusted segment length column.  The bias calculation step is run independently per tumour sample.
-
-For tumour sample 1, to calculate segment lengths file `$tumour_1_counts_lengths` for tumour sample 1 with segment counts `$tumour_1_counts`, run the `pipeline/calc_bias.py` script as follows: 
-
-    python pipeline/calc_bias.py $ref_data_dir \
-        $tumour_1_seqdata $tumour_1_counts $tumour_1_counts_lengths
-        --tmpdir $tmp_biases
-
-### Step 5 - Fitting the ReMixT model
-
-ReMixT is run on each sample individually, and takes as input the sample specific segment read counts and breakpoints.  The output is an HDF5 store (`$results` below) containing pandas dataframes.
-
-To run ReMixT for tumour sample 1 from above with counts file `$tumour_1_counts`, use the `pipeline/run_remixt.py` script as follows:
-
-    python pipeline/fit_model.py $ref_data_dir \
-        $tumour_1_counts $breakpoints \
-        $results --tmpdir $tmp_remixt
-
-where `$tmp_remixt` is a unique temporary directory.  If you need to stop and restart the script, using the same temporary directory will allow the scripts to restart where it left off.
-
-### Running the full workflow
-
-It is now possible to run the full workflow in a single script with the `run_remixt.py` script.  Given input segments `$segments`, breakpoints `$breakpoints`, normal and tumour bams `$normal_bam`, `$tumour_1_bam` and `$tumour_2_bam`, the following command will run remixt, placing raw data in $raw_data_dir, and tumour specific results in `$tumour_1_results` and $tumour_2_results`.
-
-    python pipeline/run_remixt.py $ref_data_dir \
-        $raw_data_dir $segments $breakpoints $normal_bam \
-        --tumour_sample_ids 1 2 \
-        --tumour_bam_files $tumour_1_bam $tumour_2_bam \
-        --results_files $tumour_1_results $tumour_2_results
-
-The above scripts can leverage multi-core and multi-processing environments.  For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
-
-### Intermediate File Formats
-
-#### Sequence Data Format
-
-The files produced by the `extract_seqdata.py` script are tar files raw data matrices produced for easy and efficient reading by numpy.  They contain information per chromosome about concordant alignment and SNP alleles for each fragment.  They are not intended to be usable except by ReMixT.
-
-#### Segment Counts Format
-
-The segment counts files are tab separated with the first line as the header.  The files should contain at least the following columns (and may contain additional columns):
-
-* `chromosome`
-* `start`
-* `end`
-* `readcount`
-* `length`
-* `major_readcount`
-* `minor_readcount`
-* `major_is_allele_a`
-
-The `chromosome`, `start` and `end` columns define the segment.  The `readcount` column is the total reads contained within the segment, and `major_readcount` and `minor_readcount` are the total allele specific reads contained within the segment and only include the reads that can be counted as one allele vs the other using heterozygous SNPs.  The length is the segment length scaled by a factor that takes into account mappability and GC content.  The `major_is_allele_a` column is useful if you have run ReMixT on multiple samples from the same individual.  This column is a binary indicator and will tell you if the major allele from one sample is the same as the major allele from another sample.
+Note that remixt creates multiple jobs and many parts of remixt are massively parallelizable, thus it is recommended you run remixt on a cluster or multicore machine.  For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
 
 ### Output File Formats
 
