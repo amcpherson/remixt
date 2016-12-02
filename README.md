@@ -6,7 +6,7 @@ ReMixT is a tool for joint inference of clone specific segment and breakpoint co
 
 ### Installing from conda
 
-The recommended method of installation for remixt is using `conda`.  First install [anaconda python](https://store.continuum.io/cshop/anaconda/) from the continuum website.  Then add my channel, and the bioconda channel, and install remixt as follows.
+The recommended method of installation for ReMixT is using `conda`.  First install [anaconda python](https://store.continuum.io/cshop/anaconda/) from the continuum website.  Then add my channel, and the bioconda channel, and install ReMixT as follows.
 
     conda config --add channels https://conda.anaconda.org/dranew
     conda config --add channels 'bioconda'
@@ -26,11 +26,11 @@ To install from source you will need several dependencies.  A list of dependenci
 
 #### Build executables and install
 
-To build executables and install the remixt code as a python package run the following command in the remixt repo:
+To build executables and install the ReMixT code as a python package run the following command in the ReMixT repo:
 
     python setup.py install
 
-## Setup
+## Setup ReMixT
 
 ### Reference genome
 
@@ -42,23 +42,23 @@ Download the reference data and build the required indexes:
 
 ### Mappability file
 
-Additionally, remixt requires a mappability file to be generated.  We have provided a workflow for generating a mappability file based on `bwa` alignments, for other aligners, you may want to create your own mappability workflow, see `remixt/mappability/bwa/workflow.py` as an example.
+Additionally, ReMixT requires a mappability file to be generated.  We have provided a workflow for generating a mappability file based on `bwa` alignments, for other aligners, you may want to create your own mappability workflow, see `remixt/mappability/bwa/workflow.py` as an example.
 
 To create a mappability file for `bwa`, run:
 
     remixt mappability_bwa $ref_data_dir
 
-Note that this workflow will take a considerable amount of time and it is recommended you run this part of remixt setup on a cluster or multicore machine.
+Note that this workflow will take a considerable amount of time and it is recommended you run this part of ReMixT setup on a cluster or multicore machine.
 
 For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
 
-## Running Remixt
+## Running ReMixT
 
 ### Input Data
 
-Remixt takes multiple bam files as input.  Bam files should be multiple samples from the same patient, with one bam sequenced from a normal sample from that patient.
+ReMixT takes multiple bam files as input.  Bam files should be multiple samples from the same patient, with one bam sequenced from a normal sample from that patient.
 
-Additionally, remixt takes a list of predicted breakpoints detected by paired end sequencing as an additional input.
+Additionally, ReMixT takes a list of predicted breakpoints detected by paired end sequencing as an additional input.
 
 #### Breakpoint Prediction Input Format
 
@@ -83,9 +83,9 @@ The following table may assist in understanding the strand of a break-end.  Note
 | Inversion (Breakpoint A) |              +               |              +                |
 | Inversion (Breakpoint B) |              -               |              -                |
 
-### Running Remixt
+### ReMixT Command Line
 
-Running remixt involves invoking a single command, `remixt run`.  The result of remixt is an [hdf5](https://www.hdfgroup.org) file storing [pandas](http://pandas.pydata.org) tables.
+Running ReMixT involves invoking a single command, `remixt run`.  The result of ReMixT is an [hdf5](https://www.hdfgroup.org) file storing [pandas](http://pandas.pydata.org) tables.
 
 Suppose we have the following list of inputs:
 
@@ -94,12 +94,12 @@ Suppose we have the following list of inputs:
 * Tumour sample with ID `123B` and bam filename `$tumour_b_bam`
 * Breakpoint table in TSV format with filename `$breakpoints`
 
-Additionally, remixt will generate the following outputs:
+Additionally, ReMixT will generate the following outputs:
 
 * Results as HDF5 file storing pandas tables with filename `$results_h5`
 * Temporary files and logs stored in directory `$remixt_tmp_dir` (directory created if it doesnt exist)
 
-Given the above inputs and outputs run remixt as follows:
+Given the above inputs and outputs run ReMixT as follows:
 
     remixt run $ref_data_dir $raw_data_dir $breakpoints \
         --normal_sample_id 123N \
@@ -109,7 +109,7 @@ Given the above inputs and outputs run remixt as follows:
         --results_files $results_h5
         --tmpdir $remixt_tmp_dir
 
-Note that remixt creates multiple jobs and many parts of remixt are massively parallelizable, thus it is recommended you run remixt on a cluster or multicore machine.  For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
+Note that ReMixT creates multiple jobs and many parts of ReMixT are massively parallelizable, thus it is recommended you run ReMixT on a cluster or multicore machine.  For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
 
 ### Output File Formats
 
