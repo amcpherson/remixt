@@ -405,9 +405,21 @@ class BreakpointModel(object):
         )
 
         if not result.success:
-            raise ValueError('optimization failed\n{}'.format(result))
 
+            # Check the gradiant if optimization failed
+            if result.message == 'ABNORMAL_TERMINATION_IN_LNSRCH':
+                analytic_fprime = calculate_nll_partial_h(result.x, self.model, sample)
+                numerical_fprime = statsmodels.tools.numdiff.approx_fprime(result.x, calculate_nll, args=(self.model, sample))
+
+                if not np.allclose(analytic_fprime, numerical_fprime):
+                    raise ValueError('gradiant error, analytic: {}, numerical: {}\n'.format(analytic_fprime, numerical_fprime))
+
+            else:
+                raise ValueError('optimization failed\n{}'.format(result)) 
+
+        self.model.h = result.x
         elbo_after = self.model.calculate_elbo()
+
         if elbo_after < elbo_before:
             print '[{}] h rejected, elbo before: {}, after: {}'.format(_gettime(), elbo_before, elbo_after)
             self.model.h = h_before
