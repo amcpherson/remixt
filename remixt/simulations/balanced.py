@@ -92,7 +92,7 @@ def minimize_breakpoint_copies(adjacencies, brk_cn):
                 edge = frozenset(list(edge))
                 if edge not in min_brk_cn:
                     adj = tuple(sorted([a[0][0] for a in edge]))
-                    assert adj in adjacencies
+                    assert adj in adjacencies or adj[::-1] in adjacencies
                     continue
                 assert min_brk_cn[edge][m] > 0
                 min_brk_cn[edge][m] -= 1
