@@ -25,6 +25,9 @@ if __name__ == '__main__':
     argparser.add_argument('source',
         help='Input Source SeqData Filename')
 
+    argparser.add_argument('raw_data_dir',
+        help='Raw data directory')
+
     argparser.add_argument('table',
         help='Output Table Filename')
 
@@ -41,6 +44,13 @@ if __name__ == '__main__':
     tool_defs = yaml.load(yaml_text)['tools']
 
     pyp = pypeliner.app.Pypeline(config=args)
+
+    normal_seqdata_template = os.path.join(args['raw_data_dir'], '{sim_id}', 'normal.h5')
+    tumour_seqdata_template = os.path.join(args['raw_data_dir'], '{sim_id}', 'tumour.h5')
+    genome_mixture_template = os.path.join(args['raw_data_dir'], '{sim_id}', 'genome_mixture.pickle')
+    breakpoints_template = os.path.join(args['raw_data_dir'], '{sim_id}', 'breakpoints.tsv')
+    results_template = os.path.join(args['raw_data_dir'], '{sim_id}', '{tool_name}', 'results.h5')
+    evaluation_template = os.path.join(args['raw_data_dir'], '{sim_id}', '{tool_name}', 'evaluation.h5')
 
     workflow = pypeliner.workflow.Workflow(default_ctx={'mem': 4})
 
@@ -69,10 +79,10 @@ if __name__ == '__main__':
         args=(
             mgd.TempInputObj('sim_defs', 'sim_id'),
             mgd.InputFile(args['source']),
-            mgd.TempOutputFile('normal_seqdata', 'sim_id'),
-            mgd.TempOutputFile('tumour_seqdata', 'sim_id'),
-            mgd.TempOutputFile('genome_mixture', 'sim_id'),
-            mgd.TempOutputFile('breakpoints', 'sim_id'),
+            mgd.OutputFile('normal_seqdata', 'sim_id', template=normal_seqdata_template),
+            mgd.OutputFile('tumour_seqdata', 'sim_id', template=tumour_seqdata_template),
+            mgd.OutputFile('genome_mixture', 'sim_id', template=genome_mixture_template),
+            mgd.OutputFile('breakpoints', 'sim_id', template=breakpoints_template),
             config,
             args['ref_data_dir'],
         ),
@@ -84,10 +94,10 @@ if __name__ == '__main__':
         func=remixt.simulations.pipeline.create_tool_workflow,
         args=(
             mgd.TempInputObj('tool_defs', 'sim_id', 'tool_name'),
-            mgd.TempInputFile('normal_seqdata', 'sim_id'),
-            mgd.TempInputFile('tumour_seqdata', 'sim_id'),
-            mgd.TempInputFile('breakpoints', 'sim_id'),
-            mgd.TempOutputFile('results', 'sim_id', 'tool_name'),
+            mgd.InputFile('normal_seqdata', 'sim_id', template=normal_seqdata_template),
+            mgd.InputFile('tumour_seqdata', 'sim_id', template=tumour_seqdata_template),
+            mgd.InputFile('breakpoints', 'sim_id', template=breakpoints_template),
+            mgd.OutputFile('results', 'sim_id', 'tool_name', template=results_template),
             mgd.TempSpace('raw_data', 'sim_id', 'tool_name', cleanup=None),
         ),
     )
@@ -97,11 +107,11 @@ if __name__ == '__main__':
         axes=('sim_id', 'tool_name'),
         func=remixt.simulations.pipeline.evaluate_results_task,
         args=(
-            mgd.TempOutputFile('evaluation', 'sim_id', 'tool_name'),
-            mgd.TempInputFile('results', 'sim_id', 'tool_name'),
+            mgd.OutputFile('evaluation', 'sim_id', 'tool_name', template=evaluation_template),
+            mgd.InputFile('results', 'sim_id', 'tool_name', template=results_template),
         ),
         kwargs={
-            'mixture_filename': mgd.TempInputFile('genome_mixture', 'sim_id'),
+            'mixture_filename': mgd.InputFile('genome_mixture', 'sim_id', template=genome_mixture_template),
             'key_prefix': '/sample_tumour',
         },
     )
@@ -112,7 +122,7 @@ if __name__ == '__main__':
         args=(
             mgd.OutputFile(args['table']),
             mgd.TempInputObj('sim_defs', 'sim_id'),
-            mgd.TempInputFile('evaluation', 'sim_id', 'tool_name'),
+            mgd.InputFile('evaluation', 'sim_id', 'tool_name', template=evaluation_template),
             ['sim_id', 'tool_name'],
         ),
     )
