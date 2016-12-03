@@ -43,6 +43,8 @@ if __name__ == '__main__':
     yaml_text = open(args['tool_defs']).read().format(ref_data_dir=args['ref_data_dir'])
     tool_defs = yaml.load(yaml_text)['tools']
 
+    remixt_ref_data_dir = tool_defs['remixt']['kwargs']['ref_data_dir']
+
     pyp = pypeliner.app.Pypeline(config=args)
 
     normal_seqdata_template = os.path.join(args['raw_data_dir'], '{sim_id}', 'normal.h5')
@@ -62,7 +64,7 @@ if __name__ == '__main__':
         args=(
             mgd.InputFile(args['sim_defs']),
             config,
-            args['ref_data_dir'],
+            remixt_ref_data_dir,
         ),
     )
 
@@ -84,7 +86,7 @@ if __name__ == '__main__':
             mgd.OutputFile('genome_mixture', 'sim_id', template=genome_mixture_template),
             mgd.OutputFile('breakpoints', 'sim_id', template=breakpoints_template),
             config,
-            args['ref_data_dir'],
+            remixt_ref_data_dir,
         ),
     )
 
