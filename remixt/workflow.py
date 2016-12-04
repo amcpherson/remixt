@@ -241,7 +241,7 @@ def create_prepare_counts_workflow(
     workflow.transform(
         name='segment_readcount',
         axes=('tumour_id',),
-        ctx={'mem': 16},
+        ctx={'mem': 20},
         func=remixt.analysis.readcount.segment_readcount,
         args=(
             mgd.TempOutputFile('segment_counts.tsv', 'tumour_id'),
@@ -254,7 +254,7 @@ def create_prepare_counts_workflow(
     workflow.transform(
         name='haplotype_allele_readcount',
         axes=('tumour_id',),
-        ctx={'mem': 16},
+        ctx={'mem': 20},
         func=remixt.analysis.readcount.haplotype_allele_readcount,
         args=(
             mgd.TempOutputFile('allele_counts.tsv', 'tumour_id'),
