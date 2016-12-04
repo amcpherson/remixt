@@ -249,18 +249,21 @@ class Experiment(object):
 
         self.count_data = count_data
 
+        breakpoint_cols = [
+            'prediction_id',
+            'chromosome_1',
+            'strand_1',
+            'position_1',
+            'chromosome_2',
+            'strand_2',
+            'position_2',
+        ]
+
         if breakpoint_data is not None:
-            self.breakpoint_data = breakpoint_data
+            self.breakpoint_data = breakpoint_data[breakpoint_cols]
+
         else:
-            self.breakpoint_data = pd.DataFrame(columns=[
-                'prediction_id',
-                'chromosome_1',
-                'strand_1',
-                'position_1',
-                'chromosome_2',
-                'strand_2',
-                'position_2',
-            ])
+            self.breakpoint_data = pd.DataFrame(columns=breakpoint_cols)
 
         chromosomes = self.count_data['chromosome'].unique()
 
