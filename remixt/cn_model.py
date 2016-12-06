@@ -6,6 +6,7 @@ import scipy.misc
 import pickle
 import contextlib
 import datetime
+import statsmodels.tools.numdiff
 
 import remixt.bpmodel
 
@@ -411,7 +412,7 @@ class BreakpointModel(object):
                 analytic_fprime = calculate_nll_partial_h(result.x, self.model, sample)
                 numerical_fprime = statsmodels.tools.numdiff.approx_fprime(result.x, calculate_nll, args=(self.model, sample))
 
-                if not np.allclose(analytic_fprime, numerical_fprime):
+                if not np.allclose(analytic_fprime, numerical_fprime, atol=2.):
                     raise ValueError('gradiant error, analytic: {}, numerical: {}\n'.format(analytic_fprime, numerical_fprime))
 
             else:
