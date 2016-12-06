@@ -264,6 +264,7 @@ def _get_segment_fragments(chrom_read_depth_data, source_filename, chromosome):
     source_fragments = source_fragments[source_fragments['segment_idx'] >= 0]
 
     # Add read depth to each fragment
+    # Note: this merge will duplicate source fragments per allele
     source_fragments = source_fragments.merge(chrom_read_depth_data[['segment_idx', 'allele', 'read_depth']])
 
     return source_fragments
@@ -311,6 +312,11 @@ def resample_mixture_read_data(read_data_filename, source_filename, genomes, rea
 
     for chromosome, chrom_read_depth_data in read_depth_data.groupby('chromosome'):
         print 'chromosome'
+        
+        # Get source fragments contained within each segment
+        # Note: each source fragment will be duplicated for each allele, and
+        # as a result the same source fragment may be sampled to create
+        # target fragments for both alleles
         source_fragments = _get_segment_fragments(chrom_read_depth_data, source_filename, chromosome)
 
         # Resample reads with a poisson
