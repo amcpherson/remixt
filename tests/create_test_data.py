@@ -14,10 +14,11 @@ def generate_experiment(experiment_filename, experiment_plot_filename):
     params = {
         'N': 5000,
         'frac_normal': 0.4,
-        'frac_clone': [0.4, 0.2],
-        'num_ancestral_events': 40,
-        'num_descendent_events': 20,
+        'frac_clone_1': 0.4,
+        'num_ancestral_events': 100,
+        'num_descendent_events': 50,
         'num_false_breakpoints': 0,
+        'ploidy_gaussian_mean': 2.5,
     }
 
     rh_sampler = remixt.simulations.experiment.RearrangementHistorySampler(params)
