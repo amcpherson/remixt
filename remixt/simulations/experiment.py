@@ -34,7 +34,8 @@ class RearrangedGenome(object):
 
     default_params = {
         'genome_length':3e9,
-        'seg_length_concentration':1.,
+        'seg_length_concentration':0.5,
+        'seg_length_min':200,
         'num_chromosomes':20,
         'chrom_length_concentration':5.,
         'chromosome_lengths':None,
@@ -161,6 +162,7 @@ class RearrangedGenome(object):
         chrom_num_segments += 1
 
         seg_length_concentration = params['seg_length_concentration']
+        seg_length_min = params['seg_length_min']
 
         self.l = np.array([])
 
@@ -170,7 +172,10 @@ class RearrangedGenome(object):
 
         for chrom_id, chrom_length, num_segments in zip(chromosome_ids, chromosome_lengths, chrom_num_segments):
 
-            lengths = np.random.dirichlet([seg_length_concentration] * num_segments) * chrom_length
+            length_proportions = np.random.dirichlet([seg_length_concentration] * num_segments)
+            length_proportions = np.maximum(length_proportions, float(seg_length_min) / chrom_length)
+            length_proportions /= length_proportions.sum()
+            lengths = length_proportions * chrom_length
             lengths = lengths.astype(int)
             lengths[-1] = chrom_length - lengths[:-1].sum()
 
@@ -778,6 +783,7 @@ class GenomeCollectionSampler(object):
         self.num_descendent_events = params.get('num_descendent_events', 10)
 
         self.proportion_subclonal = params.get('proportion_subclonal', 0.3)
+        self.proportion_ancestral_loh = params.get('proportion_ancestral_loh', 0.2)
 
     def sample_genome_collection(self):
         """ Sample a collection of genomes.
@@ -789,7 +795,13 @@ class GenomeCollectionSampler(object):
 
         wt_genome = self.rh_sampler.sample_wild_type()
 
-        ancestral_genome = self.rh_sampler.sample_rearrangement_history(wt_genome, self.num_ancestral_events)[0]
+        ancestral_genomes = self.rh_sampler.sample_rearrangement_history(wt_genome, self.num_ancestral_events)
+
+        # Select the descendant genome with closest requested ancestral loh
+        loh_lengths = np.array([genome.length_loh() for genome in ancestral_genomes])
+        loh_proportions = loh_lengths / float(wt_genome.l.sum())
+        loh_diff = np.absolute(loh_proportions - self.proportion_ancestral_loh)
+        ancestral_genome = ancestral_genomes[np.argmin(loh_diff)]
 
         descendent_genomes = self.rh_sampler.sample_rearrangement_history(ancestral_genome, self.num_descendent_events)
 
