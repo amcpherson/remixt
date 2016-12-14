@@ -34,8 +34,8 @@ class RearrangedGenome(object):
 
     default_params = {
         'genome_length':3e9,
-        'seg_length_concentration':0.5,
-        'seg_length_min':200,
+        'seg_length_concentration':1.0,
+        'seg_length_min':50000,
         'num_chromosomes':20,
         'chrom_length_concentration':5.,
         'chromosome_lengths':None,
@@ -600,6 +600,7 @@ class RearrangementHistorySampler(object):
                 self.genome_params[key] = params[key]
 
         self.hdel_exponential_mean = params.get('hdel_exponential_mean', 3e6)
+        self.hlamp_exponential_mean = params.get('hlamp_exponential_mean', 3e6)
 
         self.ploidy_gaussian_mean = params.get('ploidy_gaussian_mean', 3.5)
         self.ploidy_gaussian_stddev = params.get('ploidy_gaussian_stddev', 0.5)
@@ -616,6 +617,7 @@ class RearrangementHistorySampler(object):
         """
 
         hdel_log_p = scipy.stats.expon.logpdf(genome.length_hdel(), scale=self.hdel_exponential_mean)
+        hdel_log_p = scipy.stats.expon.logpdf(genome.length_hlamp(), scale=self.hlamp_exponential_mean)
         ploidy_log_p = scipy.stats.norm.logpdf(genome.ploidy(), loc=self.ploidy_gaussian_mean, scale=self.ploidy_gaussian_stddev)
 
         fitness = hdel_log_p + ploidy_log_p
@@ -782,8 +784,13 @@ class GenomeCollectionSampler(object):
         self.num_ancestral_events = params.get('num_ancestral_events', 25)
         self.num_descendent_events = params.get('num_descendent_events', 10)
 
-        self.proportion_subclonal = params.get('proportion_subclonal', 0.3)
         self.proportion_ancestral_loh = params.get('proportion_ancestral_loh', 0.2)
+
+        self.proportion_subclonal_mean = params.get('proportion_subclonal_mean', 0.3)
+        self.proportion_subclonal_stddev = params.get('proportion_subclonal_stddev', 0.01)
+
+        self.proportion_sc_loh_mean = params.get('proportion_sc_loh_mean', 0.1)
+        self.proportion_sc_loh_stddev = params.get('proportion_sc_loh_stddev', 0.02)
 
     def sample_genome_collection(self):
         """ Sample a collection of genomes.
@@ -805,12 +812,24 @@ class GenomeCollectionSampler(object):
 
         descendent_genomes = self.rh_sampler.sample_rearrangement_history(ancestral_genome, self.num_descendent_events)
 
-        # Select the descendant genome with closest requested proportion
-        # of the genome subclonal
         subclonal_lengths = np.array([genome.length_divergent(ancestral_genome) for genome in descendent_genomes])
         subclonal_proportions = subclonal_lengths / ancestral_genome.l.sum()
-        subclonal_diff = np.absolute(subclonal_proportions - self.proportion_subclonal)
-        descendent_genome = descendent_genomes[np.argmin(subclonal_diff)]
+        proportion_subclonal_log_p = scipy.stats.norm.logpdf(subclonal_proportions, loc=self.proportion_subclonal_mean, scale=self.proportion_subclonal_stddev)
+
+        def calculate_subclonal_loh_proportion(ancestral_genome, descendent_genome):
+            cn1 = ancestral_genome.segment_copy_number
+            cn2 = descendent_genome.segment_copy_number
+            sc_loh_length = ((cn2.min(axis=1) == 0) & ~(cn1.min(axis=1) == 0)) * ancestral_genome.l
+            sc_loh_proportion = sc_loh_length.sum() / ancestral_genome.l.sum()
+            return sc_loh_proportion
+
+        sc_loh_proportion = np.array([calculate_subclonal_loh_proportion(ancestral_genome, genome) for genome in descendent_genomes])
+        proportion_sc_loh_log_p = scipy.stats.norm.logpdf(sc_loh_proportion, loc=self.proportion_sc_loh_mean, scale=self.proportion_sc_loh_stddev)
+
+        resample_log_prob = proportion_sc_loh_log_p + proportion_subclonal_log_p
+        resample_prob = np.exp(resample_log_prob - scipy.misc.logsumexp(resample_log_prob))
+
+        descendent_genome = np.random.choice(descendent_genomes, size=1, p=resample_prob)[0]
 
         return GenomeCollection([wt_genome, ancestral_genome, descendent_genome])
 
@@ -949,8 +968,6 @@ class GenomeMixtureSampler(object):
             frac[1:] = np.random.dirichlet([self.frac_clone_concentration] * (M-1)) * (1 - self.frac_normal)
         else:
             frac[1:] = np.array([self.frac_clone_1, 1. - self.frac_normal - self.frac_clone_1])
-
-        frac[1:] = np.sort(frac[1:])[::-1]
 
         assert abs(1. - np.sum(frac)) < 1e-8
 
