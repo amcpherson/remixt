@@ -1124,8 +1124,7 @@ cdef class RemixtModel:
                     -self.transition_penalty)
 
         for k in range(self.num_breakpoints):
-            for m in range(self.num_clones):
-                _exp_normalize(self.p_breakpoint[k, :], log_p_breakpoint[k, :])
+            _exp_normalize(self.p_breakpoint[k, :], log_p_breakpoint[k, :])
     
     cpdef void update_p_outlier_total(self) except *:
         """ Update the total read count outlier indicator approximating distributions.
