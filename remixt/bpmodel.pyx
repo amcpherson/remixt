@@ -583,14 +583,8 @@ cdef class RemixtModel:
             self.breakpoint_side[n] = sides[self.breakpoint_idx[n]]
             sides[self.breakpoint_idx[n]] += 1
 
-        # Initialize to favour single copy change
-        self.p_breakpoint = np.zeros((self.num_breakpoints, self.num_brk_states))
-        for k in range(self.num_breakpoints):
-            for s_b in range(self.num_brk_states):
-                brk = np.array(self.brk_states[s_b])
-                if brk.max() > 1:
-                    continue
-                self.p_breakpoint[k, s_b] = 1.
+        # Initialize to uniform over states
+        self.p_breakpoint = np.ones((self.num_breakpoints, self.num_brk_states))
         self.p_breakpoint /= np.sum(self.p_breakpoint, axis=-1)[:, np.newaxis]
 
         self.hmm_log_norm_const = 0.
