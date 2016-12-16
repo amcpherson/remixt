@@ -466,21 +466,29 @@ class BreakpointModel(object):
 
         self.model.infer_cn(cn)
 
-        # Remap to original segmentation
+        log_breakpoint_p = np.zeros((self.model.num_breakpoints, self.model.num_brk_states))
+
+        for n in range(0, self.model.num_segments - 1):
+            if self.model.breakpoint_idx[n] < 0:
+                continue
+
+            for m in range(self.model.num_clones):
+                d = cn[n, m, :].sum(axis=-1) - cn[n + 1, m, :].sum(axis=-1)
+
+                for s_b in range(self.model.num_brk_states):
+                    log_breakpoint_p[self.model.breakpoint_idx[n], s_b] += (
+                        -self.model.transition_penalty * abs(d - self.model.breakpoint_orient[n] * self.model.brk_states[s_b, m]))
+
+        brk_cn = dict()
+
+        for k in range(self.model.num_breakpoints):
+            s_b = log_breakpoint_p[k, :].argmax()
+            brk_cn[self.breakpoint_ids[k]] = np.asarray(self.model.brk_states)[s_b]
+
+        # Remap cn to original segmentation
         cn = cn[self.seg_fwd_remap]
 
-        return cn
-        
-    def optimal_brk_cn(self):
-        brk_cn = []
-        
-        for brk_idx, p_breakpoint in enumerate(np.asarray(self.model.p_breakpoint)):
-            s_b = p_breakpoint.argmax()
-            brk_cn.append(np.asarray(self.model.brk_states)[s_b])
-            
-        brk_cn = dict(zip(self.breakpoint_ids, brk_cn))
-
-        return brk_cn
+        return cn, brk_cn
 
     def breakpoint_prob(self):
         p_breakpoint = np.asarray(self.model.p_breakpoint)

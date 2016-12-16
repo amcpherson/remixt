@@ -163,15 +163,15 @@ def fit(experiment, init_params, config):
 
     fit_results = dict()
 
-    fit_results['h'] = model.h
-    fit_results['cn'] = model.optimal_cn()
-    
-    if not disable_breakpoints:
-        fit_results['brk_cn'] = model.optimal_brk_cn()
+    cn, brk_cn = model.optimal_cn()
 
-    else:
-        fit_results['brk_cn'] = remixt.cn_model.decode_breakpoints_naive(
-            fit_results['cn'], experiment.adjacencies, experiment.breakpoints)
+    if disable_breakpoints:
+        brk_cn = remixt.cn_model.decode_breakpoints_naive(
+            cn, experiment.adjacencies, experiment.breakpoints)
+
+    fit_results['h'] = model.h
+    fit_results['cn'] = cn
+    fit_results['brk_cn'] = brk_cn
 
     # Save estimation statistics
     fit_results['stats'] = dict()
@@ -180,7 +180,6 @@ def fit(experiment, init_params, config):
     fit_results['stats']['error_message'] = ''
     fit_results['stats'].update(model.get_likelihood_param_values())
 
-    cn = fit_results['cn']
     ploidy = (cn[:,1:,:].mean(axis=1).T * experiment.l).sum() / experiment.l.sum()
     divergent = (cn[:,1:,:].max(axis=1) != cn[:,1:,:].min(axis=1)) * 1.
     proportion_divergent = (divergent.T * experiment.l).sum() / (2. * experiment.l.sum())
