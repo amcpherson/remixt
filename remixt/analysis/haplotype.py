@@ -211,6 +211,12 @@ def infer_haps(haps_filename, snp_genotype_filename, chromosome, temp_directory,
     except OSError:
         pass
 
+    # If we are analyzing male data and this is chromosome X
+    # then there are no het snps and no haplotypes
+    if chromosome == 'X' and not remixt.config.get_param(config, 'is_female'):
+        write_null()
+        return
+
     # Impute 2 files for thousand genomes data by chromosome
     phased_chromosome = chromosome
     if chromosome == 'X':

@@ -65,6 +65,9 @@ snp_positions_template                      = '{ref_data_dir}/thousand_genomes_s
 # Algorithm parameters
 ###
 
+# Male or female for one or two copies of chromosome 'X'
+is_female                                   = True
+
 # Maximum inferred fragment length of a read pair classified as concordant
 bam_max_fragment_length                     = 1000
 
