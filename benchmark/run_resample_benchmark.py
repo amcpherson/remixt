@@ -7,6 +7,7 @@ import pypeliner.managed as mgd
 
 import remixt.simulations.pipeline
 import remixt.simulations.workflow
+import remixt.cn_plot
 
 if __name__ == '__main__':
 
@@ -51,6 +52,7 @@ if __name__ == '__main__':
     normal_seqdata_template = os.path.join(args['raw_data_dir'], '{sim_id}', 'normal.h5')
     tumour_seqdata_template = os.path.join(args['raw_data_dir'], '{sim_id}', 'tumour.h5')
     genome_mixture_template = os.path.join(args['raw_data_dir'], '{sim_id}', 'genome_mixture.pickle')
+    genome_mixture_plot_template = os.path.join(args['raw_data_dir'], '{sim_id}', 'genome_mixture_plot.pdf')
     breakpoints_template = os.path.join(args['raw_data_dir'], '{sim_id}', 'breakpoints.tsv')
     results_template = os.path.join(args['raw_data_dir'], '{sim_id}', '{tool_name}', 'results.h5')
     evaluation_template = os.path.join(args['raw_data_dir'], '{sim_id}', '{tool_name}', 'evaluation.h5')
@@ -88,6 +90,16 @@ if __name__ == '__main__':
             mgd.OutputFile('breakpoints', 'sim_id', template=breakpoints_template),
             config,
             remixt_ref_data_dir,
+        ),
+    )
+
+    workflow.transform(
+        name='plot_mixture',
+        axes=('sim_id',),
+        func=remixt.cn_plot.plot_mixture,
+        args=(
+            mgd.OutputFile('genome_mixture_plot', 'sim_id', template=genome_mixture_plot_template),
+            mgd.InputFile('genome_mixture', 'sim_id', template=genome_mixture_template),
         ),
     )
 
