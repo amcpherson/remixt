@@ -331,11 +331,16 @@ def reindex_segments(cn_1, cn_2):
     return pd.concat(reseg, ignore_index=True)
 
 
-def aggregate_adjacent(cnv):
+def aggregate_adjacent(cnv, value_cols=None, stable_cols=None, length_normalized_cols=None):
     """ Aggregate adjacent segments with similar copy number state.
 
     Args:
         cnv (pandas.DataFrame): copy number table
+
+    KwArgs:
+        value_cols (list): list of columns to compare for equivalent copy number state
+        stable_cols (list): columns for which values are the same between equivalent states
+        length_normalized_cols (list): columns that are length normalized for equivalent states
 
     Returns:
         pandas.DataFrame: copy number with adjacent segments aggregated
@@ -347,14 +352,10 @@ def aggregate_adjacent(cnv):
         'major_raw', 'minor_raw',
     """
 
-    # Group segments with same state
-    cnv['chromosome_index'] = np.searchsorted(np.unique(cnv['chromosome']), cnv['chromosome'])
-    cnv['diff'] = cnv[['chromosome_index', 'major_1', 'major_2', 'minor_1', 'minor_2']].diff().abs().sum(axis=1)
-    cnv['is_diff'] = (cnv['diff'] != 0)
-    cnv['cn_group'] = cnv['is_diff'].cumsum()
+    if value_cols is None:
+        value_cols = ['major_1', 'major_2', 'minor_1', 'minor_2']
 
-    def agg_segments(df):
-
+    if stable_cols is None:
         stable_cols = [
             'chromosome',
             'major_1',
@@ -365,16 +366,24 @@ def aggregate_adjacent(cnv):
             'minor_raw_e',
         ]
 
+    if length_normalized_cols is None:
+        length_normalized_cols = [
+            'major_raw',
+            'minor_raw',
+        ]
+
+    # Group segments with same state
+    cnv['chromosome_index'] = np.searchsorted(np.unique(cnv['chromosome']), cnv['chromosome'])
+    cnv['diff'] = cnv[['chromosome_index'] + value_cols].diff().abs().sum(axis=1)
+    cnv['is_diff'] = (cnv['diff'] != 0)
+    cnv['cn_group'] = cnv['is_diff'].cumsum()
+
+    def agg_segments(df):
         a = df[stable_cols].iloc[0]
 
         a['start'] = df['start'].min()
         a['end'] = df['end'].max()
         a['length'] = df['length'].sum()
-
-        length_normalized_cols = [
-            'major_raw',
-            'minor_raw',
-        ]
 
         for col in length_normalized_cols:
             a[col] = (df[col] * df['length']).sum() / (df['length'].sum() + 1e-16)
