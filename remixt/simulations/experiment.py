@@ -507,7 +507,7 @@ class RearrangedGenome(object):
 
 
     def length_loh(self):
-        """ Proportion of the genome with LOH.
+        """ Length of the genome with LOH.
         """
         cn = self.segment_copy_number
         loh = (cn.min(axis=1) == 0) * 1
@@ -515,7 +515,7 @@ class RearrangedGenome(object):
 
 
     def length_hdel(self):
-        """ Proportion of the genome homozygously deleted.
+        """ Length of the genome homozygously deleted.
         """
         cn = self.segment_copy_number
         hdel = (cn.max(axis=1) == 0) * 1
@@ -523,7 +523,7 @@ class RearrangedGenome(object):
 
 
     def length_hlamp(self, hlamp_min=6):
-        """ Proportion of the genome with high level amplification.
+        """ Length of the genome with high level amplification.
         """
         cn = self.segment_copy_number
         hlamp = (cn.max(axis=1) >= hlamp_min) * 1
@@ -531,7 +531,7 @@ class RearrangedGenome(object):
 
 
     def length_divergent(self, other):
-        """ Proportion of the genome with high level amplification.
+        """ Length of the genome divergent from another genome.
         """
         cn = self.segment_copy_number
         other_cn = other.segment_copy_number
@@ -545,6 +545,21 @@ class RearrangedGenome(object):
         cn = self.segment_copy_number
         cn = cn.sum(axis=1)
         return (cn * self.l).sum() / self.l.sum()
+
+
+    def proportion_minor_state(self, cn_max=6):
+        """ Proportion of the genome with minor in each cn state.
+        """
+        minor = self.segment_copy_number.min(axis=1)
+        minor[minor > cn_max] = cn_max
+        return np.bincount(minor.flatten().astype(int), weights=self.l, minlength=cn_max+1) / self.l.sum()
+ 
+    def proportion_major_state(self, cn_max=6):
+        """ Proportion of the genome with major in each cn state.
+        """
+        major = self.segment_copy_number.max(axis=1)
+        major[major > cn_max] = cn_max
+        return np.bincount(major.flatten().astype(int), weights=self.l, minlength=cn_max+1) / self.l.sum()
 
 
     def create_chromosome_sequences(self, germline_genome):
@@ -602,7 +617,7 @@ class RearrangementHistorySampler(object):
         self.hdel_exponential_mean = params.get('hdel_exponential_mean', 3e6)
         self.hlamp_exponential_mean = params.get('hlamp_exponential_mean', 3e6)
 
-        self.ploidy_gaussian_mean = params.get('ploidy_gaussian_mean', 3.5)
+        self.ploidy_gaussian_mean = params.get('ploidy', 2.5)
         self.ploidy_gaussian_stddev = params.get('ploidy_gaussian_stddev', 0.5)
 
         self.num_swarm = 100
@@ -617,10 +632,10 @@ class RearrangementHistorySampler(object):
         """
 
         hdel_log_p = scipy.stats.expon.logpdf(genome.length_hdel(), scale=self.hdel_exponential_mean)
-        hdel_log_p = scipy.stats.expon.logpdf(genome.length_hlamp(), scale=self.hlamp_exponential_mean)
+        hlamp_log_p = scipy.stats.expon.logpdf(genome.length_hlamp(), scale=self.hlamp_exponential_mean)
         ploidy_log_p = scipy.stats.norm.logpdf(genome.ploidy(), loc=self.ploidy_gaussian_mean, scale=self.ploidy_gaussian_stddev)
 
-        fitness = hdel_log_p + ploidy_log_p
+        fitness = hdel_log_p + hlamp_log_p + ploidy_log_p
 
         return fitness
 
@@ -784,13 +799,14 @@ class GenomeCollectionSampler(object):
         self.num_ancestral_events = params.get('num_ancestral_events', 25)
         self.num_descendent_events = params.get('num_descendent_events', 10)
 
-        self.proportion_ancestral_loh = params.get('proportion_ancestral_loh', 0.2)
+        self.ploidy = params.get('ploidy', 2.5)
+        self.ploidy_max_error = params.get('ploidy_max_error', 0.2)
 
-        self.proportion_subclonal_mean = params.get('proportion_subclonal_mean', 0.3)
-        self.proportion_subclonal_stddev = params.get('proportion_subclonal_stddev', 0.01)
+        self.proportion_loh = params.get('proportion_loh', 0.2)
+        self.proportion_loh_max_error = params.get('proportion_loh_max_error', 0.02)
 
-        self.proportion_sc_loh_mean = params.get('proportion_sc_loh_mean', 0.1)
-        self.proportion_sc_loh_stddev = params.get('proportion_sc_loh_stddev', 0.02)
+        self.proportion_subclonal = params.get('proportion_subclonal', 0.3)
+        self.proportion_subclonal_max_error = params.get('proportion_subclonal_max_error', 0.02)
 
     def sample_genome_collection(self):
         """ Sample a collection of genomes.
@@ -802,34 +818,47 @@ class GenomeCollectionSampler(object):
 
         wt_genome = self.rh_sampler.sample_wild_type()
 
-        ancestral_genomes = self.rh_sampler.sample_rearrangement_history(wt_genome, self.num_ancestral_events)
+        ancestral_genome = None
 
-        # Select the descendant genome with closest requested ancestral loh
-        loh_lengths = np.array([genome.length_loh() for genome in ancestral_genomes])
-        loh_proportions = loh_lengths / float(wt_genome.l.sum())
-        loh_diff = np.absolute(loh_proportions - self.proportion_ancestral_loh)
-        ancestral_genome = ancestral_genomes[np.argmin(loh_diff)]
+        for anc_iter in xrange(100):
+            ancestral_genomes = np.array(self.rh_sampler.sample_rearrangement_history(wt_genome, self.num_ancestral_events))
 
-        descendent_genomes = self.rh_sampler.sample_rearrangement_history(ancestral_genome, self.num_descendent_events)
+            ploidys = np.array([genome.ploidy() for genome in ancestral_genomes])
+            ploidy_errors = np.absolute(ploidys - self.ploidy)
+            ancestral_genomes = ancestral_genomes[ploidy_errors < self.ploidy_max_error]
 
-        subclonal_lengths = np.array([genome.length_divergent(ancestral_genome) for genome in descendent_genomes])
-        subclonal_proportions = subclonal_lengths / ancestral_genome.l.sum()
-        proportion_subclonal_log_p = scipy.stats.norm.logpdf(subclonal_proportions, loc=self.proportion_subclonal_mean, scale=self.proportion_subclonal_stddev)
+            loh_lengths = np.array([genome.length_loh() for genome in ancestral_genomes])
+            loh_proportions = loh_lengths / float(wt_genome.l.sum())
+            loh_errors = np.absolute(loh_proportions - self.proportion_loh)
+            ancestral_genomes = ancestral_genomes[loh_errors < self.proportion_loh_max_error]
 
-        def calculate_subclonal_loh_proportion(ancestral_genome, descendent_genome):
-            cn1 = ancestral_genome.segment_copy_number
-            cn2 = descendent_genome.segment_copy_number
-            sc_loh_length = ((cn2.min(axis=1) == 0) & ~(cn1.min(axis=1) == 0)) * ancestral_genome.l
-            sc_loh_proportion = sc_loh_length.sum() / ancestral_genome.l.sum()
-            return sc_loh_proportion
+            if len(ancestral_genomes) == 0:
+                continue
 
-        sc_loh_proportion = np.array([calculate_subclonal_loh_proportion(ancestral_genome, genome) for genome in descendent_genomes])
-        proportion_sc_loh_log_p = scipy.stats.norm.logpdf(sc_loh_proportion, loc=self.proportion_sc_loh_mean, scale=self.proportion_sc_loh_stddev)
+            ancestral_genome = ancestral_genomes[0]
+            break
 
-        resample_log_prob = proportion_sc_loh_log_p + proportion_subclonal_log_p
-        resample_prob = np.exp(resample_log_prob - scipy.misc.logsumexp(resample_log_prob))
+        if ancestral_genome is None:
+            raise ValueError('unable to simulate ancestral genome')
 
-        descendent_genome = np.random.choice(descendent_genomes, size=1, p=resample_prob)[0]
+        descendent_genome = None
+
+        for desc_iter in xrange(100):
+            descendent_genomes = np.array(self.rh_sampler.sample_rearrangement_history(ancestral_genome, self.num_descendent_events))
+
+            subclonal_lengths = np.array([genome.length_divergent(ancestral_genome) for genome in descendent_genomes])
+            subclonal_proportions = subclonal_lengths / ancestral_genome.l.sum()
+            subclonal_errors = np.absolute(subclonal_proportions - self.proportion_subclonal)
+            descendent_genomes = descendent_genomes[subclonal_errors < self.proportion_subclonal_max_error]
+
+            if len(descendent_genomes) == 0:
+                continue
+
+            descendent_genome = descendent_genomes[0]
+            break
+
+        if descendent_genome is None:
+            raise ValueError('unable to simulate descendant genome')
 
         return GenomeCollection([wt_genome, ancestral_genome, descendent_genome])
 
