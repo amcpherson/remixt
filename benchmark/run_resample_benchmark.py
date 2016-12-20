@@ -37,6 +37,9 @@ if __name__ == '__main__':
     argparser.add_argument('--simulate_only', action='store_true',
         help='Simulate genome mixtures then stop')
 
+    argparser.add_argument('--resample_only', action='store_true',
+        help='Resample sequence data then stop')
+
     argparser.add_argument('--config', required=False,
         help='Configuration Filename')
 
@@ -90,12 +93,6 @@ if __name__ == '__main__':
         pyp.run(workflow)
         sys.exit()
 
-    workflow.setobj(
-        obj=mgd.TempOutputObj('tool_defs', 'sim_id', 'tool_name'),
-        value=tool_defs,
-        axes=('sim_id',),
-    )
-
     workflow.subworkflow(
         name='resample_read_data',
         axes=('sim_id',),
@@ -110,6 +107,16 @@ if __name__ == '__main__':
             config,
             remixt_ref_data_dir,
         ),
+    )
+
+    if args['resample_only']:
+        pyp.run(workflow)
+        sys.exit()
+
+    workflow.setobj(
+        obj=mgd.TempOutputObj('tool_defs', 'sim_id', 'tool_name'),
+        value=tool_defs,
+        axes=('sim_id',),
     )
 
     workflow.subworkflow(
