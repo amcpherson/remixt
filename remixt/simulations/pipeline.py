@@ -11,6 +11,7 @@ import remixt.simulations.haplotype
 import remixt.simulations.seqread
 import remixt.simulations.balanced
 import remixt.utils
+import remixt.cn_plot
 
 
 def read_sim_defs(sim_defs_filename):

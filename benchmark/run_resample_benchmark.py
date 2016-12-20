@@ -8,7 +8,6 @@ import pypeliner.managed as mgd
 
 import remixt.simulations.pipeline
 import remixt.simulations.workflow
-import remixt.cn_plot
 
 if __name__ == '__main__':
 
