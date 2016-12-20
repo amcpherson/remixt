@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 import yaml
 
@@ -32,6 +33,9 @@ if __name__ == '__main__':
 
     argparser.add_argument('table',
         help='Output Table Filename')
+
+    argparser.add_argument('--simulate_only', action='store_true',
+        help='Simulate genome mixtures then stop')
 
     argparser.add_argument('--config', required=False,
         help='Configuration Filename')
@@ -71,6 +75,21 @@ if __name__ == '__main__':
         ),
     )
 
+    workflow.transform(
+        name='simulate_genome_mixture',
+        axes=('sim_id',),
+        func=remixt.simulations.pipeline.simulate_genome_mixture,
+        args=(
+            mgd.OutputFile('genome_mixture', 'sim_id', template=genome_mixture_template),
+            mgd.OutputFile('genome_mixture_plot', 'sim_id', template=genome_mixture_plot_template),
+            mgd.TempInputObj('sim_defs', 'sim_id'),
+        )
+    )
+
+    if args['simulate_only']:
+        pyp.run(workflow)
+        sys.exit()
+
     workflow.setobj(
         obj=mgd.TempOutputObj('tool_defs', 'sim_id', 'tool_name'),
         value=tool_defs,
@@ -83,11 +102,10 @@ if __name__ == '__main__':
         func=remixt.simulations.workflow.create_resample_simulation_workflow,
         args=(
             mgd.TempInputObj('sim_defs', 'sim_id'),
+            mgd.InputFile('genome_mixture', 'sim_id', template=genome_mixture_template),
             mgd.InputFile(args['source']),
             mgd.OutputFile('normal_seqdata', 'sim_id', template=normal_seqdata_template),
             mgd.OutputFile('tumour_seqdata', 'sim_id', template=tumour_seqdata_template),
-            mgd.OutputFile('genome_mixture', 'sim_id', template=genome_mixture_template),
-            mgd.OutputFile('genome_mixture_plot', 'sim_id', template=genome_mixture_plot_template),
             mgd.OutputFile('breakpoints', 'sim_id', template=breakpoints_template),
             config,
             remixt_ref_data_dir,

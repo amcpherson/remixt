@@ -124,32 +124,21 @@ def create_simulations(sim_defs_filename, config, ref_data_dir):
     return simulations
 
 
-def simulate_genomes(genomes_filename, params):
+def simulate_genome_mixture(mixture_filename, mixture_plot_filename, params):
 
-    rh_sampler = remixt.simulations.experiment.RearrangementHistorySampler(params)
-    gc_sampler = remixt.simulations.experiment.GenomeCollectionSampler(rh_sampler, params)
-
-    np.random.seed(params['random_seed'])
-
-    gc = gc_sampler.sample_genome_collection()
-
-    with open(genomes_filename, 'w') as genomes_file:
-        pickle.dump(gc, genomes_file)
-
-
-def simulate_mixture(mixture_filename, genomes_filename, params):
-
-    gm_sampler = remixt.simulations.experiment.GenomeMixtureSampler(params)
-
-    with open(genomes_filename, 'r') as genomes_file:
-        gc = pickle.load(genomes_file)
+    history_sampler = remixt.simulations.experiment.RearrangementHistorySampler(params)
+    genomes_sampler = remixt.simulations.experiment.GenomeCollectionSampler(history_sampler, params)
+    mixture_sampler = remixt.simulations.experiment.GenomeMixtureSampler(params)
 
     np.random.seed(params['random_seed'])
 
-    gm = gm_sampler.sample_genome_mixture(gc)
+    genomes = genomes_sampler.sample_genome_collection()
+    genome_mixture = mixture_sampler.sample_genome_mixture(genomes)
 
     with open(mixture_filename, 'w') as mixture_file:
-        pickle.dump(gm, mixture_file)
+        pickle.dump(genome_mixture, mixture_file)
+
+    remixt.cn_plot.plot_mixture(mixture_plot_filename, mixture_filename)
 
 
 def simulate_experiment(experiment_filename, mixture_filename, params):

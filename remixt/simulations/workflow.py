@@ -133,11 +133,10 @@ def create_read_simulation_workflow(
 
 def create_resample_simulation_workflow(
     sim_defs,
+    mixture_filename,
     source_filename,
     normal_filename,
     tumour_filename,
-    mixture_filename,
-    mixture_plot_filename,
     breakpoint_filename,
     config,
     ref_data_dir,
@@ -162,15 +161,6 @@ def create_resample_simulation_workflow(
     )
 
     workflow.transform(
-        name='simulate_genomes',
-        func=remixt.simulations.pipeline.simulate_genomes,
-        args=(
-            mgd.TempOutputFile('genomes'),
-            mgd.TempInputObj('sim_defs'),
-        ),
-    )
-
-    workflow.transform(
         name='resample_normal_data',
         ctx={'mem': 16},
         func=remixt.simulations.pipeline.resample_normal_data,
@@ -180,25 +170,6 @@ def create_resample_simulation_workflow(
             mgd.TempInputFile('genomes'),
             mgd.TempInputFile('germline_alleles'),
             mgd.TempInputObj('sim_defs'),
-        ),
-    )
-
-    workflow.transform(
-        name='simulate_mixture',
-        func=remixt.simulations.pipeline.simulate_mixture,
-        args=(
-            mgd.OutputFile(mixture_filename),
-            mgd.TempInputFile('genomes'),
-            mgd.TempInputObj('sim_defs'),
-        ),
-    )
-
-    workflow.transform(
-        name='plot_mixture',
-        func=remixt.cn_plot.plot_mixture,
-        args=(
-            mgd.OutputFile(mixture_plot_filename),
-            mgd.InputFile(mixture_filename),
         ),
     )
 
