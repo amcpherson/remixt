@@ -5,49 +5,6 @@ import remixt.simulations.pipeline
 import remixt.cn_plot
 
 
-def create_segment_simulation_workflow(
-    sim_defs,
-    experiment_filename,
-):
-    workflow = pypeliner.workflow.Workflow()
-
-    workflow.setobj(obj=mgd.TempOutputObj('sim_defs'), value=sim_defs)
-
-    workflow.transform(
-        name='simulate_genomes',
-        ctx={'mem': 4},
-        func=remixt.simulations.pipeline.simulate_genomes,
-        args=(
-            mgd.TempOutputFile('genomes'),
-            mgd.TempInputObj('sim_defs'),
-        ),
-    )
-
-    workflow.transform(
-        name='simulate_mixture',
-        ctx={'mem': 4},
-        func=remixt.simulations.pipeline.simulate_mixture,
-        args=(
-            mgd.TempOutputFile('mixture'),
-            mgd.TempInputFile('genomes'),
-            mgd.TempInputObj('sim_defs'),
-        ),
-    )
-
-    workflow.transform(
-        name='simulate_experiment',
-        ctx={'mem': 8},
-        func=remixt.simulations.pipeline.simulate_experiment,
-        args=(
-            mgd.OutputFile(experiment_filename),
-            mgd.TempInputFile('mixture'),
-            mgd.TempInputObj('sim_defs'),
-        ),
-    )
-
-    return workflow
-    
-
 def create_read_simulation_workflow(
     sim_defs,
     normal_filename,

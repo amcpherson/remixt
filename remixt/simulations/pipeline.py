@@ -142,19 +142,23 @@ def simulate_genome_mixture(mixture_filename, mixture_plot_filename, params):
     remixt.cn_plot.plot_mixture(mixture_plot_filename, mixture_filename)
 
 
-def simulate_experiment(experiment_filename, mixture_filename, params):
+def simulate_experiment(experiment_filename, experiment_plot_filename, params):
 
-    exp_sampler = remixt.simulations.experiment.ExperimentSampler(params)
-
-    with open(mixture_filename, 'r') as mixture_file:
-        gm = pickle.load(mixture_file)
+    history_sampler = remixt.simulations.experiment.RearrangementHistorySampler(params)
+    genomes_sampler = remixt.simulations.experiment.GenomeCollectionSampler(history_sampler, params)
+    mixture_sampler = remixt.simulations.experiment.GenomeMixtureSampler(params)
+    experiment_sampler = remixt.simulations.experiment.ExperimentSampler(params)
 
     np.random.seed(params['random_seed'])
 
-    exp = exp_sampler.sample_experiment(gm)
+    genomes = genomes_sampler.sample_genome_collection()
+    genome_mixture = mixture_sampler.sample_genome_mixture(genomes)
+    experiment = experiment_sampler.sample_experiment(genome_mixture)
 
     with open(experiment_filename, 'w') as experiment_file:
-        pickle.dump(exp, experiment_file)
+        pickle.dump(experiment, experiment_file)
+
+    remixt.cn_plot.plot_experiment(experiment_plot_filename, experiment_filename)
 
 
 def simulate_germline_alleles(germline_alleles_filename, params, config, ref_data_dir):
