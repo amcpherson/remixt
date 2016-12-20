@@ -87,19 +87,10 @@ if __name__ == '__main__':
             mgd.OutputFile('normal_seqdata', 'sim_id', template=normal_seqdata_template),
             mgd.OutputFile('tumour_seqdata', 'sim_id', template=tumour_seqdata_template),
             mgd.OutputFile('genome_mixture', 'sim_id', template=genome_mixture_template),
+            mgd.OutputFile('genome_mixture_plot', 'sim_id', template=genome_mixture_plot_template),
             mgd.OutputFile('breakpoints', 'sim_id', template=breakpoints_template),
             config,
             remixt_ref_data_dir,
-        ),
-    )
-
-    workflow.transform(
-        name='plot_mixture',
-        axes=('sim_id',),
-        func=remixt.cn_plot.plot_mixture,
-        args=(
-            mgd.OutputFile('genome_mixture_plot', 'sim_id', template=genome_mixture_plot_template),
-            mgd.InputFile('genome_mixture', 'sim_id', template=genome_mixture_template),
         ),
     )
 

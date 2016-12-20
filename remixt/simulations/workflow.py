@@ -2,6 +2,7 @@ import pypeliner.workflow
 import pypeliner.managed as mgd
 
 import remixt.simulations.pipeline
+import remixt.cn_plot
 
 
 def create_segment_simulation_workflow(
@@ -136,6 +137,7 @@ def create_resample_simulation_workflow(
     normal_filename,
     tumour_filename,
     mixture_filename,
+    mixture_plot_filename,
     breakpoint_filename,
     config,
     ref_data_dir,
@@ -188,6 +190,15 @@ def create_resample_simulation_workflow(
             mgd.OutputFile(mixture_filename),
             mgd.TempInputFile('genomes'),
             mgd.TempInputObj('sim_defs'),
+        ),
+    )
+
+    workflow.transform(
+        name='plot_mixture',
+        func=remixt.cn_plot.plot_mixture,
+        args=(
+            mgd.OutputFile(mixture_plot_filename),
+            mgd.InputFile(mixture_filename),
         ),
     )
 
