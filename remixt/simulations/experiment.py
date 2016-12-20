@@ -514,12 +514,24 @@ class RearrangedGenome(object):
         return (loh * self.l).sum()
 
 
+    def proportion_loh(self):
+        """ Proportion of the genome with LOH.
+        """
+        return self.length_loh() / float(self.l.sum())
+
+
     def length_hdel(self):
         """ Length of the genome homozygously deleted.
         """
         cn = self.segment_copy_number
         hdel = (cn.max(axis=1) == 0) * 1
         return (hdel * self.l).sum()
+
+
+    def proportion_hdel(self):
+        """ Proportion of the genome homozygously deleted.
+        """
+        return self.length_hdel() / float(self.l.sum())
 
 
     def length_hlamp(self, hlamp_min=6):
@@ -530,6 +542,12 @@ class RearrangedGenome(object):
         return (hlamp * self.l).sum()
 
 
+    def proportion_hlamp(self):
+        """ Proportion of the genome with high level amplification.
+        """
+        return self.length_hlamp() / float(self.l.sum())
+
+
     def length_divergent(self, other):
         """ Length of the genome divergent from another genome.
         """
@@ -537,6 +555,12 @@ class RearrangedGenome(object):
         other_cn = other.segment_copy_number
         divergent = ((cn - other_cn > 0) * 1).sum(axis=1)
         return (divergent * self.l).sum()
+
+
+    def proportion_divergent(self, other):
+        """ Proportion of the genome divergent from another genome.
+        """
+        return self.length_divergent(other) / float(self.l.sum())
 
 
     def ploidy(self):
@@ -614,43 +638,59 @@ class RearrangementHistorySampler(object):
             if key in params:
                 self.genome_params[key] = params[key]
 
-        self.hdel_exponential_mean = params.get('hdel_exponential_mean', 3e6)
-        self.hlamp_exponential_mean = params.get('hlamp_exponential_mean', 3e6)
+        self.proportion_hdel = params.get('proportion_hdel', 0.)
+        self.proportion_hdel_stddev = params.get('proportion_hdel_stddev', 0.001)
 
-        self.ploidy_gaussian_mean = params.get('ploidy', 2.5)
-        self.ploidy_gaussian_stddev = params.get('ploidy_gaussian_stddev', 0.5)
+        self.proportion_hlamp = params.get('proportion_hlamp', 0.)
+        self.proportion_hlamp_stddev = params.get('proportion_hlamp_stddev', 0.005)
+
+        self.ploidy = params.get('ploidy', 2.5)
+        self.ploidy_stddev = params.get('ploidy_stddev', 0.1)
+
+        self.proportion_loh = params.get('proportion_loh', 0.2)
+        self.proportion_loh_stddev = params.get('proportion_loh_stddev', 0.02)
 
         self.num_swarm = 100
 
 
-    def genome_fitness(self, genome):
-        """ Calculate fitness of a genome based on genome properties.
+    def genome_fitness(self, genome, fitness_callback=None):
+        """ Calculate fitness of a genome based on loh, hdel and hlamp proportions.
 
         Args:
             genome (RearrangedGenome): Genome to calculate fitness
 
+        Kwargs:
+            fitness_callback (callable): modify fitness callback 
+
         """
 
-        hdel_log_p = scipy.stats.expon.logpdf(genome.length_hdel(), scale=self.hdel_exponential_mean)
-        hlamp_log_p = scipy.stats.expon.logpdf(genome.length_hlamp(), scale=self.hlamp_exponential_mean)
-        ploidy_log_p = scipy.stats.norm.logpdf(genome.ploidy(), loc=self.ploidy_gaussian_mean, scale=self.ploidy_gaussian_stddev)
+        hdel_log_p = scipy.stats.norm.logpdf(genome.proportion_hdel(), loc=self.proportion_hdel, scale=self.proportion_hdel_stddev)
+        hlamp_log_p = scipy.stats.norm.logpdf(genome.proportion_hlamp(), loc=self.proportion_hlamp, scale=self.proportion_hlamp_stddev)
+        ploidy_log_p = scipy.stats.norm.logpdf(genome.ploidy(), loc=self.ploidy, scale=self.ploidy_stddev)
+        loh_log_p = scipy.stats.norm.logpdf(genome.proportion_loh(), loc=self.proportion_loh, scale=self.proportion_loh_stddev)
 
-        fitness = hdel_log_p + hlamp_log_p + ploidy_log_p
+        fitness = hdel_log_p + hlamp_log_p + ploidy_log_p + loh_log_p
+
+        if fitness_callback is not None:
+            fitness = fitness_callback(genome, fitness)
 
         return fitness
 
 
-    def resample_probs(self, genomes):
+    def resample_probs(self, genomes, fitness_callback=None):
         """ Calculate resampling probabilities.
 
         Args:
             genomes (list of RearrangedGenome): list of rearranged genomes to calculate prob from fitnesses
 
+        Kwargs:
+            fitness_callback (callable): modify fitness callback 
+
         """
 
         fitnesses = list()
         for genome in genomes:
-            fitnesses.append(self.genome_fitness(genome))
+            fitnesses.append(self.genome_fitness(genome, fitness_callback))
 
         fitnesses = np.array(fitnesses)
 
@@ -673,12 +713,15 @@ class RearrangementHistorySampler(object):
         return wt_genome
 
 
-    def sample_rearrangement_history(self, genome_init, num_events):
+    def sample_rearrangement_history(self, genome_init, num_events, fitness_callback=None):
         """ Sample a rearrangement history specified by a random seed, and select based on fitness.
 
         Args:
             genome_init (RearrangedGenome): initial genome to which rearrangements will be applied
             num_events (int): number of rearrangement events
+
+        Kwargs:
+            fitness_callback (callable): modify fitness callback 
 
         Returns:
             list of RearrangedGenome: a list genome evolved through a series of rearrangements,
@@ -695,7 +738,7 @@ class RearrangementHistorySampler(object):
                 genome.rearrange(self.genome_params)
                 new_swarm.append(genome)
 
-            resample_p = self.resample_probs(new_swarm)
+            resample_p = self.resample_probs(new_swarm, fitness_callback=fitness_callback)
             resampled_swarm = np.random.choice(new_swarm, size=self.num_swarm, p=resample_p)
 
             swarm = list(resampled_swarm)
@@ -807,6 +850,7 @@ class GenomeCollectionSampler(object):
 
         self.proportion_subclonal = params.get('proportion_subclonal', 0.3)
         self.proportion_subclonal_max_error = params.get('proportion_subclonal_max_error', 0.02)
+        self.proportion_subclonal_stddev = params.get('proportion_subclonal_stddev', 0.02)
 
     def sample_genome_collection(self):
         """ Sample a collection of genomes.
@@ -821,18 +865,23 @@ class GenomeCollectionSampler(object):
         ancestral_genome = None
 
         for anc_iter in xrange(100):
-            ancestral_genomes = np.array(self.rh_sampler.sample_rearrangement_history(wt_genome, self.num_ancestral_events))
+            ancestral_genomes = self.rh_sampler.sample_rearrangement_history(wt_genome, self.num_ancestral_events)
+            ancestral_genomes = np.array(ancestral_genomes)
 
             ploidys = np.array([genome.ploidy() for genome in ancestral_genomes])
             ploidy_errors = np.absolute(ploidys - self.ploidy)
             ancestral_genomes = ancestral_genomes[ploidy_errors < self.ploidy_max_error]
 
-            loh_lengths = np.array([genome.length_loh() for genome in ancestral_genomes])
-            loh_proportions = loh_lengths / float(wt_genome.l.sum())
+            if len(ancestral_genomes) == 0:
+                print 'failed ploidy'
+                continue
+
+            loh_proportions = np.array([genome.proportion_loh() for genome in ancestral_genomes])
             loh_errors = np.absolute(loh_proportions - self.proportion_loh)
             ancestral_genomes = ancestral_genomes[loh_errors < self.proportion_loh_max_error]
 
             if len(ancestral_genomes) == 0:
+                print 'failed loh'
                 continue
 
             ancestral_genome = ancestral_genomes[0]
@@ -841,17 +890,24 @@ class GenomeCollectionSampler(object):
         if ancestral_genome is None:
             raise ValueError('unable to simulate ancestral genome')
 
+        def subclone_fitness(genome, fitness):
+            divergent_log_p = scipy.stats.norm.logpdf(
+                genome.proportion_divergent(ancestral_genome), loc=self.proportion_subclonal, scale=self.proportion_subclonal_stddev)
+            return fitness + divergent_log_p
+
         descendent_genome = None
 
         for desc_iter in xrange(100):
-            descendent_genomes = np.array(self.rh_sampler.sample_rearrangement_history(ancestral_genome, self.num_descendent_events))
+            descendent_genomes = self.rh_sampler.sample_rearrangement_history(
+                ancestral_genome, self.num_descendent_events, fitness_callback=subclone_fitness)
+            descendent_genomes = np.array(descendent_genomes)
 
-            subclonal_lengths = np.array([genome.length_divergent(ancestral_genome) for genome in descendent_genomes])
-            subclonal_proportions = subclonal_lengths / ancestral_genome.l.sum()
+            subclonal_proportions = np.array([genome.proportion_divergent(ancestral_genome) for genome in descendent_genomes])
             subclonal_errors = np.absolute(subclonal_proportions - self.proportion_subclonal)
             descendent_genomes = descendent_genomes[subclonal_errors < self.proportion_subclonal_max_error]
 
             if len(descendent_genomes) == 0:
+                print 'failed subclonal'
                 continue
 
             descendent_genome = descendent_genomes[0]
