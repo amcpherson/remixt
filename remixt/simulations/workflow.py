@@ -91,7 +91,7 @@ def create_read_simulation_workflow(
         func=remixt.simulations.pipeline.simulate_normal_data,
         args=(
             mgd.OutputFile(normal_filename),
-            mgd.TempInputFile('genomes'),
+            mgd.InputFile(mixture_filename),
             mgd.TempInputFile('germline_alleles'),
             mgd.TempInputObj('sim_defs'),
         ),
@@ -167,7 +167,7 @@ def create_resample_simulation_workflow(
         args=(
             mgd.OutputFile(normal_filename),
             mgd.InputFile(source_filename),
-            mgd.TempInputFile('genomes'),
+            mgd.InputFile(mixture_filename),
             mgd.TempInputFile('germline_alleles'),
             mgd.TempInputObj('sim_defs'),
         ),

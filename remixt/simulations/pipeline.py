@@ -167,28 +167,30 @@ def simulate_germline_alleles(germline_alleles_filename, params, config, ref_dat
             germline_alleles_store.put('/chromosome_{}'.format(chromosome), alleles_table, format='table')
 
 
-def simulate_normal_data(read_data_filename, genome_filename, germline_alleles_filename, params):
+def simulate_normal_data(read_data_filename, mixture_filename, germline_alleles_filename, params):
 
-    with open(genome_filename, 'r') as genome_file:
-        gc = pickle.load(genome_file)
+    with open(mixture_filename, 'r') as mixture_file:
+        genome_mixture = pickle.load(mixture_file)
 
+    germline_genome = genome_mixture.genome_collection.genomes[0]
     germline_alleles = pd.HDFStore(germline_alleles_filename, 'r')
 
     np.random.seed(params['random_seed'])
 
     remixt.simulations.seqread.simulate_mixture_read_data(
         read_data_filename,
-        [gc.genomes[0]],
+        [germline_genome],
         [params['h_total']],
         germline_alleles,
         params)
 
 
-def resample_normal_data(read_data_filename, source_filename, genome_filename, germline_alleles_filename, params):
+def resample_normal_data(read_data_filename, source_filename, mixture_filename, germline_alleles_filename, params):
 
-    with open(genome_filename, 'r') as genome_file:
-        gc = pickle.load(genome_file)
+    with open(mixture_filename, 'r') as mixture_file:
+        genome_mixture = pickle.load(mixture_file)
 
+    germline_genome = genome_mixture.genome_collection.genomes[0]
     germline_alleles = pd.HDFStore(germline_alleles_filename, 'r')
 
     np.random.seed(params['random_seed'])
@@ -196,7 +198,7 @@ def resample_normal_data(read_data_filename, source_filename, genome_filename, g
     remixt.simulations.seqread.resample_mixture_read_data(
         read_data_filename,
         source_filename,
-        [gc.genomes[0]],
+        [germline_genome],
         [params['h_total']],
         germline_alleles,
         params)
