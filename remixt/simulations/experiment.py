@@ -538,14 +538,14 @@ class RearrangedGenome(object):
         """ Length of the genome with high level amplification.
         """
         cn = self.segment_copy_number
-        hlamp = (cn.max(axis=1) >= hlamp_min) * 1
+        hlamp = (cn.sum(axis=1) >= hlamp_min) * 1
         return (hlamp * self.l).sum()
 
 
-    def proportion_hlamp(self):
+    def proportion_hlamp(self, hlamp_min=6):
         """ Proportion of the genome with high level amplification.
         """
-        return self.length_hlamp() / float(self.l.sum())
+        return self.length_hlamp(hlamp_min=hlamp_min) / float(self.l.sum())
 
 
     def length_divergent(self, other):
@@ -642,7 +642,7 @@ class RearrangementHistorySampler(object):
         self.proportion_hdel_stddev = params.get('proportion_hdel_stddev', 0.001)
 
         self.proportion_hlamp = params.get('proportion_hlamp', 0.)
-        self.proportion_hlamp_stddev = params.get('proportion_hlamp_stddev', 0.005)
+        self.proportion_hlamp_stddev = params.get('proportion_hlamp_stddev', 0.001)
 
         self.ploidy = params.get('ploidy', 2.5)
         self.ploidy_stddev = params.get('ploidy_stddev', 0.1)
