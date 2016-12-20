@@ -16,7 +16,7 @@ import remixt.analysis.experiment
 import remixt.analysis.readdepth
 
 
-def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor'):
+def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor', do_fill=False,):
     """ Plot raw major/minor copy number as line plots
 
     Args:
@@ -24,6 +24,7 @@ def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor'):
         cnv (pandas.DataFrame): cnv table
         major_col (str): name of major copies column
         minor_col (str): name of minor copies column
+        do_fill (boolean): fill from 0
 
     Plot major and minor copy number as line plots.  The columns 'start' and 'end'
     are expected and should be adjusted for full genome plots.  Values from the
@@ -74,14 +75,15 @@ def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor'):
     ax.add_collection(matplotlib.collections.LineCollection(major_connectors, colors=segment_color_major, lw=1))
     ax.add_collection(matplotlib.collections.LineCollection(minor_connectors, colors=segment_color_minor, lw=1))
 
-    major_quads = create_quads(cnv, major_col)
-    minor_quads = create_quads(cnv, minor_col)
-    ax.add_collection(matplotlib.collections.PolyCollection(major_quads, facecolors=quad_color_major, edgecolors=quad_color_major, lw=0))
-    ax.add_collection(matplotlib.collections.PolyCollection(minor_quads, facecolors=quad_color_minor, edgecolors=quad_color_minor, lw=0))
+    if do_fill:
+        major_quads = create_quads(cnv, major_col)
+        minor_quads = create_quads(cnv, minor_col)
+        ax.add_collection(matplotlib.collections.PolyCollection(major_quads, facecolors=quad_color_major, edgecolors=quad_color_major, lw=0))
+        ax.add_collection(matplotlib.collections.PolyCollection(minor_quads, facecolors=quad_color_minor, edgecolors=quad_color_minor, lw=0))
 
 
 def plot_cnv_genome(ax, cnv, mincopies=-0.4, maxcopies=4, minlength=1000, major_col='major', minor_col='minor', 
-                    chromosome=None, start=None, end=None):
+                    chromosome=None, start=None, end=None, tick_step=None, do_fill=False):
     """ Plot major/minor copy number across the genome
 
     Args:
@@ -97,6 +99,8 @@ def plot_cnv_genome(ax, cnv, mincopies=-0.4, maxcopies=4, minlength=1000, major_
         chromosome (str): name of chromosome to plot, None for all chromosomes
         start (int): start of region in chromosome, None for beginning
         end (int): end of region in chromosome, None for end of chromosome
+        tick_step (float): genomic length between x steps
+        do_fill (boolean): fill to 0 for copy number
 
     """
 
@@ -137,7 +141,7 @@ def plot_cnv_genome(ax, cnv, mincopies=-0.4, maxcopies=4, minlength=1000, major_
     cnv['start'] = cnv['start'] + cnv['chromosome_start']
     cnv['end'] = cnv['end'] + cnv['chromosome_start']
 
-    plot_cnv_segments(ax, cnv, major_col=major_col, minor_col=minor_col)
+    plot_cnv_segments(ax, cnv, major_col=major_col, minor_col=minor_col, do_fill=do_fill)
 
     ax.set_ylim((mincopies, maxcopies))
     ax.set_yticklabels(ax.get_yticks(), ha='left')
@@ -160,10 +164,11 @@ def plot_cnv_genome(ax, cnv, mincopies=-0.4, maxcopies=4, minlength=1000, major_
         plot_end = end + chromosome_info.loc[chromosome, 'start']
         ax.set_xlim((plot_start, plot_end))
         ax.set_xlabel('chromosome ' + chromosome, fontsize=20)
-        step = (end - start) / 12.
-        step = np.round(step, decimals=-int(np.floor(np.log10(step))))
-        xticks = np.arange(plot_start, plot_end, step)
-        xticklabels = np.arange(start, end, step)
+        if tick_step is None:
+            tick_step = (end - start) / 12.
+            tick_step = np.round(tick_step, decimals=-int(np.floor(np.log10(tick_step))))
+        xticks = np.arange(plot_start, plot_end, tick_step)
+        xticklabels = np.arange(start, end, tick_step)
         ax.set_xticks(xticks)
         ax.set_xticklabels(['{:g}'.format(a/1e6) + 'Mb' for a in xticklabels])
     else:
