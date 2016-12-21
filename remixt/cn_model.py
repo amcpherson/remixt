@@ -67,6 +67,7 @@ class BreakpointModel(object):
         self.max_depth = kwargs.get('max_depth')
         self.transition_log_prob = kwargs.get('transition_log_prob', 10.)
         self.disable_breakpoints = kwargs.get('disable_breakpoints', False)
+        self.breakpoint_init = kwargs.get('breakpoint_init', None)
 
         if self.max_depth is None:
             raise ValueError('must specify max depth')
@@ -226,6 +227,21 @@ class BreakpointModel(object):
             'betabin_loh_M_0': (10., 2000.),
             'betabin_loh_M_1': (1., 200.),
         }
+
+        if self.breakpoint_init is not None:
+            p_breakpoint = np.ones((self.model.num_breakpoints, self.model.num_brk_states))
+            brk_states = np.array(self.model.brk_states)
+
+            for k, bp in enumerate(self.breakpoints):
+                cn = self.breakpoint_init[bp]
+
+                for s in xrange(self.model.num_brk_states):
+                    if np.all(cn == brk_states[s]):
+                        self.model.p_breakpoint[k, s] = 1000.
+
+            p_breakpoint /= np.sum(p_breakpoint, axis=-1)[:, np.newaxis]
+
+            self.model.p_breakpoint = p_breakpoint
 
     def get_likelihood_param_values(self):
         """ Get current likelihood parameter values.

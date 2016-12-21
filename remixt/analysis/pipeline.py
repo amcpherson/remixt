@@ -141,6 +141,20 @@ def fit(experiment, init_params, config):
     num_update_iter = remixt.config.get_param(config, 'num_update_iter')
     disable_breakpoints = remixt.config.get_param(config, 'disable_breakpoints')
 
+    # For convergence testing purposes, provide optimal initialization
+    # based on simulated breakpoint copy number
+    breakpoint_init = None
+    if config.get('optimal_initialization', False):
+        breakpoint_init = experiment.genome_mixture.genome_collection.breakpoint_copy_number.copy()
+        
+        swap = (experiment.h[1] < experiment.h[2]) != (h_init[1] < h_init[2])
+
+        if swap:
+            for bp, cn in breakpoint_init.itervalues():
+                cn = cn.copy()
+                cn[1:] = cn[1:][::-1]
+                breakpoint_init[bp] = cn
+
     model = remixt.cn_model.BreakpointModel(
         h_init,
         experiment.x,
@@ -154,6 +168,7 @@ def fit(experiment, init_params, config):
         min_proportion_genotyped=min_proportion_genotyped,
         max_depth=max_depth,
         disable_breakpoints=disable_breakpoints,
+        breakpoint_init=breakpoint_init,
     )
     
     model.num_em_iter = num_em_iter
