@@ -147,10 +147,14 @@ def fit(experiment, init_params, config):
     if config.get('optimal_initialization', False):
         breakpoint_init = experiment.genome_mixture.genome_collection.breakpoint_copy_number.copy()
         
+        for bp in experiment.genome_mixture.detected_breakpoints.itervalues():
+            if bp not in breakpoint_init:
+                breakpoint_init[bp] = np.zeros((experiment.genome_mixture.M,))
+
         swap = (experiment.h[1] < experiment.h[2]) != (h_init[1] < h_init[2])
 
         if swap:
-            for bp, cn in breakpoint_init.itervalues():
+            for bp, cn in breakpoint_init.iteritems():
                 cn = cn.copy()
                 cn[1:] = cn[1:][::-1]
                 breakpoint_init[bp] = cn
