@@ -9,7 +9,6 @@ import remixt.segalg
 import remixt.simulations.experiment
 import remixt.simulations.haplotype
 import remixt.simulations.seqread
-import remixt.simulations.balanced
 import remixt.utils
 import remixt.cn_plot
 
@@ -436,29 +435,6 @@ def evaluate_cn_results(genome_mixture, cn_data_table, order_true, order_pred, a
     return results
 
 
-def _collapse_allele_bp(allele_bp):
-    ((n_1, ell_1), side_1), ((n_2, ell_2), side_2) = allele_bp
-    return frozenset([(n_1, side_1), (n_2, side_2)])
-
-
-def _sum_brk_cn_alleles(allele_brk_cn):
-    total_brk_cn = {}
-    for allele_bp, cn in allele_brk_cn.iteritems():
-        total_bp = _collapse_allele_bp(allele_bp)
-        if total_bp not in total_brk_cn:
-            total_brk_cn[total_bp] = cn
-        else:
-            total_brk_cn[total_bp] += cn
-    return total_brk_cn
-
-
-def _collapse_allele_bps(allele_bps):
-    total_bps = set()
-    for allele_bp in allele_bps:
-        total_bps.add(_collapse_allele_bp(allele_bp))
-    return total_bps
-
-
 def evaluate_brk_cn_results(genome_mixture, brk_cn_table, order_true, order_pred, allow_swap):
     """ Evaluate breakpoint copy number results.
 
@@ -503,15 +479,11 @@ def evaluate_brk_cn_results(genome_mixture, brk_cn_table, order_true, order_pred
     # Default False for is_balanced
     data['is_balanced'] = False
 
-    # Annotate each breakpoint with its predicted copy number
-    true_brk_cn = genome_mixture.genome_collection.breakpoint_copy_number
-    min_true_brk_cn = remixt.simulations.balanced.minimize_breakpoint_copies(genome_mixture.adjacencies, true_brk_cn)
-    true_balanced_breakpoints = genome_mixture.genome_collection.balanced_breakpoints
-
-    # Collapse combinations for allele non-specific copy numbers
-    true_brk_cn = _sum_brk_cn_alleles(true_brk_cn)
-    min_true_brk_cn = _sum_brk_cn_alleles(min_true_brk_cn)
-    true_balanced_breakpoints = _collapse_allele_bps(true_balanced_breakpoints)
+    # Annotate each breakpoint with its predicted copy number, using
+    # breakpoints collapsed by allele
+    true_brk_cn = genome_mixture.genome_collection.collapsed_breakpoint_copy_number()
+    min_true_brk_cn = genome_mixture.genome_collection.collapsed_minimal_breakpoint_copy_number()
+    true_balanced_breakpoints = genome_mixture.genome_collection.collapsed_balanced_breakpoints()
 
     # Add true copy number and balanced indicator to table
     for prediction_id, breakpoint in genome_mixture.detected_breakpoints.iteritems():

@@ -8,6 +8,7 @@ import scipy.stats
 import remixt.utils
 import remixt.likelihood
 import remixt.analysis.experiment
+import remixt.simulations.balanced
 
 
 MAX_SEED = 2**32
@@ -749,6 +750,29 @@ class RearrangementHistorySampler(object):
         return swarm
 
 
+def _collapse_allele_bp(allele_bp):
+    ((n_1, ell_1), side_1), ((n_2, ell_2), side_2) = allele_bp
+    return frozenset([(n_1, side_1), (n_2, side_2)])
+
+
+def _sum_brk_cn_alleles(allele_brk_cn):
+    total_brk_cn = {}
+    for allele_bp, cn in allele_brk_cn.iteritems():
+        total_bp = _collapse_allele_bp(allele_bp)
+        if total_bp not in total_brk_cn:
+            total_brk_cn[total_bp] = cn
+        else:
+            total_brk_cn[total_bp] += cn
+    return total_brk_cn
+
+
+def _collapse_allele_bps(allele_bps):
+    total_bps = set()
+    for allele_bp in allele_bps:
+        total_bps.add(_collapse_allele_bp(allele_bp))
+    return total_bps
+
+
 class GenomeCollection(object):
     """
     Collection of normal and tumour clone genomes.
@@ -828,6 +852,17 @@ class GenomeCollection(object):
 
     def length_hlamp(self, hlamp_min=6):
         return [g.length_hlamp() for g in self.genomes]
+
+    def collapsed_breakpoint_copy_number(self):
+        return _sum_brk_cn_alleles(self.breakpoint_copy_number)
+
+    def collapsed_minimal_breakpoint_copy_number(self):
+        minimal_breakpoint_copy_number = remixt.simulations.balanced.minimize_breakpoint_copies(
+            self.adjacencies, self.breakpoint_copy_number)
+        return _sum_brk_cn_alleles(minimal_breakpoint_copy_number)
+
+    def collapsed_balanced_breakpoints(self):
+        return _collapse_allele_bps(self.balanced_breakpoints)
 
 
 class GenomeCollectionSampler(object):

@@ -237,7 +237,7 @@ class BreakpointModel(object):
 
                 for s in xrange(self.model.num_brk_states):
                     if np.all(cn == brk_states[s]):
-                        self.model.p_breakpoint[k, s] = 1000.
+                        p_breakpoint[k, s] = 1000.
 
             p_breakpoint /= np.sum(p_breakpoint, axis=-1)[:, np.newaxis]
 

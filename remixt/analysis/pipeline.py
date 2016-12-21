@@ -145,7 +145,7 @@ def fit(experiment, init_params, config):
     # based on simulated breakpoint copy number
     breakpoint_init = None
     if config.get('optimal_initialization', False):
-        breakpoint_init = experiment.genome_mixture.genome_collection.breakpoint_copy_number.copy()
+        breakpoint_init = experiment.genome_mixture.genome_collection.collapsed_breakpoint_copy_number()
         
         for bp in experiment.genome_mixture.detected_breakpoints.itervalues():
             if bp not in breakpoint_init:
