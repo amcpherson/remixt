@@ -385,85 +385,21 @@ cdef np.float64_t betabin_log_likelihood_partial_p(np.float64_t k, np.float64_t 
     return partial_p
 
 
-def create_remixt_model(
-    num_clones,
-    num_segments,
-    num_breakpoints,
-    num_alleles,
-    cn_max,
-    cn_diff_max,
-    normal_contamination,
-    num_cn_states,
-    cn_states,
-    num_brk_states,
-    brk_states,
-    is_telomere,
-    breakpoint_idx,
-    breakpoint_orient,
-    breakpoint_side,
-    transition_penalty,
-    p_breakpoint,
-    hmm_log_norm_const,
-    framelogprob,
-    log_transmat,
-    posterior_marginals,
-    joint_posterior_marginals,
-):
-    model = RemixtModel(
-        num_clones,
-        num_segments,
-        num_breakpoints,
-        cn_max,
-        cn_diff_max,
-        normal_contamination,
-        is_telomere,
-        breakpoint_idx,
-        breakpoint_orient,
-        transition_penalty,
-    )
-    
-    model.num_clones = num_clones
-    model.num_segments = num_segments
-    model.num_breakpoints = num_breakpoints
-    model.num_alleles = num_alleles
-    model.cn_max = cn_max
-    model.cn_diff_max = cn_diff_max
-    model.normal_contamination = normal_contamination
-    model.num_cn_states = num_cn_states
-    model.cn_states = cn_states
-    model.num_brk_states = num_brk_states
-    model.brk_states = brk_states
-    model.is_telomere = is_telomere
-    model.breakpoint_idx = breakpoint_idx
-    model.breakpoint_orient = breakpoint_orient
-    model.breakpoint_side = breakpoint_side
-    model.transition_penalty = transition_penalty
-    model.p_breakpoint = p_breakpoint
-    model.hmm_log_norm_const = hmm_log_norm_const
-    model.framelogprob = framelogprob
-    model.log_transmat = log_transmat
-    model.posterior_marginals = posterior_marginals
-    model.joint_posterior_marginals = joint_posterior_marginals
-    
-    return model
-
-
 cdef class RemixtModel:
     cdef public int num_clones
     cdef public int num_segments
     cdef public int num_breakpoints
     cdef public int num_alleles
     cdef public int cn_max
-    cdef public int cn_diff_max
     cdef public bint normal_contamination
     cdef public int num_cn_states
-    cdef public np.int64_t[:, :, :] cn_states
-    cdef public np.int64_t[:, :] cn_states_total
+    cdef public np.int64_t[:, :, :, :] cn_states
+    cdef public np.int64_t[:, :, :] cn_states_total
     cdef public int num_brk_states
     cdef public np.int64_t[:, :] brk_states
-    cdef public np.int64_t[:] num_alleles_subclonal
-    cdef public np.int64_t[:] is_hdel
-    cdef public np.int64_t[:] is_loh
+    cdef public np.int64_t[:, :] num_alleles_subclonal
+    cdef public np.int64_t[:, :] is_hdel
+    cdef public np.int64_t[:, :] is_loh
 
     cdef public np.int64_t[:] is_telomere
     cdef public np.int64_t[:] breakpoint_idx
@@ -510,9 +446,12 @@ cdef class RemixtModel:
     cdef np.float64_t[:] _allele_cn_change
 
     def __cinit__(self,
-        int num_clones, int num_segments,
-        int num_breakpoints, int cn_max,
-        int cn_diff_max, bint normal_contamination,
+        int num_clones,
+        int num_segments,
+        int num_breakpoints,
+        bint normal_contamination,
+        np.ndarray[np.int64_t, ndim=4] cn_states,
+        np.ndarray[np.int64_t, ndim=2] brk_states,
         np.ndarray[np.float64_t, ndim=1] h_init,
         np.ndarray[np.float64_t, ndim=1] l,
         np.ndarray[np.float64_t, ndim=1] x,
@@ -527,31 +466,38 @@ cdef class RemixtModel:
         self.num_clones = num_clones
         self.num_segments = num_segments
         self.num_breakpoints = num_breakpoints
-        self.cn_max = cn_max
-        self.cn_diff_max = cn_diff_max
         self.normal_contamination = normal_contamination
+        self.cn_states = cn_states
+        self.brk_states = brk_states
         self.h = h_init
         self.l = l
         self.x = x
         self.y = y
         self.likelihood_mask = likelihood_mask
         self.num_alleles = 2
-        self.cn_states = self.create_cn_states(self.num_clones, self.num_alleles, self.cn_max, self.cn_diff_max, self.normal_contamination)
-        self.num_cn_states = self.cn_states.shape[0]
-        self.brk_states = self.create_brk_states(self.num_clones, self.cn_max, self.cn_diff_max)
+        self.cn_max = max(cn_states.max(), brk_states.max())
+        self.num_cn_states = self.cn_states.shape[1]
         self.num_brk_states = self.brk_states.shape[0]
 
         # Create total states for convenience
-        self.cn_states_total = np.zeros((self.num_cn_states, self.num_clones), dtype=np.int64)
-        for s in range(self.num_cn_states):
-            for m in range(self.num_clones):
-                for ell in range(self.num_alleles):
-                    self.cn_states_total[s, m] += self.cn_states[s, m, ell]
+        self.cn_states_total = np.zeros((self.num_segments, self.num_cn_states, self.num_clones), dtype=np.int64)
+        for n in range(self.num_segments):
+            for s in range(self.num_cn_states):
+                for m in range(self.num_clones):
+                    for ell in range(self.num_alleles):
+                        self.cn_states_total[n, s, m] += self.cn_states[n, s, m, ell]
 
         # Create is subclonal and cn state indicators for convenience
-        self.num_alleles_subclonal = np.sum((np.asarray(self.cn_states)[:, 1:, :].max(axis=-2) != np.asarray(self.cn_states)[:, 1:, :].min(axis=-2)), axis=-1)
-        self.is_hdel = np.all(np.asarray(self.cn_states) == 0, axis=(1, 2)) * 1
+        self.num_alleles_subclonal = np.sum((np.asarray(self.cn_states)[:, :, 1:, :].max(axis=-2) != np.asarray(self.cn_states)[:, :, 1:, :].min(axis=-2)), axis=-1)
+        self.is_hdel = np.all(np.asarray(self.cn_states) == 0, axis=(-2, -1)) * 1
         self.is_loh = np.any(np.asarray(self.cn_states).sum(axis=-2) == 0, axis=-1) * 1
+
+        if ((cn_states.shape[0] != num_segments) or (cn_states.shape[1] != self.num_cn_states) or
+            (cn_states.shape[2] != num_clones) or (cn_states.shape[3] != self.num_alleles)):
+            raise ValueError('cn_states must have shape (num_segments, num_cn_states, num_clones, num_alleles)')
+
+        if ((brk_states.shape[0] != self.num_brk_states) or (brk_states.shape[1] != num_clones)):
+            raise ValueError('cn_states must have shape (num_brk_states, num_clones)')
 
         if h_init.shape[0] != num_clones:
             raise ValueError('h must have length equal to num_clones')
@@ -639,88 +585,7 @@ cdef class RemixtModel:
         self._p_d = np.zeros(((self.cn_max + 1) * 2,))
         self._allele_cn_change = np.zeros((2,))
 
-    def __reduce__(self):
-        state = (
-            self.num_clones,
-            self.num_segments,
-            self.num_breakpoints,
-            self.num_alleles,
-            self.cn_max,
-            self.cn_diff_max,
-            self.normal_contamination,
-            self.num_cn_states,
-            np.asarray(self.cn_states),
-            self.num_brk_states,
-            np.asarray(self.brk_states),
-            np.asarray(self.is_telomere),
-            np.asarray(self.breakpoint_idx),
-            np.asarray(self.breakpoint_orient),
-            np.asarray(self.breakpoint_side),
-            np.asarray(self.transition_penalty),
-            np.asarray(self.p_breakpoint),
-            self.hmm_log_norm_const,
-            np.asarray(self.framelogprob),
-            np.asarray(self.log_transmat),
-            np.asarray(self.posterior_marginals),
-            np.asarray(self.joint_posterior_marginals),
-        )
-
-        return (create_remixt_model, state)
-
-    def create_cn_states(self, num_clones, num_alleles, cn_max, cn_diff_max, normal_contamination):
-        """ Create a list of allele specific copy number states.
-        """
-        num_tumour_vars = (num_clones - 1) * num_alleles
-        
-        if normal_contamination:
-            normal_cn = (1, 1)
-        else:
-            normal_cn = (0, 0)
-
-        cn_states = dict()
-        for cn in itertools.product(range(cn_max + 1), repeat=num_tumour_vars):
-            cn = np.array(normal_cn + cn).reshape((num_clones, num_alleles))
-
-            if not np.all(cn.sum(axis=1) <= cn_max):
-                continue
-
-            if not np.all(cn[1:, :].max(axis=0) - cn[1:, :].min(axis=0) <= cn_diff_max):
-                continue
-
-            # Ensure states are non-redundant under swapping
-            cn_key = tuple(cn.flatten())
-            cn_swapped_key = tuple(cn[:, ::-1].flatten())
-
-            cn_states[frozenset([cn_key, cn_swapped_key])] = cn
-
-        cn_states = np.array(cn_states.values())
-
-        return cn_states
-
-    def create_brk_states(self, num_clones, cn_max, cn_diff_max):
-        """ Create a list of allele specific breakpoint copy number states.
-        """
-        num_tumour_vars = num_clones - 1
-            
-        normal_cn = (0,)
-
-        brk_states = list()
-        for cn in itertools.product(range(cn_max + 1), repeat=num_tumour_vars):
-            cn = np.array(normal_cn + cn).reshape((num_clones,))
-
-            if not np.all(cn <= cn_max):
-                continue
-
-            if not np.all(cn[1:].max() - cn[1:].min() <= cn_diff_max):
-                continue
-
-            brk_states.append(cn)
-
-        brk_states = np.array(brk_states)
-
-        return brk_states
-
-    cdef void add_log_transmat_total(self, np.float64_t[:, :] log_transmat, int m, np.float64_t mult_const) except *:
+    cdef void add_log_transmat_total(self, np.float64_t[:, :] log_transmat, int n, int m, np.float64_t mult_const) except *:
         """ Add total copy number log transition matrix for no breakpoint.
         """
 
@@ -728,9 +593,9 @@ cdef class RemixtModel:
 
         for s_1 in range(self.num_cn_states):
             for s_2 in range(self.num_cn_states):
-                log_transmat[s_1, s_2] += mult_const * fabs(self.cn_states_total[s_1, m] - self.cn_states_total[s_2, m])
+                log_transmat[s_1, s_2] += mult_const * fabs(self.cn_states_total[n, s_1, m] - self.cn_states_total[n + 1, s_2, m])
 
-    cdef void add_log_transmat_allele(self, np.float64_t[:, :] log_transmat, np.float64_t mult_const) except *:
+    cdef void add_log_transmat_allele(self, np.float64_t[:, :] log_transmat, int n, np.float64_t mult_const) except *:
         """ Add allele specific copy number log transition matrix for no breakpoint.
         """
 
@@ -748,12 +613,12 @@ cdef class RemixtModel:
                                 other_allele = 1 - allele
                             else:
                                 other_allele = allele
-                            self._allele_cn_change[flip] += fabs(self.cn_states[s_1, m, allele] - self.cn_states[s_2, m, other_allele])
-                        self._allele_cn_change[flip] -= fabs(self.cn_states_total[s_1, m] - self.cn_states_total[s_2, m])
+                            self._allele_cn_change[flip] += fabs(self.cn_states[n, s_1, m, allele] - self.cn_states[n + 1, s_2, m, other_allele])
+                        self._allele_cn_change[flip] -= fabs(self.cn_states_total[n, s_1, m] - self.cn_states_total[n + 1, s_2, m])
                 log_transmat[s_1, s_2] += mult_const * min(self._allele_cn_change[0], self._allele_cn_change[1])
 
     @cython.wraparound(True)
-    cdef void add_log_transmat_expectation_brk(self, np.float64_t[:, :] log_transmat, int m,
+    cdef void add_log_transmat_expectation_brk(self, np.float64_t[:, :] log_transmat, int n, int m,
                                           np.float64_t[:] p_breakpoint, int breakpoint_orient,
                                           np.float64_t mult_const) except *:
         """ Add expected log transition matrix wrt breakpoint
@@ -770,11 +635,11 @@ cdef class RemixtModel:
 
         for s_1 in range(self.num_cn_states):
             for s_2 in range(self.num_cn_states):
-                log_transmat[s_1, s_2] += mult_const * self._p_d[self.cn_states_total[s_1, m] - self.cn_states_total[s_2, m]]
+                log_transmat[s_1, s_2] += mult_const * self._p_d[self.cn_states_total[n, s_1, m] - self.cn_states_total[n + 1, s_2, m]]
 
     @cython.wraparound(True)
     cdef void add_log_breakpoint_p_expectation_cn(self, np.float64_t[:] log_breakpoint_p, np.float64_t[:, :] p_cn,
-                                             int m, int breakpoint_orient, np.float64_t mult_const) except *:
+                                             int n, int m, int breakpoint_orient, np.float64_t mult_const) except *:
         """ Calculate the expected log transition matrix wrt pairwise
         copy number probability.
         """
@@ -786,7 +651,7 @@ cdef class RemixtModel:
 
         for s_1 in range(self.num_cn_states):
             for s_2 in range(self.num_cn_states):
-                d = self.cn_states_total[s_1, m] - self.cn_states_total[s_2, m]
+                d = self.cn_states_total[n, s_1, m] - self.cn_states_total[n + 1, s_2, m]
                 self._p_d[d] += p_cn[s_1, s_2]
 
         for s_b in range(self.num_brk_states):
@@ -799,9 +664,9 @@ cdef class RemixtModel:
         log_transmat[:] = 0.
 
         for m in range(self.num_clones):
-            self.add_log_transmat_total(log_transmat, m, -self.transition_penalty)
+            self.add_log_transmat_total(log_transmat, n, m, -self.transition_penalty)
 
-        self.add_log_transmat_allele(log_transmat, -self.transition_penalty)
+        self.add_log_transmat_allele(log_transmat, n, -self.transition_penalty)
 
     cdef void calculate_log_transmat_breakpoint(self, int n, np.float64_t[:, :] log_transmat) except *:
         cdef int m
@@ -811,12 +676,12 @@ cdef class RemixtModel:
 
         for m in range(self.num_clones):
             self.add_log_transmat_expectation_brk(
-                log_transmat, m,
+                log_transmat, n, m,
                 self.p_breakpoint[self.breakpoint_idx[n], :],
                 self.breakpoint_orient[n],
                 -self.transition_penalty)
 
-        self.add_log_transmat_allele(log_transmat, -self.transition_penalty)
+        self.add_log_transmat_allele(log_transmat, n, -self.transition_penalty)
 
     cpdef void calculate_log_transmat(self, int n, np.float64_t[:, :] log_transmat) except *:
         """ Calculate the log transition matrix given current breakpoint and
@@ -840,7 +705,7 @@ cdef class RemixtModel:
         cdef int m
 
         for m in range(self.num_clones):
-            mu += self.h[m] * self.cn_states_total[s, m]
+            mu += self.h[m] * self.cn_states_total[n, s, m]
 
         mu *= self.l[n]
 
@@ -853,9 +718,9 @@ cdef class RemixtModel:
         cdef int m
 
         for m in range(self.num_clones):
-            partial_h[m] = self.l[n] * self.cn_states_total[s, m]
+            partial_h[m] = self.l[n] * self.cn_states_total[n, s, m]
 
-    cpdef np.float64_t calculate_expected_allele_ratio(self, int s) except *:
+    cpdef np.float64_t calculate_expected_allele_ratio(self, int n, int s) except *:
         """ Calculate expected allele ratio for a segment.
         """
 
@@ -864,15 +729,15 @@ cdef class RemixtModel:
         cdef int m
 
         for m in range(self.num_clones):
-            minor_depth += self.h[m] * self.cn_states[s, m, 0]
-            total_depth += self.h[m] * self.cn_states_total[s, m]
+            minor_depth += self.h[m] * self.cn_states[n, s, m, 0]
+            total_depth += self.h[m] * self.cn_states_total[n, s, m]
 
         if total_depth <= 0:
             raise ValueError('total_depth <= 0 for s: {}'.format(s))
 
         return minor_depth / total_depth
 
-    cpdef np.float64_t calculate_expected_allele_ratio_partial_h(self, int s, np.float64_t[:] partial_h) except *:
+    cpdef np.float64_t calculate_expected_allele_ratio_partial_h(self, int n, int s, np.float64_t[:] partial_h) except *:
         """ Calculate expected allele ratio for a segment.
         """
 
@@ -881,22 +746,28 @@ cdef class RemixtModel:
         cdef int m
 
         for m in range(self.num_clones):
-            minor_depth += self.h[m] * self.cn_states[s, m, 0]
-            total_depth += self.h[m] * self.cn_states_total[s, m]
+            minor_depth += self.h[m] * self.cn_states[n, s, m, 0]
+            total_depth += self.h[m] * self.cn_states_total[n, s, m]
 
         if total_depth <= 0:
             raise ValueError('total_depth <= 0 for s: {}'.format(s))
 
         for m in range(self.num_clones):
             partial_h[m] = (
-                (self.cn_states[s, m, 0] * total_depth - minor_depth * self.cn_states_total[s, m]) /
+                (self.cn_states[n, s, m, 0] * total_depth - minor_depth * self.cn_states_total[n, s, m]) /
                 (total_depth * total_depth))
 
     cpdef np.float64_t calculate_log_prior_cn(self, int n, int s) except *:
         """ Calculate the log prior of the copy number state for a segment.
         """
+        # TEMPORARY
+        alleles_subclonal = 0
+        for ell in range(2):
+            if np.asarray(self.cn_states[n, s, 1:, ell]).max() != np.asarray(self.cn_states[n, s, 1:, ell]).min():
+                alleles_subclonal += 1
+        assert alleles_subclonal == self.num_alleles_subclonal[n, s]
 
-        return -1.0 * self.num_alleles_subclonal[s] * self.l[n] * self.divergence_weight
+        return -1.0 * self.num_alleles_subclonal[n, s] * self.l[n] * self.divergence_weight
 
     cpdef np.float64_t calculate_log_likelihood_total(self, int n, int s, int u) except *:
         """ Calculate the log likelihood of total read counts for a segment.
@@ -907,7 +778,14 @@ cdef class RemixtModel:
         if self.likelihood_mask[n] == 0:
             return 0.
 
-        if not self.normal_contamination and self.is_hdel[s] == 1:
+        # TEMPORARY
+        cn_check = 0
+        for m in range(self.num_clones):
+            for ell in range(2):
+                cn_check += self.cn_states[n, s, m, ell]
+        assert self.is_hdel[n, s] == ((cn_check == 0) * 1)
+
+        if not self.normal_contamination and self.is_hdel[n, s] == 1:
             mu = self.negbin_hdel_mu
 
             if u == 0:
@@ -937,7 +815,7 @@ cdef class RemixtModel:
             partial_h[:] = 0.
             return
 
-        if not self.normal_contamination and self.is_hdel[s] == 1:
+        if not self.normal_contamination and self.is_hdel[n, s] == 1:
             partial_h[:] = 0.
             return
             
@@ -965,12 +843,21 @@ cdef class RemixtModel:
         if self.likelihood_mask[n] == 0:
             return 0.
 
-        if self.is_hdel[s] == 1:
+        if self.is_hdel[n, s] == 1:
             p = 0.
         else:
-            p = self.calculate_expected_allele_ratio(s)
+            p = self.calculate_expected_allele_ratio(n, s)
 
-        if not self.normal_contamination and self.is_loh[s] == 1:
+        # TEMPORARY
+        cn1 = 0
+        for m in range(self.num_clones):
+            cn1 += self.cn_states[n, s, m, 0]
+        cn2 = 0
+        for m in range(self.num_clones):
+            cn2 += self.cn_states[n, s, m, 1]
+        assert self.is_loh[n, s] == (((cn1 == 0) or (cn2 == 0)) * 1)
+
+        if not self.normal_contamination and self.is_loh[n, s] == 1:
             if p == 0.:
                 p = self.betabin_loh_p
             elif p == 1.:
@@ -1011,12 +898,12 @@ cdef class RemixtModel:
             partial_h[:] = 0.
             return
 
-        if not self.normal_contamination and self.is_loh[s] == 1:
+        if not self.normal_contamination and self.is_loh[n, s] == 1:
             partial_h[:] = 0.
             return
 
         else:
-            p = self.calculate_expected_allele_ratio(s)
+            p = self.calculate_expected_allele_ratio(n, s)
 
             if v == 0:
                 M = self.betabin_M_0
@@ -1033,7 +920,7 @@ cdef class RemixtModel:
 
         log_likelihood_partial_p = betabin_log_likelihood_partial_p(minor_readcount, allelic_readcount, p, M)
 
-        self.calculate_expected_allele_ratio_partial_h(s, partial_h)
+        self.calculate_expected_allele_ratio_partial_h(n, s, partial_h)
 
         for m in range(self.num_clones):
             partial_h[m] *= log_likelihood_partial_p
@@ -1120,7 +1007,7 @@ cdef class RemixtModel:
                 self.add_log_breakpoint_p_expectation_cn(
                     log_p_breakpoint[self.breakpoint_idx[n], :],
                     self.joint_posterior_marginals[n, :, :],
-                    m, self.breakpoint_orient[n],
+                    n, m, self.breakpoint_orient[n],
                     -self.transition_penalty)
 
         for k in range(self.num_breakpoints):
@@ -1352,7 +1239,7 @@ cdef class RemixtModel:
                 for ell in range(self.num_alleles):
                     if self.p_allele_swap[n, 1] > self.p_allele_swap[n, 0]:
                         ell = 1 - ell
-                    cn[n, m, ell] = self.cn_states[state_sequence[n], m, ell]
+                    cn[n, m, ell] = self.cn_states[n, state_sequence[n], m, ell]
 
 
 cpdef void sum_product(

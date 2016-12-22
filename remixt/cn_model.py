@@ -61,6 +61,7 @@ class BreakpointModel(object):
         self.max_copy_number = kwargs.get('max_copy_number', 6)
         self.max_copy_number_diff = kwargs.get('max_copy_number_diff', 1)
         self.normal_contamination = kwargs.get('normal_contamination', True)
+        self.is_female = kwargs.get('is_female', True)
         self.divergence_weight = kwargs.get('divergence_weight', 1e6)
         self.min_segment_length = kwargs.get('min_segment_length', 10000)
         self.min_proportion_genotyped = kwargs.get('min_proportion_genotyped', 0.01)
@@ -175,11 +176,18 @@ class BreakpointModel(object):
             breakpoint_idx = -np.ones(breakpoint_idx.shape, dtype=int)
             breakpoint_orient = np.zeros(breakpoint_orient.shape, dtype=int)
 
+        cn_states = self.create_cn_states(self.M, 2, self.max_copy_number, self.max_copy_number_diff, self.normal_contamination)
+        brk_states = self.create_brk_states(self.M, self.max_copy_number, self.max_copy_number_diff)
+
+        cn_states = np.array([cn_states] * self.N1)
+
         self.model = remixt.bpmodel.RemixtModel(
-            self.M, self.N1, num_breakpoints,
-            self.max_copy_number,
-            self.max_copy_number_diff,
+            self.M,
+            self.N1,
+            num_breakpoints,
             self.normal_contamination,
+            cn_states,
+            brk_states,
             h_init,
             self.l1,
             self.x1[:, 2],
@@ -242,6 +250,59 @@ class BreakpointModel(object):
             p_breakpoint /= np.sum(p_breakpoint, axis=-1)[:, np.newaxis]
 
             self.model.p_breakpoint = p_breakpoint
+
+    def create_cn_states(self, num_clones, num_alleles, cn_max, cn_diff_max, normal_contamination):
+        """ Create a list of allele specific copy number states.
+        """
+        num_tumour_vars = (num_clones - 1) * num_alleles
+        
+        if normal_contamination:
+            normal_cn = (1, 1)
+        else:
+            normal_cn = (0, 0)
+
+        cn_states = dict()
+        for cn in itertools.product(range(cn_max + 1), repeat=num_tumour_vars):
+            cn = np.array(normal_cn + cn).reshape((num_clones, num_alleles))
+
+            if not np.all(cn.sum(axis=1) <= cn_max):
+                continue
+
+            if not np.all(cn[1:, :].max(axis=0) - cn[1:, :].min(axis=0) <= cn_diff_max):
+                continue
+
+            # Ensure states are non-redundant under swapping
+            cn_key = tuple(cn.flatten())
+            cn_swapped_key = tuple(cn[:, ::-1].flatten())
+
+            cn_states[frozenset([cn_key, cn_swapped_key])] = cn
+
+        cn_states = np.array(cn_states.values())
+
+        return cn_states
+
+    def create_brk_states(self, num_clones, cn_max, cn_diff_max):
+        """ Create a list of allele specific breakpoint copy number states.
+        """
+        num_tumour_vars = num_clones - 1
+            
+        normal_cn = (0,)
+
+        brk_states = list()
+        for cn in itertools.product(range(cn_max + 1), repeat=num_tumour_vars):
+            cn = np.array(normal_cn + cn).reshape((num_clones,))
+
+            if not np.all(cn <= cn_max):
+                continue
+
+            if not np.all(cn[1:].max() - cn[1:].min() <= cn_diff_max):
+                continue
+
+            brk_states.append(cn)
+
+        brk_states = np.array(brk_states)
+
+        return brk_states
 
     def get_likelihood_param_values(self):
         """ Get current likelihood parameter values.
