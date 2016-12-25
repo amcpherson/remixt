@@ -46,7 +46,8 @@ class BreakpointModel(object):
             min_proportion_genotyped (float): minimum proportion genotyped reads for segment likelihood mask
             max_depth (float): maximum depth for segment likelihood mask
             transition_log_prob (float): penalty on transitions, per copy number change
-            disable_breakpoints (bool): disable integrated breakpoint copy number inference 
+            disable_breakpoints (bool): disable integrated breakpoint copy number inference
+            normal_copies (numpy.array): germline copy number
 
         """
         
@@ -69,9 +70,15 @@ class BreakpointModel(object):
         self.transition_log_prob = kwargs.get('transition_log_prob', 10.)
         self.disable_breakpoints = kwargs.get('disable_breakpoints', False)
         self.breakpoint_init = kwargs.get('breakpoint_init', None)
+        self.normal_copies = kwargs.get('normal_copies', np.array([[1, 1]] * self.N))
 
         if self.max_depth is None:
             raise ValueError('must specify max depth')
+
+        if not self.normal_contamination:
+            self.normal_copies = self.normal_copies * 0
+
+        cn_states = self.create_cn_states(self.N, self.M, 2, self.max_copy_number, self.max_copy_number_diff, self.normal_copies)
 
         # The factor graph model for breakpoint copy number allows only a single breakend
         # interposed between each pair of adjacent segments.  Where multiple breakends are
@@ -99,6 +106,9 @@ class BreakpointModel(object):
         # New segment refers to an original segment
         self.seg_is_original = np.zeros(self.N1, dtype=bool)
         
+        # Mapping from new segment index to old segment index
+        seg_rev_remap = np.zeros(self.N1, dtype=int)
+        
         # Create variables required for lower level model object
         num_breakpoints = len(self.breakpoints)
         is_telomere = np.ones(self.N1, dtype=int)
@@ -121,6 +131,7 @@ class BreakpointModel(object):
                     # Breakpoint index and orientation based on n_new
                     breakpoint_idx[n_new] = bp_idx
                     breakpoint_orient[n_new] = orient
+                    seg_rev_remap[n_new] = n
 
                     # Breakpoint incident segments cannot be telomeres
                     is_telomere[n_new] = 0
@@ -132,6 +143,7 @@ class BreakpointModel(object):
                 if (n, n + 1) not in adjacencies:
                     # Mark as a telomere
                     is_telomere[n_new] = 1
+                    seg_rev_remap[n_new] = n
 
                     # Next new segment, after telomere
                     n_new += 1
@@ -140,6 +152,8 @@ class BreakpointModel(object):
                 # If n is not a telomere, n_new is not a telomere
                 if (n, n + 1) in adjacencies:
                     is_telomere[n_new] = 0
+
+                seg_rev_remap[n_new] = n
 
                 # Next new segment
                 n_new += 1
@@ -155,6 +169,9 @@ class BreakpointModel(object):
 
         self.x1[self.seg_fwd_remap, :] = x
         self.l1[self.seg_fwd_remap] = l
+
+        # Remap cn states
+        cn_states = cn_states[seg_rev_remap, :, :, :]
 
         # Mask likelihood of poorly modelled segments
         self.likelihood_mask = np.array([True] * len(self.l1))
@@ -176,10 +193,7 @@ class BreakpointModel(object):
             breakpoint_idx = -np.ones(breakpoint_idx.shape, dtype=int)
             breakpoint_orient = np.zeros(breakpoint_orient.shape, dtype=int)
 
-        cn_states = self.create_cn_states(self.M, 2, self.max_copy_number, self.max_copy_number_diff, self.normal_contamination)
         brk_states = self.create_brk_states(self.M, self.max_copy_number, self.max_copy_number_diff)
-
-        cn_states = np.array([cn_states] * self.N1)
 
         self.model = remixt.bpmodel.RemixtModel(
             self.M,
@@ -251,19 +265,33 @@ class BreakpointModel(object):
 
             self.model.p_breakpoint = p_breakpoint
 
-    def create_cn_states(self, num_clones, num_alleles, cn_max, cn_diff_max, normal_contamination):
+    def create_cn_states(self, num_segments, num_clones, num_alleles, cn_max, cn_diff_max, normal_copies):
         """ Create a list of allele specific copy number states.
+        """
+        cn_states = list()
+
+        for n in xrange(num_segments):
+            cn_state = self.create_segment_cn_states(
+                num_clones,
+                num_alleles,
+                cn_max,
+                cn_diff_max,
+                normal_copies[n])
+
+            cn_states.append(cn_state)
+
+        cn_states = np.array(cn_states)
+
+        return cn_states
+
+    def create_segment_cn_states(self, num_clones, num_alleles, cn_max, cn_diff_max, normal_cn):
+        """ Create a list of allele specific copy number states for a single segment.
         """
         num_tumour_vars = (num_clones - 1) * num_alleles
         
-        if normal_contamination:
-            normal_cn = (1, 1)
-        else:
-            normal_cn = (0, 0)
-
         cn_states = dict()
         for cn in itertools.product(range(cn_max + 1), repeat=num_tumour_vars):
-            cn = np.array(normal_cn + cn).reshape((num_clones, num_alleles))
+            cn = np.concatenate([normal_cn, cn]).reshape((num_clones, num_alleles))
 
             if not np.all(cn.sum(axis=1) <= cn_max):
                 continue

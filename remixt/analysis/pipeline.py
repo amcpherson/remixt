@@ -140,6 +140,7 @@ def fit(experiment, init_params, config):
     num_em_iter = remixt.config.get_param(config, 'num_em_iter')
     num_update_iter = remixt.config.get_param(config, 'num_update_iter')
     disable_breakpoints = remixt.config.get_param(config, 'disable_breakpoints')
+    is_female = remixt.config.get_param(config, 'is_female')
 
     # For convergence testing purposes, provide optimal initialization
     # based on simulated breakpoint copy number
@@ -159,6 +160,10 @@ def fit(experiment, init_params, config):
                 cn[1:] = cn[1:][::-1]
                 breakpoint_init[bp] = cn
 
+    normal_copies = np.array([[1, 1]] * experiment.l.shape[0])
+    if not is_female:
+        normal_copies[experiment.segment_chromosome_id == 'X', :] = np.array([0, 1])
+
     model = remixt.cn_model.BreakpointModel(
         h_init,
         experiment.x,
@@ -171,6 +176,7 @@ def fit(experiment, init_params, config):
         min_segment_length=min_segment_length,
         min_proportion_genotyped=min_proportion_genotyped,
         max_depth=max_depth,
+        normal_copies=normal_copies,
         disable_breakpoints=disable_breakpoints,
         breakpoint_init=breakpoint_init,
     )
