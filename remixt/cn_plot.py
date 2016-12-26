@@ -650,7 +650,7 @@ def plot_experiment(experiment_plot_filename, experiment_filename):
     with open(experiment_filename, 'r') as experiment_file:
         exp = pickle.load(experiment_file)
 
-    fig = experiment_plot(exp, exp.cn, exp.h, exp.p)
+    fig = experiment_plot(exp, exp.cn, exp.h)
 
     fig.savefig(experiment_plot_filename, format='pdf', bbox_inches='tight', dpi=300)
 
