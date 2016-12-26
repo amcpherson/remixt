@@ -280,6 +280,9 @@ class BreakpointModel(object):
 
             cn_states.append(cn_state)
 
+        # Ensure all segments have the same number of states
+        assert len(set([a.shape[0] for a in cn_states])) == 1
+
         cn_states = np.array(cn_states)
 
         return cn_states
@@ -293,15 +296,15 @@ class BreakpointModel(object):
         for cn in itertools.product(range(cn_max + 1), repeat=num_tumour_vars):
             cn = np.concatenate([normal_cn, cn]).reshape((num_clones, num_alleles))
 
-            if not np.all(cn.sum(axis=1) <= cn_max):
+            if not np.all(cn[1:, :].sum(axis=1) <= cn_max):
                 continue
 
             if not np.all(cn[1:, :].max(axis=0) - cn[1:, :].min(axis=0) <= cn_diff_max):
                 continue
 
             # Ensure states are non-redundant under swapping
-            cn_key = tuple(cn.flatten())
-            cn_swapped_key = tuple(cn[:, ::-1].flatten())
+            cn_key = tuple(cn[1:, :].flatten())
+            cn_swapped_key = tuple(cn[1:, ::-1].flatten())
 
             cn_states[frozenset([cn_key, cn_swapped_key])] = cn
 
