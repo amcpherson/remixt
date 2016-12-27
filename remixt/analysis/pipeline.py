@@ -162,7 +162,10 @@ def fit(experiment, init_params, config):
 
     normal_copies = np.array([[1, 1]] * experiment.l.shape[0])
     if not is_female:
-        normal_copies[experiment.segment_chromosome_id == 'X', :] = np.array([0, 1])
+        normal_copies[experiment.segment_chromosome_id == 'X', :] = np.array([1, 0])
+
+        if np.any(experiment.x[experiment.segment_chromosome_id == 'X', 0:2] > 0):
+            raise Exception('inconsistent allele read counts for chromosome X')
 
     model = remixt.cn_model.BreakpointModel(
         h_init,

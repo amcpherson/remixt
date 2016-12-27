@@ -4,8 +4,6 @@ import pickle
 import numpy as np
 import pandas as pd
 
-import remixt.likelihood
-
 
 def find_closest(a, v):
     """ Find closest value in a to values in v
@@ -343,10 +341,11 @@ def create_segment_table(experiment):
         'readcount': experiment.x[:, 2],
     })
 
-    phi = remixt.likelihood.estimate_phi(experiment.x)
+    data['allele_ratio'] = data['major_readcount'] / (data['major_readcount'] + data['minor_readcount'])
+    data['allele_ratio'] = data['allele_ratio'].fillna(0)
 
-    data['major_depth'] = data['major_readcount'] / (phi * data['length'])
-    data['minor_depth'] = data['minor_readcount'] / (phi * data['length'])
+    data['major_depth'] = data['readcount'] * (1. - data['allele_ratio']) / data['length']
+    data['minor_depth'] = data['readcount'] * data['allele_ratio'] / data['length']
     data['total_depth'] = data['readcount'] / data['length']
 
     return data
@@ -370,32 +369,23 @@ def create_cn_table(experiment, cn, h, phi=None):
 
     data = create_segment_table(experiment)
 
-    if phi is None:
-        phi = remixt.likelihood.estimate_phi(experiment.x)
-
-    data['major_raw'] = (data['major_depth'] - h[0]) / h[1:].sum()
-    data['minor_raw'] = (data['minor_depth'] - h[0]) / h[1:].sum()
-    
-    data['ratio_raw'] = experiment.x[:, 1].astype(float) / experiment.x[:, :2].sum(axis=1).astype(float)
-
-    mu = remixt.likelihood.expected_read_count(experiment.l, cn, h, phi)
-
-    data['major_expected'] = mu[:, 0]
-    data['minor_expected'] = mu[:, 1]
-    data['total_expected'] = mu[:, 2]
-
-    major_depth_e = mu[:, 0] / (phi * experiment.l)
-    minor_depth_e = mu[:, 1] / (phi * experiment.l)
-
-    major_raw_e = (major_depth_e - h[0]) / h[1:].sum()
-    minor_raw_e = (minor_depth_e - h[0]) / h[1:].sum()
-
-    data['major_raw_e'] = major_raw_e
-    data['minor_raw_e'] = minor_raw_e
-
-    for m in xrange(1, cn.shape[1]):
+    for m in xrange(0, cn.shape[1]):
         data['major_{0}'.format(m)] = cn[:, m, 0]
         data['minor_{0}'.format(m)] = cn[:, m, 1]
+
+    data['major_raw'] = (data['major_depth'] - data['major_0'] * h[0]) / h[1:].sum()
+    data['minor_raw'] = (data['minor_depth'] - data['minor_0'] * h[0]) / h[1:].sum()
+
+    data['major_depth_e'] = (cn[:, :, 0] * h[np.newaxis, :]).sum(axis=-1)
+    data['minor_depth_e'] = (cn[:, :, 1] * h[np.newaxis, :]).sum(axis=-1)
+    data['total_depth_e'] = (cn.sum(axis=-1) * h[np.newaxis, :]).sum(axis=-1)
+
+    data['major_e'] = data['major_depth_e'] * experiment.l
+    data['minor_e'] = data['minor_depth_e'] * experiment.l
+    data['total_e'] = data['total_depth_e'] * experiment.l
+
+    data['major_raw_e'] = (data['major_depth_e'] - data['major_0'] * h[0]) / h[1:].sum()
+    data['minor_raw_e'] = (data['minor_depth_e'] - data['minor_0'] * h[0]) / h[1:].sum()
 
     if 'major_2' in data:
         data['major_diff'] = np.absolute(data['major_1'] - data['major_2'])

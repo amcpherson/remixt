@@ -426,7 +426,8 @@ cdef class RemixtModel:
     cdef public np.float64_t[:] l
     cdef public np.float64_t[:] x
     cdef public np.float64_t[:, :] y
-    cdef public np.int64_t[:] likelihood_mask
+    cdef public np.int64_t[:] total_likelihood_mask
+    cdef public np.int64_t[:] allele_likelihood_mask
 
     cdef public np.float64_t[:] h
 
@@ -456,7 +457,6 @@ cdef class RemixtModel:
         np.ndarray[np.float64_t, ndim=1] l,
         np.ndarray[np.float64_t, ndim=1] x,
         np.ndarray[np.float64_t, ndim=2] y,
-        np.ndarray[np.int64_t, ndim=1] likelihood_mask,
         np.ndarray[np.int64_t, ndim=1] is_telomere,
         np.ndarray[np.int64_t, ndim=1] breakpoint_idx,
         np.ndarray[np.int64_t, ndim=1] breakpoint_orient,
@@ -473,11 +473,13 @@ cdef class RemixtModel:
         self.l = l
         self.x = x
         self.y = y
-        self.likelihood_mask = likelihood_mask
         self.num_alleles = 2
         self.cn_max = max(cn_states.max(), brk_states.max())
         self.num_cn_states = self.cn_states.shape[1]
         self.num_brk_states = self.brk_states.shape[0]
+
+        self.total_likelihood_mask = np.ones((self.num_segments,), dtype=np.int64)
+        self.allele_likelihood_mask = np.ones((self.num_segments,), dtype=np.int64)
 
         # Create total states for convenience
         self.cn_states_total = np.zeros((self.num_segments, self.num_cn_states, self.num_clones), dtype=np.int64)
@@ -775,7 +777,7 @@ cdef class RemixtModel:
 
         cdef np.float64_t mu, r
 
-        if self.likelihood_mask[n] == 0:
+        if self.total_likelihood_mask[n] == 0:
             return 0.
 
         # TEMPORARY
@@ -811,7 +813,7 @@ cdef class RemixtModel:
 
         cdef np.float64_t mu, r, log_likelihood_partial_mu
 
-        if self.likelihood_mask[n] == 0:
+        if self.total_likelihood_mask[n] == 0:
             partial_h[:] = 0.
             return
 
@@ -840,7 +842,7 @@ cdef class RemixtModel:
 
         cdef np.float64_t p, M, allelic_readcount, minor_readcount
 
-        if self.likelihood_mask[n] == 0:
+        if self.allele_likelihood_mask[n] == 0:
             return 0.
 
         if self.is_hdel[n, s] == 1:
@@ -878,6 +880,9 @@ cdef class RemixtModel:
 
         allelic_readcount = self.y[n, 0] + self.y[n, 1]
 
+        if allelic_readcount == 0:
+            return 0.
+
         if w == 0:
             minor_readcount = self.y[n, 0]
 
@@ -894,7 +899,7 @@ cdef class RemixtModel:
 
         cdef np.float64_t p, M, allelic_readcount, minor_readcount, log_likelihood_partial_p
 
-        if self.likelihood_mask[n] == 0:
+        if self.allele_likelihood_mask[n] == 0:
             partial_h[:] = 0.
             return
 
@@ -911,6 +916,10 @@ cdef class RemixtModel:
                 M = self.betabin_M_1
 
         allelic_readcount = self.y[n, 0] + self.y[n, 1]
+
+        if allelic_readcount == 0:
+            partial_h[:] = 0.
+            return
 
         if w == 0:
             minor_readcount = self.y[n, 0]
