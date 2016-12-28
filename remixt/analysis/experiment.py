@@ -341,7 +341,7 @@ def create_segment_table(experiment):
         'readcount': experiment.x[:, 2],
     })
 
-    data['allele_ratio'] = data['major_readcount'] / (data['major_readcount'] + data['minor_readcount'])
+    data['allele_ratio'] = data['minor_readcount'] / (data['major_readcount'] + data['minor_readcount'])
     data['allele_ratio'] = data['allele_ratio'].fillna(0)
 
     data['major_depth'] = data['readcount'] * (1. - data['allele_ratio']) / data['length']
