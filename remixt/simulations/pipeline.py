@@ -421,12 +421,19 @@ def evaluate_cn_results(genome_mixture, cn_data_table, order_true, order_pred, a
     proportion_clonal_correct = float((is_clonal_correct * segment_lengths).sum()) / float(segment_lengths.sum())
     proportion_subclonal_correct = float((is_subclonal_correct * segment_lengths).sum()) / float(segment_lengths.sum())
 
-    pred_ploidy = (cn_pred[:,1:,:].mean(axis=1).T * segment_lengths).sum() / segment_lengths.sum()
-    pred_divergent = (cn_pred[:,1:,:].max(axis=1) != cn_pred[:,1:,:].min(axis=1)) * 1.
-    pred_proportion_divergent = (pred_divergent * segment_lengths[:, np.newaxis]).sum() / (2. * segment_lengths.sum())
+    pred_ploidy = (cn_pred.mean(axis=1) * segment_lengths[:, np.newaxis]).sum() / segment_lengths.sum()
+    true_ploidy = (cn_true.mean(axis=1) * segment_lengths[:, np.newaxis]).sum() / segment_lengths.sum()
 
-    true_ploidy = (cn_true[:,1:,:].mean(axis=1).T * segment_lengths).sum() / segment_lengths.sum()
-    true_divergent = (cn_true[:,1:,:].max(axis=1) != cn_true[:,1:,:].min(axis=1)) * 1.
+    pred_ploidy_1 = (cn_pred[:, 0, :] * segment_lengths[:, np.newaxis]).sum() / segment_lengths.sum()
+    true_ploidy_1 = (cn_true[:, 0, :] * segment_lengths[:, np.newaxis]).sum() / segment_lengths.sum()
+
+    pred_ploidy_2 = (cn_pred[:, 1, :] * segment_lengths[:, np.newaxis]).sum() / segment_lengths.sum()
+    true_ploidy_2 = (cn_true[:, 1, :] * segment_lengths[:, np.newaxis]).sum() / segment_lengths.sum()
+
+    pred_divergent = (cn_pred.max(axis=1) != cn_pred.min(axis=1)) * 1.
+    true_divergent = (cn_true.max(axis=1) != cn_true.min(axis=1)) * 1.
+
+    pred_proportion_divergent = (pred_divergent * segment_lengths[:, np.newaxis]).sum() / (2. * segment_lengths.sum())
     true_proportion_divergent = (true_divergent * segment_lengths[:, np.newaxis]).sum() / (2. * segment_lengths.sum())
 
     evaluation = dict()
@@ -435,8 +442,12 @@ def evaluate_cn_results(genome_mixture, cn_data_table, order_true, order_pred, a
     evaluation['proportion_clonal_correct'] = proportion_clonal_correct
     evaluation['proportion_subclonal_correct'] = proportion_subclonal_correct
     evaluation['pred_ploidy'] = pred_ploidy
-    evaluation['pred_proportion_divergent'] = pred_proportion_divergent
     evaluation['true_ploidy'] = true_ploidy
+    evaluation['pred_ploidy_1'] = pred_ploidy_1
+    evaluation['true_ploidy_1'] = true_ploidy_1
+    evaluation['pred_ploidy_2'] = pred_ploidy_2
+    evaluation['true_ploidy_2'] = true_ploidy_2
+    evaluation['pred_proportion_divergent'] = pred_proportion_divergent
     evaluation['true_proportion_divergent'] = true_proportion_divergent
     evaluation = pd.Series(evaluation)
     
