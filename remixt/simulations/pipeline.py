@@ -421,11 +421,23 @@ def evaluate_cn_results(genome_mixture, cn_data_table, order_true, order_pred, a
     proportion_clonal_correct = float((is_clonal_correct * segment_lengths).sum()) / float(segment_lengths.sum())
     proportion_subclonal_correct = float((is_subclonal_correct * segment_lengths).sum()) / float(segment_lengths.sum())
 
+    pred_ploidy = (cn_pred[:,1:,:].mean(axis=1).T * segment_lengths).sum() / segment_lengths.sum()
+    pred_divergent = (cn_pred[:,1:,:].max(axis=1) != cn_pred[:,1:,:].min(axis=1)) * 1.
+    pred_proportion_divergent = (pred_divergent * segment_lengths[:, np.newaxis]).sum() / (2. * segment_lengths.sum())
+
+    true_ploidy = (cn_true[:,1:,:].mean(axis=1).T * segment_lengths).sum() / segment_lengths.sum()
+    true_divergent = (cn_true[:,1:,:].max(axis=1) != cn_true[:,1:,:].min(axis=1)) * 1.
+    true_proportion_divergent = (true_divergent * segment_lengths[:, np.newaxis]).sum() / (2. * segment_lengths.sum())
+
     evaluation = dict()
     evaluation['proportion_cn_correct'] = proportion_cn_correct
     evaluation['proportion_dom_cn_correct'] = proportion_dom_cn_correct
     evaluation['proportion_clonal_correct'] = proportion_clonal_correct
     evaluation['proportion_subclonal_correct'] = proportion_subclonal_correct
+    evaluation['pred_ploidy'] = pred_ploidy
+    evaluation['pred_proportion_divergent'] = pred_proportion_divergent
+    evaluation['true_ploidy'] = true_ploidy
+    evaluation['true_proportion_divergent'] = true_proportion_divergent
     evaluation = pd.Series(evaluation)
     
     results = {
