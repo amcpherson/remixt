@@ -7,7 +7,6 @@ from scipy.special import betaln
 from scipy.special import digamma
 
 import remixt.utils
-import remixt.paramlearn
 
 
 
