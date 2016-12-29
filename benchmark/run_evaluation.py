@@ -1,3 +1,5 @@
+import os
+import sys
 import argparse
 
 import pypeliner
@@ -41,8 +43,8 @@ if __name__ == '__main__':
 
     experiment_template = os.path.join(args['raw_data_dir'], '{sim_id}', 'experiment.pickle')
     experiment_plot_template = os.path.join(args['raw_data_dir'], '{sim_id}', 'experiment_plot.pdf')
-    results_template = os.path.join(args['raw_data_dir'], '{sim_id}', '{tool_name}', 'results.h5')
-    evaluation_template = os.path.join(args['raw_data_dir'], '{sim_id}', '{tool_name}', 'evaluation.h5')
+    results_template = os.path.join(args['raw_data_dir'], '{sim_id}', 'results.h5')
+    evaluation_template = os.path.join(args['raw_data_dir'], '{sim_id}', 'evaluation.h5')
 
     workflow = pypeliner.workflow.Workflow(default_ctx={'mem': 4})
 
