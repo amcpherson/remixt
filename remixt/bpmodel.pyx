@@ -443,6 +443,8 @@ cdef class RemixtModel:
     cdef public np.float64_t betabin_loh_M_0
     cdef public np.float64_t betabin_loh_M_1
 
+    cdef public int transition_model
+
     cdef np.float64_t[:] _p_d
     cdef np.float64_t[:] _allele_cn_change
 
@@ -587,6 +589,17 @@ cdef class RemixtModel:
         self._p_d = np.zeros(((self.cn_max + 1) * 2,))
         self._allele_cn_change = np.zeros((2,))
 
+    cdef np.float64_t calc_transition(self, np.float64_t cn_diff):
+        """ Calculate transition function for a copy number difference.
+        """
+        if self.transition_model == 0:
+            return fabs(cn_diff)
+        elif self.transition_model == 1:
+            if cn_diff == 0:
+                return 0.
+            else:
+                return 1.
+
     cdef void add_log_transmat_total(self, np.float64_t[:, :] log_transmat, int n, int m, np.float64_t mult_const) except *:
         """ Add total copy number log transition matrix for no breakpoint.
         """
@@ -595,7 +608,7 @@ cdef class RemixtModel:
 
         for s_1 in range(self.num_cn_states):
             for s_2 in range(self.num_cn_states):
-                log_transmat[s_1, s_2] += mult_const * fabs(self.cn_states_total[n, s_1, m] - self.cn_states_total[n + 1, s_2, m])
+                log_transmat[s_1, s_2] += mult_const * self.calc_transition(self.cn_states_total[n, s_1, m] - self.cn_states_total[n + 1, s_2, m])
 
     cdef void add_log_transmat_allele(self, np.float64_t[:, :] log_transmat, int n, np.float64_t mult_const) except *:
         """ Add allele specific copy number log transition matrix for no breakpoint.
@@ -615,8 +628,8 @@ cdef class RemixtModel:
                                 other_allele = 1 - allele
                             else:
                                 other_allele = allele
-                            self._allele_cn_change[flip] += fabs(self.cn_states[n, s_1, m, allele] - self.cn_states[n + 1, s_2, m, other_allele])
-                        self._allele_cn_change[flip] -= fabs(self.cn_states_total[n, s_1, m] - self.cn_states_total[n + 1, s_2, m])
+                            self._allele_cn_change[flip] += self.calc_transition(self.cn_states[n, s_1, m, allele] - self.cn_states[n + 1, s_2, m, other_allele])
+                        self._allele_cn_change[flip] -= self.calc_transition(self.cn_states_total[n, s_1, m] - self.cn_states_total[n + 1, s_2, m])
                 log_transmat[s_1, s_2] += mult_const * min(self._allele_cn_change[0], self._allele_cn_change[1])
 
     @cython.wraparound(True)
@@ -633,7 +646,7 @@ cdef class RemixtModel:
 
         for d in range(-self.cn_max - 1, self.cn_max + 2):
             for s_b in range(self.num_brk_states):
-                self._p_d[d] += p_breakpoint[s_b] * fabs(d - breakpoint_orient * self.brk_states[s_b, m])
+                self._p_d[d] += p_breakpoint[s_b] * self.calc_transition(d - breakpoint_orient * self.brk_states[s_b, m])
 
         for s_1 in range(self.num_cn_states):
             for s_2 in range(self.num_cn_states):
@@ -658,7 +671,7 @@ cdef class RemixtModel:
 
         for s_b in range(self.num_brk_states):
             for d in range(-self.cn_max - 1, self.cn_max + 2):
-                log_breakpoint_p[s_b] += mult_const * self._p_d[d] * fabs(d - breakpoint_orient * self.brk_states[s_b, m])
+                log_breakpoint_p[s_b] += mult_const * self._p_d[d] * self.calc_transition(d - breakpoint_orient * self.brk_states[s_b, m])
 
     cdef void calculate_log_transmat_regular(self, int n, np.float64_t[:, :] log_transmat) except *:
         cdef int m

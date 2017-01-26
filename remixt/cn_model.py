@@ -68,6 +68,7 @@ class BreakpointModel(object):
         self.min_proportion_genotyped = kwargs.get('min_proportion_genotyped', 0.01)
         self.max_depth = kwargs.get('max_depth')
         self.transition_log_prob = kwargs.get('transition_log_prob', 10.)
+        self.transition_model = kwargs.get('transition_model', 0)
         self.disable_breakpoints = kwargs.get('disable_breakpoints', False)
         self.breakpoint_init = kwargs.get('breakpoint_init', None)
         self.normal_copies = kwargs.get('normal_copies', np.array([[1, 1]] * self.N))
@@ -268,6 +269,8 @@ class BreakpointModel(object):
             p_breakpoint /= np.sum(p_breakpoint, axis=-1)[:, np.newaxis]
 
             self.model.p_breakpoint = p_breakpoint
+
+        self.model.transition_model = self.transition_model
 
     def create_cn_states(self, num_clones, num_alleles, cn_max, cn_diff_max):
         """ Create a list of allele specific copy number states for a single segment.
