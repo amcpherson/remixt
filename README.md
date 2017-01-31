@@ -151,16 +151,21 @@ The columns refer to the major and minor copy number in tumour clone 1 and 2.
 The breakpoint copy number table contains the following columns:
 
 * `prediction_id`
-* `allele_1`
-* `allele_2`
 * `cn_1`
 * `cn_2`
 
-The `prediction_id` column matches the column of the same name in the input breakpoints file, and specifies for which breakpoint prediction the copy number is being provided.  The `allele_1` and `allele_2` columns refer to which allele at break-end 1 and 2 are part of the tumour chromosome harboring the breakpoints.  The `cn_1` and `cn_2` columns provide the clone specific copy number for clone 1 and 2 respectively.
+The `prediction_id` column matches the column of the same name in the input breakpoints file, and specifies for which breakpoint prediction the copy number is being provided.  The `cn_1` and `cn_2` columns provide the clone specific copy number for tumour clone 1 and 2 respectively.
 
 #### Haploid Depths
 
 The haploid depths is a vector of `M` depths for each of the `M` clones including the normal.  To recover cell mixture proportions, simply normalize `h`.
+
+### Extracting Tables as TSV files
+
+If preferred, it is possible to extract copy number and metadata in TSV and YaML format.  For results file `$results_h5`, extract segment copy number, breakpoint copy number and meta data to files `$cn_table`, `$brk_cn_table`, `$meta_data` respectively as follows:
+
+    remixt write_results \
+        $results_h5 $cn_table $brk_cn_table $meta_data
 
 ### ReMixT Viewer
 
