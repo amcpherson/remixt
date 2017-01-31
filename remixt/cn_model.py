@@ -354,13 +354,17 @@ class BreakpointModel(object):
                 setattr(self.model, a, data[a])
 
     def _get_hdel_weights(self):
-        states = np.where(np.asarray(self.model.is_hdel) == 1)[0]
-        weights = np.asarray(self.model.posterior_marginals)[:, states].sum(axis=-1)
+        mask = np.zeros(self.model.posterior_marginals.shape)
+        n, s = np.where(np.asarray(self.model.is_hdel) == 1)
+        mask[n, s] = 1
+        weights = (np.asarray(self.model.posterior_marginals) * mask).sum(axis=-1)
         return weights
 
     def _get_loh_weights(self):
-        states = np.where(np.asarray(self.model.is_loh) == 1)[0]
-        weights = np.asarray(self.model.posterior_marginals)[:, states].sum(axis=-1)
+        mask = np.zeros(self.model.posterior_marginals.shape)
+        n, s = np.where(np.asarray(self.model.is_loh) == 1)
+        mask[n, s] = 1
+        weights = (np.asarray(self.model.posterior_marginals) * mask).sum(axis=-1)
         return weights
 
     def get_param_sample_weight(self, name):
