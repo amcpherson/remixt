@@ -25,6 +25,7 @@ def create_extract_seqdata_workflow(
 
     bam_max_fragment_length = remixt.config.get_param(config, 'bam_max_fragment_length')
     bam_max_soft_clipped = remixt.config.get_param(config, 'bam_max_soft_clipped')
+    bam_check_proper_pair = remixt.config.get_param(config, 'bam_check_proper_pair')
 
     workflow = pypeliner.workflow.Workflow()
 
@@ -42,6 +43,7 @@ def create_extract_seqdata_workflow(
             mgd.InputInstance('chromosome'),
             bam_max_fragment_length,
             bam_max_soft_clipped,
+            bam_check_proper_pair,
         ),
     )
 

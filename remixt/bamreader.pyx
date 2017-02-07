@@ -24,7 +24,8 @@ cdef extern from "BamReader.h":
             string snpFilename,
             string chromosome,
             int maxFragmentLength,
-            int maxSoftClipped) except +
+            int maxSoftClipped,
+            bool checkProperPair) except +
         bool ReadAlignments(int maxAlignments) except +
         vector[FragmentData] mFragmentData
         vector[AlleleData] mAlleleData
@@ -57,8 +58,8 @@ def create_allele_table(nrows):
 
 cdef class AlleleReader:
     cdef CAlleleReader *thisptr
-    def __cinit__(self, bam_filename, snp_filename, chromosome, max_fragment_length, max_soft_clipped):
-        self.thisptr = new CAlleleReader(bam_filename, snp_filename, chromosome, max_fragment_length, max_soft_clipped)
+    def __cinit__(self, bam_filename, snp_filename, chromosome, max_fragment_length, max_soft_clipped, check_proper_pair):
+        self.thisptr = new CAlleleReader(bam_filename, snp_filename, chromosome, max_fragment_length, max_soft_clipped, check_proper_pair)
     def __dealloc__(self):
         del self.thisptr
     def ReadAlignments(self, max_alignments):

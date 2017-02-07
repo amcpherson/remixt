@@ -67,7 +67,8 @@ struct AlleleReader : BamTools::PileupVisitor, BamTools::DiscardAlignmentVisitor
 	             const std::string& snpFilename,
 	             const std::string& chromosome,
 	             int maxFragmentLength,
-	             int maxSoftClipped);
+	             int maxSoftClipped,
+	             bool checkProperPair);
 
 	void ReadSNPs(const std::string& snpFilename);
 
@@ -86,6 +87,7 @@ struct AlleleReader : BamTools::PileupVisitor, BamTools::DiscardAlignmentVisitor
 	
 	int mMaxFragmentLength;
 	int mMaxSoftClipped;
+	bool mCheckProperPair;
 	
 	std::deque<BamTools::BamAlignment> mReadQueue;
 	std::map<std::string,BamTools::BamAlignment> mReadBuffer[2];

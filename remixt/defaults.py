@@ -74,6 +74,10 @@ bam_max_fragment_length                     = 1000
 # Maximum soft clipped bases before a read is called discordant
 bam_max_soft_clipped                        = 8
 
+# Check proper pair flag for identifying concordant pairs,
+# disable for irregular fragment length distribution
+bam_check_proper_pair                       = True
+
 # Heterozygous snp calling
 sequencing_base_call_error                  = 0.01
 het_snp_call_threshold                      = 0.9

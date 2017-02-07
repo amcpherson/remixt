@@ -26,7 +26,7 @@ def _unique_index_append(store, key, data):
         store.append(key, data)
 
 
-def create_chromosome_seqdata(seqdata_filename, bam_filename, snp_filename, chromosome, max_fragment_length, max_soft_clipped):
+def create_chromosome_seqdata(seqdata_filename, bam_filename, snp_filename, chromosome, max_fragment_length, max_soft_clipped, check_proper_pair):
     """ Create seqdata from bam for one chromosome.
 
     Args:
@@ -36,6 +36,7 @@ def create_chromosome_seqdata(seqdata_filename, bam_filename, snp_filename, chro
         chromosome(str): chromosome to extract
         max_fragment_length(int): maximum length of fragments generating paired reads
         max_soft_clipped(int): maximum soft clipping for considering a read concordant
+        check_proper_pair(boo): check proper pair flag
 
     """
 
@@ -45,6 +46,7 @@ def create_chromosome_seqdata(seqdata_filename, bam_filename, snp_filename, chro
         chromosome,
         max_fragment_length,
         max_soft_clipped,
+        check_proper_pair,
     )
 
     with pd.HDFStore(seqdata_filename, 'w', complevel=9, complib='zlib') as store:

@@ -45,29 +45,32 @@ inline int GetOtherReadEnd(const BamAlignment& alignment)
 	return OtherReadEnd(GetReadEnd(alignment));
 }
 
-inline bool IsReadPairDiscordant(const BamAlignment& alignment, double maxFragmentLength)
+inline bool IsReadPairDiscordant(const BamAlignment& alignment, double maxFragmentLength, bool checkProperPair)
 {
-	return !(alignment.IsProperPair() &&
-			 alignment.InsertSize != 0 &&
-			 abs(alignment.InsertSize) <= maxFragmentLength);
+	return !((alignment.IsProperPair() || !checkProperPair) &&
+	         alignment.InsertSize != 0 &&
+	         abs(alignment.InsertSize) <= maxFragmentLength);
 }
 
 inline bool IsReadValidConcordant(const BamAlignment& alignment, double maxSoftClipped)
 {
 	return (GetNumSoftClipped(alignment) <= maxSoftClipped &&
-			!alignment.IsFailedQC());
+	        alignment.IsMapped() &&
+	        !alignment.IsFailedQC());
 }
 
 AlleleReader::AlleleReader(const string& bamFilename,
                            const string& snpFilename,
                            const string& chromosome,
                            int maxFragmentLength,
-                           int maxSoftClipped)
+                           int maxSoftClipped,
+                           bool checkProperPair)
 	: mChromosome(chromosome),
 	  mMaxFragmentLength(maxFragmentLength),
 	  mMaxSoftClipped(maxSoftClipped),
 	  mRefID(-1),
-	  mNextFragmentID(0)
+	  mNextFragmentID(0),
+	  mCheckProperPair(checkProperPair)
 {
 	if (!mBamReader.Open(bamFilename))
 	{
@@ -190,7 +193,7 @@ bool AlleleReader::ReadAlignments(int maxAlignments)
 		}
 
 		// Classify reads pairs as discordant and ignore
-		if (IsReadPairDiscordant(alignment, mMaxFragmentLength))
+		if (IsReadPairDiscordant(alignment, mMaxFragmentLength, mCheckProperPair))
 		{
 			continue;
 		}
