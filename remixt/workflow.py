@@ -150,7 +150,10 @@ def create_calc_bias_workflow(
         ctx={'mem': 16},
         func=remixt.analysis.stats.calculate_fragment_stats,
         ret=mgd.TempOutputObj('fragstats'),
-        args=(mgd.InputFile(tumour_seqdata_filename),)
+        args=(
+            mgd.InputFile(tumour_seqdata_filename),
+            config,
+        )
     )
 
     workflow.transform(

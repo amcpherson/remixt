@@ -2,6 +2,8 @@ import collections
 import numpy as np
 
 import remixt.seqdataio
+import remixt.config
+
 
 FragmentStats = collections.namedtuple('FragmentStats', [
     'fragment_mean',
@@ -9,7 +11,10 @@ FragmentStats = collections.namedtuple('FragmentStats', [
 ])
 
 
-def calculate_fragment_stats(seqdata_filename):
+def calculate_fragment_stats(seqdata_filename, config):
+
+    filter_duplicates = remixt.config.get_param(config, 'filter_duplicates')
+    map_qual_threshold = remixt.config.get_param(config, 'map_qual_threshold')
 
     sum_x = 0.
     sum_x2 = 0.
@@ -18,7 +23,13 @@ def calculate_fragment_stats(seqdata_filename):
     chromosomes = remixt.seqdataio.read_chromosomes(seqdata_filename)
 
     for chrom in chromosomes:
-        for chrom_reads in remixt.seqdataio.read_fragment_data(seqdata_filename, chrom, chunksize=1000000):
+        reads_iter = remixt.seqdataio.read_fragment_data(
+            seqdata_filename, chrom,
+            filter_duplicates=filter_duplicates,
+            map_qual_threshold=map_qual_threshold,
+            chunksize=1000000)
+
+        for chrom_reads in reads_iter:
             length = chrom_reads['end'].values - chrom_reads['start'].values
 
             sum_x += length.sum()

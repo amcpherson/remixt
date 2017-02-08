@@ -17,6 +17,7 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config, re
     position_offset = remixt.config.get_param(config, 'gc_position_offset')
     genome_fasta = remixt.config.get_filename(config, ref_data_dir, 'genome_fasta')
     mappability_filename = remixt.config.get_filename(config, ref_data_dir, 'mappability')
+    filter_duplicates = remixt.config.get_param(config, 'filter_duplicates')
     map_qual_threshold = remixt.config.get_param(config, 'map_qual_threshold')
 
     fragment_length = int(fragment_length)
@@ -84,7 +85,13 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config, re
         if chrom_id not in chromosomes:
             continue
 
-        for chrom_reads in remixt.seqdataio.read_fragment_data(seqdata_filename, chrom_id, chunksize=1000000):
+        reads_iter = remixt.seqdataio.read_fragment_data(
+            seqdata_filename, chrom_id,
+            filter_duplicates=filter_duplicates,
+            map_qual_threshold=map_qual_threshold,
+            chunksize=1000000)
+
+        for chrom_reads in reads_iter:
 
             # Calculate read start in concatenated genome
             chrom_reads['start'] += chrom_info.loc[chrom_id, 'chrom_start']

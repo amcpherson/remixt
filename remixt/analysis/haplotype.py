@@ -375,7 +375,7 @@ def count_allele_reads(seqdata_filename, haps, chromosome, segments, filter_dupl
     alleles = pd.concat(alleles, ignore_index=True)
 
     # Read fragment data with filtering
-    reads = remixt.seqdataio.read_filtered_fragment_data(
+    reads = remixt.seqdataio.read_fragment_data(
         seqdata_filename, chromosome,
         filter_duplicates=filter_duplicates,
         map_qual_threshold=map_qual_threshold,

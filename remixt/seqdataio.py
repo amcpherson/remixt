@@ -119,10 +119,13 @@ class Writer(object):
         self.store.close()
 
 
-def _read_seq_data_full(seqdata_filename, record_type, chromosome):
+_identity = lambda x: x
+
+
+def _read_seq_data_full(seqdata_filename, record_type, chromosome, post=_identity):
     key = _get_key(record_type, chromosome)
     try:
-        return pd.read_hdf(seqdata_filename, key)
+        return post(pd.read_hdf(seqdata_filename, key))
     except KeyError:
         return empty_data[record_type]
 
@@ -135,17 +138,17 @@ def _get_seq_data_nrows(seqdata_filename, key):
             return 0
 
 
-def _read_seq_data_chunks(seqdata_filename, record_type, chromosome, chunksize):
+def _read_seq_data_chunks(seqdata_filename, record_type, chromosome, chunksize, post=_identity):
     key = _get_key(record_type, chromosome)
     nrows = _get_seq_data_nrows(seqdata_filename, key)
     if nrows == 0:
         yield empty_data[record_type]
     else:
         for i in xrange(nrows//chunksize + 1):
-            yield pd.read_hdf(seqdata_filename, key, start=i*chunksize, stop=(i+1)*chunksize)
+            yield post(pd.read_hdf(seqdata_filename, key, start=i*chunksize, stop=(i+1)*chunksize))
 
 
-def read_seq_data(seqdata_filename, record_type, chromosome, chunksize=None):
+def read_seq_data(seqdata_filename, record_type, chromosome, chunksize=None, post=_identity):
     """ Read sequence data from a HDF seqdata file.
 
     Args:
@@ -155,6 +158,7 @@ def read_seq_data(seqdata_filename, record_type, chromosome, chunksize=None):
 
     KwArgs:
         chunksize (int): number of rows to stream at a time, None for the entire file
+        post (callable): post processing function
 
     Yields:
         pandas.DataFrame
@@ -162,12 +166,12 @@ def read_seq_data(seqdata_filename, record_type, chromosome, chunksize=None):
     """
 
     if chunksize is None:
-        return _read_seq_data_full(seqdata_filename, record_type, chromosome)
+        return _read_seq_data_full(seqdata_filename, record_type, chromosome, post=post)
     else:
-        return _read_seq_data_chunks(seqdata_filename, record_type, chromosome, chunksize)
+        return _read_seq_data_chunks(seqdata_filename, record_type, chromosome, chunksize, post=post)
 
 
-def read_fragment_data(seqdata_filename, chromosome, chunksize=None):
+def read_fragment_data(seqdata_filename, chromosome, filter_duplicates=False, map_qual_threshold=1, chunksize=None):
     """ Read fragment data from a HDF seqdata file.
 
     Args:
@@ -175,6 +179,8 @@ def read_fragment_data(seqdata_filename, chromosome, chunksize=None):
         chromosome (str): select specific chromosome, None for all chromosomes
 
     KwArgs:
+        filter_duplicates (bool): filter reads marked as duplicate
+        map_qual_threshold (int): filter reads with less than this mapping quality
         chunksize (int): number of rows to stream at a time, None for the entire file
 
     Yields:
@@ -184,7 +190,21 @@ def read_fragment_data(seqdata_filename, chromosome, chunksize=None):
 
     """
 
-    return read_seq_data(seqdata_filename, 'fragments', chromosome, chunksize=chunksize)
+    def filter_reads(reads):
+        # Filter duplicates if necessary
+        if 'is_duplicate' in reads and filter_duplicates is not None:
+            if filter_duplicates:
+                reads = reads[reads['is_duplicate'] == 0]
+            reads.drop(['is_duplicate'], axis=1, inplace=True)
+
+        # Filter poor quality reads
+        if 'mapping_quality' in reads and map_qual_threshold is not None:
+            reads = reads[reads['mapping_quality'] >= map_qual_threshold]
+            reads.drop(['mapping_quality'], axis=1, inplace=True)
+
+        return reads
+
+    return read_seq_data(seqdata_filename, 'fragments', chromosome, chunksize=chunksize, post=filter_reads)
 
 
 def read_allele_data(seqdata_filename, chromosome, chunksize=None):
@@ -225,37 +245,5 @@ def read_chromosomes(seqdata_filename):
                 chromosomes.add(key[key.index('chromosome_') + len('chromosome_'):])
 
         return chromosomes
-
-
-def read_filtered_fragment_data(seqdata_filename, chromosome, filter_duplicates=False, map_qual_threshold=1):
-    """ Read filtered fragment data from a HDF seqdata file.
-
-    Args:
-        seqdata_filename (str): name of seqdata file
-        chromosome (str): select specific chromosome, None for all chromosomes
-
-    KwArgs:
-        filter_duplicates (bool): filter reads marked as duplicate
-        map_qual_threshold (int): filter reads with less than this mapping quality
-
-    Yields:
-        pandas.DataFrame
-
-    Returned dataframe has columns 'fragment_id', 'start', 'end'
-
-    """
-
-    reads = remixt.seqdataio.read_fragment_data(seqdata_filename, chromosome)
-
-    # Filter duplicates if necessary
-    if filter_duplicates:
-        reads = reads[reads['is_duplicate'] == 1]
-
-    # Filter poor quality reads
-    reads = reads[reads['mapping_quality'] >= map_qual_threshold]
-
-    reads.drop(['is_duplicate', 'mapping_quality'], axis=1, inplace=True)
-
-    return reads
 
 
