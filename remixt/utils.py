@@ -21,6 +21,17 @@ class gaussian_kde_set_covariance(scipy.stats.gaussian_kde):
         self._norm_factor = np.sqrt(2*np.pi*self.covariance) * self.n
 
 
+class TempRandomSeed(object):
+    def __init__(self, seed=1234):
+        self.seed = seed
+    def __enter__(self):
+        self.rng_state = np.random.get_state()
+        return self
+    def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type is None:
+            np.random.set_state(self.rng_state)
+
+
 def filled_density(ax, data, c, a, xmin, xmax, cov, rotate=False):
     density = gaussian_kde_set_covariance(data, cov)
     xs = [xmin] + list(np.linspace(xmin, xmax, 2000)) + [xmax]
@@ -35,12 +46,10 @@ def filled_density(ax, data, c, a, xmin, xmax, cov, rotate=False):
         ax.fill(xs, ys, color=c, alpha=a)
 
 
-def weighted_resample(data, weights, num_samples=10000, randomize=False):
+def weighted_resample(data, weights, num_samples=10000):
     norm_weights = weights.astype(float) / float(weights.sum())
-    if randomize:
+    with TempRandomSeed():
         counts = np.random.multinomial(num_samples, norm_weights)
-    else:
-        counts = np.round(norm_weights * float(num_samples)).astype(int)
     samples = np.repeat(data, counts)
     return samples
 
@@ -48,12 +57,13 @@ def weighted_resample(data, weights, num_samples=10000, randomize=False):
 def filled_density_weighted(ax, data, weights, c, a, xmim, xmax, cov, rotate=False):
     weights = weights.astype(float)
     resample_prob = weights / weights.sum()
-    samples = np.random.choice(data, size=10000, replace=True, p=resample_prob)
+    with TempRandomSeed():
+        samples = np.random.choice(data, size=10000, replace=True, p=resample_prob)
     filled_density(ax, samples, c, a, xmim, xmax, cov, rotate=rotate)
 
 
-def weighted_percentile(data, weights, percentile, num_samples=10000, randomize=False):
-    data = weighted_resample(data, weights, num_samples=num_samples, randomize=randomize)
+def weighted_percentile(data, weights, percentile, num_samples=10000):
+    data = weighted_resample(data, weights, num_samples=num_samples)
     return np.percentile(data, percentile)
 
 
