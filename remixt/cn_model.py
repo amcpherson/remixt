@@ -491,7 +491,7 @@ class BreakpointModel(object):
             return -partial_h
 
         h_before = self.model.h
-        elbo_before = self.model.calculate_elbo()
+        elbo_before = self.model.calculate_expected_log_likelihood(np.ones((self.model.num_segments,), dtype=int))
 
         sample = self._create_sample()
 
@@ -518,7 +518,7 @@ class BreakpointModel(object):
                 raise ValueError('optimization failed\n{}'.format(result)) 
 
         self.model.h = result.x
-        elbo_after = self.model.calculate_elbo()
+        elbo_after = self.model.calculate_expected_log_likelihood(np.ones((self.model.num_segments,), dtype=int))
 
         if elbo_after < elbo_before:
             print '[{}] h rejected, elbo before: {}, after: {}'.format(_gettime(), elbo_before, elbo_after)
@@ -541,7 +541,7 @@ class BreakpointModel(object):
             return nll
 
         value_before = getattr(self.model, name)
-        elbo_before = self.model.calculate_elbo()
+        elbo_before = self.model.calculate_expected_log_likelihood(np.ones((self.model.num_segments,), dtype=int))
 
         sample = self._create_sample(weights)
 
@@ -552,7 +552,7 @@ class BreakpointModel(object):
             full_output=True,
         )
 
-        elbo_after = self.model.calculate_elbo()
+        elbo_after = self.model.calculate_expected_log_likelihood(np.ones((self.model.num_segments,), dtype=int))
         if elbo_after < elbo_before:
             print '[{}] {} rejected, elbo before: {}, after: {}'.format(_gettime(), name, elbo_before, elbo_after)
             setattr(self.model, name, value_before)

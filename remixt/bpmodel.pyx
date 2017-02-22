@@ -413,6 +413,7 @@ cdef class RemixtModel:
     cdef public np.float64_t hmm_log_norm_const
     cdef public np.float64_t[:, :] framelogprob
     cdef public np.float64_t[:, :, :] log_transmat
+    cdef public np.float64_t[:, :, :] cached_log_transmat
     cdef public np.float64_t[:, :] posterior_marginals
     cdef public np.float64_t[:, :, :] joint_posterior_marginals
 
@@ -546,6 +547,7 @@ cdef class RemixtModel:
         self.hmm_log_norm_const = 0.
         self.framelogprob = np.ones((self.num_segments, self.num_cn_states))
         self.log_transmat = np.zeros((self.num_segments - 1, self.num_cn_states, self.num_cn_states))
+        self.cached_log_transmat = np.zeros((self.num_segments - 1, self.num_cn_states, self.num_cn_states))
         self.posterior_marginals = np.zeros((self.num_segments, self.num_cn_states))
         self.joint_posterior_marginals = np.zeros((self.num_segments - 1, self.num_cn_states, self.num_cn_states))
 
@@ -589,6 +591,9 @@ cdef class RemixtModel:
         self._p_d = np.zeros(((self.cn_max + 1) * 2,))
         self._allele_cn_change = np.zeros((2,))
 
+        # Cached transmat expecation for elbo calc, updated with p_breakpoint
+        self.calculate_log_transmat(self.cached_log_transmat)
+
     @cython.profile(False)
     cdef inline np.float64_t calc_transition(self, np.float64_t cn_diff):
         """ Calculate transition function for a copy number difference.
@@ -629,9 +634,9 @@ cdef class RemixtModel:
         """
         cdef int n, m, d, s_b, s_1, s_2, flip, allele
 
-        for n in range(0, self.num_segments - 1):
-            log_transmat[n, :, :] = 0.
+        log_transmat[:] = 0.
 
+        for n in range(0, self.num_segments - 1):
             if self.is_telomere[n] > 0:
                 continue
 
@@ -967,7 +972,9 @@ cdef class RemixtModel:
 
         for k in range(self.num_breakpoints):
             _exp_normalize(self.p_breakpoint[k, :], log_p_breakpoint[k, :])
-    
+
+        self.calculate_log_transmat(self.cached_log_transmat)
+
     cpdef void update_p_outlier_total(self) except *:
         """ Update the total read count outlier indicator approximating distributions.
         """
@@ -1046,8 +1053,6 @@ cdef class RemixtModel:
         approximating distribution.
         """
 
-        cdef np.ndarray[np.float64_t, ndim=3] log_transmat = np.empty((self.num_segments - 1, self.num_cn_states, self.num_cn_states))
-
         cdef int n, s, s_, u, v, w
         cdef np.float64_t energy = 0.
         
@@ -1095,11 +1100,10 @@ cdef class RemixtModel:
                 log(self.prior_outlier_allele))
 
         # Transitions factor
-        self.calculate_log_transmat(log_transmat)
         for n in range(0, self.num_segments - 1):
             for s in range(self.num_cn_states):
                 for s_ in range(self.num_cn_states):
-                    energy += self.joint_posterior_marginals[n, s, s_] * log_transmat[n, s, s_]
+                    energy += self.joint_posterior_marginals[n, s, s_] * self.cached_log_transmat[n, s, s_]
 
         return energy
 
