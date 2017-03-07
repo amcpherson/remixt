@@ -582,6 +582,16 @@ def evaluate_results(genome_mixture, cn_table, brk_cn_table, mix_pred):
 
     assert genome_mixture.M == 3
 
+    # Return empty evaluation for empty results
+    if len(cn_table.index) == 0 or mix_pred.shape[0] == 0:
+        empty_results = {
+            'brk_cn_evaluation': pd.Series(),
+            'brk_cn_table': pd.DataFrame(),
+            'cn_evaluation': pd.Series(),
+            'mix_results': pd.Series()}
+
+        return empty_results
+
     cn_table = cn_table.copy()
     brk_cn_table = brk_cn_table.copy()
     mix_true = genome_mixture.frac.copy()
