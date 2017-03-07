@@ -275,6 +275,11 @@ def reindex_segments(cn_1, cn_2):
 
     """
 
+    if len(cn_1.index) == 0 or len(cn_2.index) == 0:
+        empty = pd.DataFrame(columns=['chromosome', 'start', 'end', 'idx_1', 'idx_2'], dtype=int)
+        empty['chromosome'] = empty['chromosome'].astype(str)
+        return empty
+
     reseg = list()
 
     for chromosome, chrom_cn_1 in cn_1.groupby('chromosome'):
