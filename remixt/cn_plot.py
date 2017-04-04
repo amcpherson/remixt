@@ -143,6 +143,7 @@ def plot_cnv_genome(ax, cnv, mincopies=-0.4, maxcopies=4, minlength=1000, major_
 
     plot_cnv_segments(ax, cnv, major_col=major_col, minor_col=minor_col, do_fill=do_fill)
 
+    ax.set_yticks(range(int(mincopies), int(maxcopies - mincopies) + 1))
     ax.set_ylim((mincopies, maxcopies))
     ax.set_yticklabels(ax.get_yticks(), ha='left')
     ax.yaxis.tick_left()
