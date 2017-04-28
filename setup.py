@@ -35,12 +35,13 @@ extensions = [
         sources=['remixt/bamreader.pyx', 'src/BamReader.cpp'] + bamtools_sources,
         include_dirs=['src', external_dir, bamtools_dir, numpy.get_include()],
         libraries=['z', 'bz2'],
+        extra_compile_args=['-g'],
     ),
     Extension(
         name='remixt.bpmodel',
         sources=['remixt/bpmodel.pyx'],
         include_dirs=[numpy.get_include()],
-        extra_compile_args=["-Wno-unused-function"],
+        extra_compile_args=['-g', '-Wno-unused-function'],
     ),
 ]
 
