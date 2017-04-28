@@ -28,7 +28,7 @@ def _gettime():
 
 class BreakpointModel(object):
 
-    def __init__(self, h_init, x, l, adjacencies, breakpoints, **kwargs):
+    def __init__(self, x, l, adjacencies, breakpoints, **kwargs):
         """ Create a copy number model.
 
         Args:
@@ -54,7 +54,6 @@ class BreakpointModel(object):
         # Observed data should be ordered as major, minor, total
         assert np.all(x[:, 1] <= x[:, 0])
 
-        self.M = h_init.shape[0]
         self.N = x.shape[0]
 
         self.breakpoint_ids, self.breakpoints = zip(*breakpoints.iteritems())
@@ -78,10 +77,6 @@ class BreakpointModel(object):
 
         if not self.normal_contamination:
             self.normal_copies = self.normal_copies * 0
-
-        cn_states = self.create_cn_states(self.M, 2, self.max_copy_number, self.max_copy_number_diff)
-        cn_states = np.array([cn_states] * self.N)
-        cn_states[:, :, 0, :] = self.normal_copies[:, np.newaxis, :]
 
         # The factor graph model for breakpoint copy number allows only a single breakend
         # interposed between each pair of adjacent segments.  Where multiple breakends are
@@ -110,13 +105,13 @@ class BreakpointModel(object):
         self.seg_is_original = np.zeros(self.N1, dtype=bool)
         
         # Mapping from new segment index to old segment index
-        seg_rev_remap = np.zeros(self.N1, dtype=int)
+        self.seg_rev_remap = np.zeros(self.N1, dtype=int)
         
         # Create variables required for lower level model object
-        num_breakpoints = len(self.breakpoints)
-        is_telomere = np.ones(self.N1, dtype=int)
-        breakpoint_idx = -np.ones(self.N1, dtype=int)
-        breakpoint_orient = np.zeros(self.N1, dtype=int)
+        self.num_breakpoints = len(self.breakpoints)
+        self.is_telomere = np.ones(self.N1, dtype=int)
+        self.breakpoint_idx = -np.ones(self.N1, dtype=int)
+        self.breakpoint_orient = np.zeros(self.N1, dtype=int)
 
         # Index of new segmentation
         n_new = 0
@@ -132,12 +127,12 @@ class BreakpointModel(object):
             if n in breakpoint_segment:
                 for bp_idx, be_idx, orient in breakpoint_segment[n]:
                     # Breakpoint index and orientation based on n_new
-                    breakpoint_idx[n_new] = bp_idx
-                    breakpoint_orient[n_new] = orient
-                    seg_rev_remap[n_new] = n
+                    self.breakpoint_idx[n_new] = bp_idx
+                    self.breakpoint_orient[n_new] = orient
+                    self.seg_rev_remap[n_new] = n
 
                     # Breakpoint incident segments cannot be telomeres
-                    is_telomere[n_new] = 0
+                    self.is_telomere[n_new] = 0
 
                     # Next new segment, per introduced breakend
                     n_new += 1
@@ -145,8 +140,8 @@ class BreakpointModel(object):
                 # If a breakend is at a telomere, create an additional new segment to be the telomere
                 if (n, n + 1) not in adjacencies:
                     # Mark as a telomere
-                    is_telomere[n_new] = 1
-                    seg_rev_remap[n_new] = n
+                    self.is_telomere[n_new] = 1
+                    self.seg_rev_remap[n_new] = n
 
                     # Next new segment, after telomere
                     n_new += 1
@@ -154,24 +149,21 @@ class BreakpointModel(object):
             elif n >= 0:
                 # If n is not a telomere, n_new is not a telomere
                 if (n, n + 1) in adjacencies:
-                    is_telomere[n_new] = 0
+                    self.is_telomere[n_new] = 0
 
-                seg_rev_remap[n_new] = n
+                self.seg_rev_remap[n_new] = n
 
                 # Next new segment
                 n_new += 1
 
-        assert not np.any((breakpoint_idx >= 0) & (is_telomere == 1))
-        assert np.all(np.bincount(breakpoint_idx[breakpoint_idx >= 0]) == 2)
+        assert not np.any((self.breakpoint_idx >= 0) & (self.is_telomere == 1))
+        assert np.all(np.bincount(self.breakpoint_idx[self.breakpoint_idx >= 0]) == 2)
 
         self.x1 = np.zeros((self.N1, x.shape[1]), dtype=float)
         self.l1 = np.zeros((self.N1,), dtype=float)
 
         self.x1[self.seg_fwd_remap, :] = x
         self.l1[self.seg_fwd_remap] = l
-
-        # Remap cn states
-        cn_states = cn_states[seg_rev_remap, :, :, :]
 
         # Mask likelihood of poorly modelled segments
         self.total_likelihood_mask = np.array([True] * len(self.l1))
@@ -192,32 +184,9 @@ class BreakpointModel(object):
 
         # Optionally disable integrated breakpoint copy number inference
         if self.disable_breakpoints:
-            num_breakpoints = 0
-            breakpoint_idx = -np.ones(breakpoint_idx.shape, dtype=int)
-            breakpoint_orient = np.zeros(breakpoint_orient.shape, dtype=int)
-
-        brk_states = self.create_brk_states(self.M, self.max_copy_number, self.max_copy_number_diff)
-
-        self.model = remixt.bpmodel.RemixtModel(
-            self.M,
-            self.N1,
-            num_breakpoints,
-            self.normal_contamination,
-            cn_states,
-            brk_states,
-            h_init,
-            self.l1,
-            self.x1[:, 2],
-            self.x1[:, 0:2],
-            is_telomere,
-            breakpoint_idx,
-            breakpoint_orient,
-            self.transition_log_prob,
-            self.divergence_weight,
-        )
-
-        self.model.total_likelihood_mask = self.total_likelihood_mask.astype(int)
-        self.model.allele_likelihood_mask = self.allele_likelihood_mask.astype(int)
+            self.num_breakpoints = 0
+            self.breakpoint_idx = -np.ones(self.breakpoint_idx.shape, dtype=int)
+            self.breakpoint_orient = np.zeros(self.breakpoint_orient.shape, dtype=int)
 
         self.check_elbo = True
         self.prev_elbo = None
@@ -254,23 +223,6 @@ class BreakpointModel(object):
             'betabin_loh_M_0': (10., 2000.),
             'betabin_loh_M_1': (1., 200.),
         }
-
-        if self.breakpoint_init is not None:
-            p_breakpoint = np.ones((self.model.num_breakpoints, self.model.num_brk_states))
-            brk_states = np.array(self.model.brk_states)
-
-            for k, bp in enumerate(self.breakpoints):
-                cn = self.breakpoint_init[bp]
-
-                for s in xrange(self.model.num_brk_states):
-                    if np.all(cn == brk_states[s]):
-                        p_breakpoint[k, s] = 1000.
-
-            p_breakpoint /= np.sum(p_breakpoint, axis=-1)[:, np.newaxis]
-
-            self.model.p_breakpoint = p_breakpoint
-
-        self.model.transition_model = self.transition_model
 
     def create_cn_states(self, num_clones, num_alleles, cn_max, cn_diff_max):
         """ Create a list of allele specific copy number states for a single segment.
@@ -398,9 +350,58 @@ class BreakpointModel(object):
             print 'nothing for ' + name
             return None
 
-    def fit(self):
+    def fit(self, h_init):
         """ Fit the model with a series of updates.
         """
+        M = h_init.shape[0]
+
+        cn_states = self.create_cn_states(M, 2, self.max_copy_number, self.max_copy_number_diff)
+        cn_states = np.array([cn_states] * self.N)
+        cn_states[:, :, 0, :] = self.normal_copies[:, np.newaxis, :]
+
+        # Remap cn states
+        cn_states = cn_states[self.seg_rev_remap, :, :, :]
+
+        brk_states = self.create_brk_states(M, self.max_copy_number, self.max_copy_number_diff)
+
+        self.model = remixt.bpmodel.RemixtModel(
+            M,
+            self.N1,
+            self.num_breakpoints,
+            self.normal_contamination,
+            cn_states,
+            brk_states,
+            h_init,
+            self.l1,
+            self.x1[:, 2],
+            self.x1[:, 0:2],
+            self.is_telomere,
+            self.breakpoint_idx,
+            self.breakpoint_orient,
+            self.transition_log_prob,
+            self.divergence_weight,
+        )
+
+        self.model.total_likelihood_mask = self.total_likelihood_mask.astype(int)
+        self.model.allele_likelihood_mask = self.allele_likelihood_mask.astype(int)
+
+        if self.breakpoint_init is not None:
+            p_breakpoint = np.ones((self.model.self.num_breakpoints, self.model.num_brk_states))
+            brk_states = np.array(self.model.brk_states)
+
+            for k, bp in enumerate(self.breakpoints):
+                cn = self.breakpoint_init[bp]
+
+                for s in xrange(self.model.num_brk_states):
+                    if np.all(cn == brk_states[s]):
+                        p_breakpoint[k, s] = 1000.
+
+            p_breakpoint /= np.sum(p_breakpoint, axis=-1)[:, np.newaxis]
+
+            self.model.p_breakpoint = p_breakpoint
+
+        self.model.transition_model = self.transition_model
+
         if self.prev_elbo is None:
             self.prev_elbo = self.model.calculate_elbo()
 

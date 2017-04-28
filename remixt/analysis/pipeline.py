@@ -168,7 +168,6 @@ def fit(experiment, init_params, config):
             raise Exception('inconsistent allele read counts for chromosome X')
 
     model = remixt.cn_model.BreakpointModel(
-        h_init,
         experiment.x,
         experiment.l,
         experiment.adjacencies,
@@ -187,7 +186,7 @@ def fit(experiment, init_params, config):
     model.num_em_iter = num_em_iter
     model.num_update_iter = num_update_iter
     
-    model.fit()
+    model.fit(h_init)
 
     fit_results = dict()
 
