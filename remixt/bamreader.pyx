@@ -8,7 +8,7 @@ from libcpp.string cimport string
 from libcpp cimport bool
 from libcpp.vector cimport vector
 
-cdef extern from "BamReader.h":
+cdef extern from "BamAlleleReader.h":
     cdef cppclass FragmentData:
         int fragmentID
         int fragmentStart

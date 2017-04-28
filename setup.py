@@ -32,7 +32,7 @@ if 'linux' in sys.platform:
 extensions = [
     Extension(
         name='remixt.bamreader',
-        sources=['remixt/bamreader.pyx', 'src/BamReader.cpp'] + bamtools_sources,
+        sources=['remixt/bamreader.pyx', 'src/BamAlleleReader.cpp'] + bamtools_sources,
         include_dirs=['src', external_dir, bamtools_dir, numpy.get_include()],
         libraries=['z', 'bz2'],
         extra_compile_args=['-g'],

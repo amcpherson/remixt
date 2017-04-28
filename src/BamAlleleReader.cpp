@@ -1,4 +1,4 @@
-#include "BamReader.h"
+#include "BamAlleleReader.h"
 #include "external/bamtools/src/api/BamReader.h"
 #include "external/bamtools/src/utils/bamtools_pileup_engine.h"
 
