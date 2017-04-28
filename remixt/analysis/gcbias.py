@@ -199,6 +199,7 @@ class GCCurve(object):
         with open(gc_dist_filename, 'r') as f:
             self.gc_lowess = np.array(f.readlines(), dtype=float)
         self.gc_lowess /= self.gc_lowess.sum()
+        self.cache = {}
 
     def predict(self, x):
         """ Calculate GC probability from percent
@@ -209,7 +210,9 @@ class GCCurve(object):
     def table(self, l):
         """ Tabulate GC probabilities for a specific fragment length
         """
-        return np.array([self.predict(float(x)/float(l)) for x in xrange(0, l + 1)])
+        if l not in self.cache:
+            self.cache[l] = np.array([self.predict(float(x)/float(l)) for x in xrange(0, l + 1)])
+        return self.cache[l]
 
 
 def gc_map_bias(segment_filename, fragment_mean, fragment_stddev, gc_dist_filename, bias_filename, config, ref_data_dir):
@@ -241,6 +244,7 @@ def calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_file
 
     fragment_min = int(fragment_dist.ppf(0.01) - 1.)
     fragment_max = int(fragment_dist.ppf(0.99) + 1.)
+    fragment_step = 10
 
     for chromosome, chrom_seg in segments.groupby('chromosome', sort=False):
         gc_cumsum = read_gc_cumsum(genome_fasta, chromosome)
@@ -249,19 +253,19 @@ def calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_file
 
         for idx, (start, end) in chrom_seg[['start', 'end']].iterrows():
             segments.loc[idx, 'bias'] = calculate_segment_gc_map_bias(gc_cumsum[start:end], mappability[start:end],
-                gc_dist, fragment_dist, fragment_min, fragment_max, position_offset, read_length,
+                gc_dist, fragment_dist, fragment_min, fragment_max, fragment_step, position_offset, read_length,
                 do_gc=do_gc, do_map=do_map)
 
     return segments
 
 
-def calculate_segment_gc_map_bias(gc_cumsum, mappability, gc_dist, fragment_dist, fragment_min, fragment_max, position_offset, read_length,
+def calculate_segment_gc_map_bias(gc_cumsum, mappability, gc_dist, fragment_dist, fragment_min, fragment_step, fragment_max, position_offset, read_length,
         do_gc=True, do_map=True):
     """ Calculate GC/mappability bias
     """
     bias = 0.
 
-    for fragment_length in xrange(fragment_min, fragment_max+1):
+    for fragment_length in xrange(fragment_min, fragment_max+1, fragment_step):
         if fragment_length < read_length:
             continue
 
