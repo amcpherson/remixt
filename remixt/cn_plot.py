@@ -164,7 +164,7 @@ def plot_cnv_genome(ax, cnv, mincopies=-0.4, maxcopies=4, minlength=1000, major_
         plot_start = start + chromosome_info.loc[chromosome, 'start']
         plot_end = end + chromosome_info.loc[chromosome, 'start']
         ax.set_xlim((plot_start, plot_end))
-        ax.set_xlabel('chromosome ' + chromosome, fontsize=20)
+        ax.set_xlabel('Chromosome ' + chromosome, fontsize=14)
         if tick_step is None:
             tick_step = (end - start) / 12.
             tick_step = np.round(tick_step, decimals=-int(np.floor(np.log10(tick_step))))
