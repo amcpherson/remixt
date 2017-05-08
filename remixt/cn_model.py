@@ -188,7 +188,7 @@ class BreakpointModel(object):
             self.breakpoint_idx = -np.ones(self.breakpoint_idx.shape, dtype=int)
             self.breakpoint_orient = np.zeros(self.breakpoint_orient.shape, dtype=int)
 
-        self.check_elbo = True
+        self.check_elbo = False
         self.prev_elbo = None
         self.prev_elbo_diff = None
         self.num_em_iter = 1
