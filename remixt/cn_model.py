@@ -166,21 +166,21 @@ class BreakpointModel(object):
         self.l1[self.seg_fwd_remap] = l
 
         # Mask likelihood of poorly modelled segments
-        self.total_likelihood_mask = np.array([True] * len(self.l1))
-        self.allele_likelihood_mask = np.array([True] * len(self.l1))
+        self._total_likelihood_mask = np.array([True] * len(self.l1))
+        self._allele_likelihood_mask = np.array([True] * len(self.l1))
 
         # Add segment length mask
-        self.total_likelihood_mask &= (self.l1 >= self.min_segment_length)
-        self.allele_likelihood_mask &= (self.l1 >= self.min_segment_length)
+        self._total_likelihood_mask &= (self.l1 >= self.min_segment_length)
+        self._allele_likelihood_mask &= (self.l1 >= self.min_segment_length)
 
         # Add proportion genotyped mask
         p = self.x1[:,:2].sum(axis=1).astype(float) / (self.x1[:,2].astype(float) + 1e-16)
-        self.allele_likelihood_mask &= (p >= self.min_proportion_genotyped)
+        self._allele_likelihood_mask &= (p >= self.min_proportion_genotyped)
         
         # Add amplification mask based on max depth
         depth = self.x1[:,2].astype(float) / (self.l1.astype(float) + 1e-16)
-        self.total_likelihood_mask &= (depth <= self.max_depth)
-        self.allele_likelihood_mask &= (depth <= self.max_depth)
+        self._total_likelihood_mask &= (depth <= self.max_depth)
+        self._allele_likelihood_mask &= (depth <= self.max_depth)
 
         # Optionally disable integrated breakpoint copy number inference
         if self.disable_breakpoints:
@@ -382,8 +382,8 @@ class BreakpointModel(object):
             self.divergence_weight,
         )
 
-        self.model.total_likelihood_mask = self.total_likelihood_mask.astype(int)
-        self.model.allele_likelihood_mask = self.allele_likelihood_mask.astype(int)
+        self.model.total_likelihood_mask = self._total_likelihood_mask.astype(int)
+        self.model.allele_likelihood_mask = self._allele_likelihood_mask.astype(int)
 
         if self.breakpoint_init is not None:
             p_breakpoint = np.ones((self.model.self.num_breakpoints, self.model.num_brk_states))
