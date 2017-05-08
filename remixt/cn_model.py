@@ -604,6 +604,22 @@ class BreakpointModel(object):
     def p_breakpoint(self):
         return np.asarray(self.model.p_breakpoint)
 
+    @property
+    def p_outlier_total(self):
+        return np.asarray(self.model.p_outlier_total)[self.seg_fwd_remap]
+
+    @property
+    def p_outlier_allele(self):
+        return np.asarray(self.model.p_outlier_allele)[self.seg_fwd_remap]
+
+    @property
+    def total_likelihood_mask(self):
+        return np.asarray(self.model.total_likelihood_mask)[self.seg_fwd_remap]
+
+    @property
+    def allele_likelihood_mask(self):
+        return np.asarray(self.model.allele_likelihood_mask)[self.seg_fwd_remap]
+
 
 def decode_breakpoints_naive(cn, adjacencies, breakpoints):
     """ Naive decoding of breakpoint copy number.  Finds most likely set of copy numbers given h.

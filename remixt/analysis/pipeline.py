@@ -199,6 +199,10 @@ def fit(experiment, init_params, config):
     fit_results['h'] = model.h
     fit_results['cn'] = cn
     fit_results['brk_cn'] = brk_cn
+    fit_results['p_outlier_total'] = model.p_outlier_total
+    fit_results['p_outlier_allele'] = model.p_outlier_allele
+    fit_results['total_likelihood_mask'] = model.total_likelihood_mask
+    fit_results['allele_likelihood_mask'] = model.allele_likelihood_mask
 
     # Save estimation statistics
     fit_results['stats'] = dict()
@@ -220,7 +224,7 @@ def fit(experiment, init_params, config):
     fit_results['stats']['divergence_weight'] = init_params['divergence_weight']
 
     return fit_results
-    
+
 
 def store_fit_results(store, experiment, fit_results, key_prefix):
     h = fit_results['h']
@@ -229,6 +233,12 @@ def store_fit_results(store, experiment, fit_results, key_prefix):
 
     # Create copy number table
     cn_table = remixt.analysis.experiment.create_cn_table(experiment, cn, h)
+
+    # Add columns for outlier / masked status
+    cn_table['prob_is_outlier_total'] = fit_results['p_outlier_total'][1, :]
+    cn_table['prob_is_outlier_allele'] = fit_results['p_outlier_allele'][1, :]
+    cn_table['total_likelihood_mask'] = fit_results['total_likelihood_mask']
+    cn_table['allele_likelihood_mask'] = fit_results['allele_likelihood_mask']
 
     brk_cn_table = remixt.analysis.experiment.create_brk_cn_table(brk_cn, experiment.breakpoint_segment_data)
 
