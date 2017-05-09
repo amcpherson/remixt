@@ -235,8 +235,8 @@ def store_fit_results(store, experiment, fit_results, key_prefix):
     cn_table = remixt.analysis.experiment.create_cn_table(experiment, cn, h)
 
     # Add columns for outlier / masked status
-    cn_table['prob_is_outlier_total'] = fit_results['p_outlier_total'][1, :]
-    cn_table['prob_is_outlier_allele'] = fit_results['p_outlier_allele'][1, :]
+    cn_table['prob_is_outlier_total'] = fit_results['p_outlier_total'][:, 1]
+    cn_table['prob_is_outlier_allele'] = fit_results['p_outlier_allele'][:, 1]
     cn_table['total_likelihood_mask'] = fit_results['total_likelihood_mask']
     cn_table['allele_likelihood_mask'] = fit_results['allele_likelihood_mask']
 
