@@ -119,7 +119,7 @@ def create_resample_simulation_workflow(
 
     workflow.transform(
         name='resample_normal_data',
-        ctx={'mem': 16},
+        ctx={'mem': 128},
         func=remixt.simulations.pipeline.resample_normal_data,
         args=(
             mgd.OutputFile(normal_filename),
@@ -132,7 +132,7 @@ def create_resample_simulation_workflow(
 
     workflow.transform(
         name='resample_tumour_data',
-        ctx={'mem': 16},
+        ctx={'mem': 128},
         func=remixt.simulations.pipeline.resample_tumour_data,
         args=(
             mgd.OutputFile(tumour_filename),
