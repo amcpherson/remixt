@@ -1187,9 +1187,8 @@ def _sample_negbin_mix(mu, r_0, r_1, mix):
     x_0 = _sample_negbin(mu, r_0)
     x_1 = _sample_negbin(mu, r_1)
     is_0 = np.random.random(size=x_0.shape) > mix
-    print is_0.sum()
     x = np.where(is_0, x_0, x_1)
-    return x
+    return x, is_0
 
 
 def _sample_betabin(n, p, M):
@@ -1202,9 +1201,8 @@ def _sample_betabin_mix(n, p, M_0, M_1, mix):
     x_0 = _sample_betabin(n, p, M_0)
     x_1 = _sample_betabin(n, p, M_1)
     is_0 = np.random.random(size=x_0.shape) > mix
-    print is_0.sum()
     x = np.where(is_0, x_0, x_1)
-    return x
+    return x, is_0
 
 
 class ExperimentSampler(object):
@@ -1276,16 +1274,19 @@ class ExperimentSampler(object):
             betabin_M_1 = self.params.get('betabin_M_1', 10.)
             betabin_mix = self.params.get('betabin_mix', 0.01)
 
-            x_total = _sample_negbin_mix(mu[:, 2] + 1e-16, negbin_r_0, negbin_r_1, negbin_mix)
+            x_total, x_total_is_0 = _sample_negbin_mix(mu[:, 2] + 1e-16, negbin_r_0, negbin_r_1, negbin_mix)
 
             allele_total = (phi * x_total).astype(int)
             p_true = mu[:, 0] / (mu[:, 0:2].sum(axis=1) + 1e-16)
-            x_allele_1 = _sample_betabin_mix(allele_total, p_true, betabin_M_0, betabin_M_1, betabin_mix)
+            x_allele_1, x_allele_1_is_0 = _sample_betabin_mix(allele_total, p_true, betabin_M_0, betabin_M_1, betabin_mix)
             x_allele_2 = allele_total - x_allele_1
 
             x[:, 2] = x_total
             x[:, 0] = x_allele_1
             x[:, 1] = x_allele_2
+
+            extra_params['is_outlier_total'] = ~x_total_is_0
+            extra_params['is_outlier_allele'] = ~x_allele_1_is_0
 
         elif self.emission_model == 'normal':
             x = np.zeros(mu.shape)
