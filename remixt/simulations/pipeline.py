@@ -572,7 +572,7 @@ def evaluate_results(genome_mixture, cn_table, brk_cn_table, mix_pred):
         mix_pred (numpy.array): predicted mixture
 
     Returns:
-        dict: dictionary of pandas.DataFrame with evaluation statistics
+        dict: dictionary of pandas.DataFrame and pandas.Series with evaluation statistics
 
     Predicted copy number data `cn_table` should have columns 'chromosome', 'start', 'end',
     in addition to either 'major_m', 'minor_m' for clone 'm', or 'total_m' for allele non-specific
@@ -639,6 +639,50 @@ def evaluate_results(genome_mixture, cn_table, brk_cn_table, mix_pred):
     return results
 
 
+def evaluate_likelihood_results(
+    experiment,
+    cn_data_table,
+):
+    """ Experiment specific performance evaluation.
+
+    Args:
+        experiment (Experiment): experiment object
+        cn_data_table (str): copy number table
+
+    Returns:
+        dict: dictionary of pandas.DataFrame and pandas.Series with evaluation statistics
+    """
+
+    sim_segments = pd.DataFrame({
+        'chromosome': experiment.genome_mixture.segment_chromosome_id,
+        'start': experiment.genome_mixture.segment_start,
+        'end': experiment.genome_mixture.segment_end,
+    })
+
+    cn_data_index = remixt.segalg.reindex_segments(sim_segments, cn_data_table)
+
+    is_outlier_total_pred = cn_data_table['prob_is_outlier_total'] > 0.5
+    is_outlier_allele_pred = cn_data_table['prob_is_outlier_allele'] > 0.5
+
+    is_outlier_total_true = experiment.is_outlier_total[cn_data_index['idx_1'].values]
+    is_outlier_allele_true = experiment.is_outlier_allele[cn_data_index['idx_1'].values]
+
+    is_outlier_total_pred = is_outlier_total_pred[cn_data_index['idx_2'].values]
+    is_outlier_allele_pred = is_outlier_allele_pred[cn_data_index['idx_2'].values]
+
+    is_outlier_total_correct = is_outlier_total_true == is_outlier_total_pred
+    is_outlier_allele_correct = is_outlier_allele_true == is_outlier_allele_pred
+
+    segment_lengths = (cn_data_index['end'] - cn_data_index['start']).values
+
+    evaluation = {}
+    evaluation['correct_outlier_total_proportion'] = (is_outlier_total_correct * segment_lengths).sum() / segment_lengths.sum()
+    evaluation['correct_outlier_allele_proportion'] = (is_outlier_allele_correct * segment_lengths).sum() / segment_lengths.sum()
+    evaluation = pd.Series(evaluation)
+
+    return {'outlier_evaluation': evaluation}
+
+
 def evaluate_results_task(
     evaluation_filename,
     results_filename,
@@ -674,6 +718,9 @@ def evaluate_results_task(
         raise ValueError('either mixture_filename or experiment_filename must be set')
 
     evaluation = evaluate_results(mixture, cn_table, brk_cn_table, mix_pred)
+
+    if experiment_filename is not None:
+        evaluation.update(evaluate_likelihood_results(experiment, cn_table))
 
     with pd.HDFStore(evaluation_filename, 'w') as store:
         for key, data in evaluation.iteritems():
