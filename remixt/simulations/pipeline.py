@@ -704,7 +704,9 @@ def evaluate_results_task(
 
     with pd.HDFStore(results_filename, 'r') as store:
         cn_table = store[key_prefix + '/cn']
-        brk_cn_table = store[key_prefix + '/brk_cn']
+        brk_cn_table = pd.DataFrame(columns=['prediction_id', 'cn_1', 'cn_2'])
+        if key_prefix + '/brk_cn' in store:
+            brk_cn_table = store[key_prefix + '/brk_cn']
         mix_pred = store[key_prefix + '/mix'].values
 
     if mixture_filename is not None:
