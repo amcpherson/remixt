@@ -259,7 +259,7 @@ def calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_file
     return segments
 
 
-def calculate_segment_gc_map_bias(gc_cumsum, mappability, gc_dist, fragment_dist, fragment_min, fragment_step, fragment_max, position_offset, read_length,
+def calculate_segment_gc_map_bias(gc_cumsum, mappability, gc_dist, fragment_dist, fragment_min, fragment_max, fragment_step, position_offset, read_length,
         do_gc=True, do_map=True):
     """ Calculate GC/mappability bias
     """
