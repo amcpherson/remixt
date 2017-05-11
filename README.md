@@ -175,6 +175,51 @@ There is an experimental viewer for ReMixT at `tools/remixt_viewer_app.py`.  Bok
 
 Then navigate to `http://127.0.0.1:5006/remixt`.
 
+## Test Dataset for ReMixT
+
+A test dataset is provided for providing the ability to run a quick analysis of a small dataset to ensure remixt is working correctly.
+
+We will assume that the `REMIXT_DIR` environment variable points to a clone of the ReMixT source code.  Additionally, create a directory, and set the environment variable `WORK_DIR` to the location of that directory.
+
+First use the `remixt create_ref_data` sub-command to create a reference dataset.  Specify a config, and use the example config that restricts to chromosome 15.
+
+    remixt create_ref_data $WORK_DIR/ref_data \
+        --config $REMIXT_DIR/examples/chromosome_15_config.yaml
+
+Use `wget` to retrieve a precomputed mappability file.
+
+    wget ftp://ftp.bcgsc.ca/public/shahlab/ReMixT/hg19.100.bwa.mappability.h5 --directory-prefix $WORK_DIR/ref_data/
+
+Use `wget` to retrieve the example bam files and their indices for chromosome 15, and the breakpoints file with chromosome 15 breakpoints.
+
+    wget ftp://ftp.bcgsc.ca/public/shahlab/ReMixT/HCC1395*chr15.bam* --directory-prefix $WORK_DIR/
+    wget ftp://ftp.bcgsc.ca/public/shahlab/ReMixT/HCC1395_breakpoints.tsv --directory-prefix $WORK_DIR/
+
+Use the `remixt run` sub-command to run a remixt analysis.
+
+    remixt run $WORK_DIR/ref_data $WORK_DIR/raw_data $WORK_DIR/HCC1395_breakpoints.tsv \
+        --config $REMIXT_DIR/examples/chromosome_15_config.yaml \
+        --tmpdir $WORK_DIR/tmp_remixt \
+        --tumour_sample_ids HCC1395 \
+        --tumour_bam_files $WORK_DIR/HCC1395_chr15.bam \
+        --normal_sample_id HCC1395BL \
+        --normal_bam_file $WORK_DIR/HCC1395BL_chr15.bam \
+        --loglevel DEBUG \
+        --submit local \
+        --results_files $WORK_DIR/HCC1395.h5
+
+Use the `remixt write_results` sub-command to write out tables of results and a yaml file containing inferred parameters and other meta data.
+
+    remixt write_results $WORK_DIR/HCC1395.h5 \
+        $WORK_DIR/HCC1395_cn.tsv \
+        $WORK_DIR/HCC1395_brk_cn.tsv \
+        $WORK_DIR/HCC1395_info.yaml
+
+Finally, create a visualization of the solutions using the `remixt visualize_solutions` sub-command.
+
+    remixt visualize_solutions $WORK_DIR/HCC1395.h5 \
+        $WORK_DIR/HCC1395.html
+
 ## Parallelism Using Pypeliner
 
 ReMixT uses the pypeliner python library for parallelism.  Several of the scripts described above will complete more quickly on a multi-core machine or on a cluster.
