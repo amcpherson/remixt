@@ -3,7 +3,8 @@ import logging
 
 import remixt.visualize
 
-# warnings.filterwarnings('error')
+import warnings
+warnings.filterwarnings('error')
 logging.basicConfig(level=logging.DEBUG)
 
 
