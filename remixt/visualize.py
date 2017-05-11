@@ -43,10 +43,11 @@ def major_minor_scatter_plot(source):
         plot_width=1000, plot_height=500,
         tools='pan,wheel_zoom,box_select,reset,lasso_select',
         logo=None,
-        title_text_font_size=bokeh.core.properties.value('10pt'),
         x_range=[-0.5, 6.5],
         y_range=[-0.5, 4.5],
     )
+
+    p.title.text_font_size=bokeh.core.properties.value('10pt')
 
     p.circle(
         x='major_raw', y='minor_raw',
@@ -72,8 +73,8 @@ def major_minor_segment_plot(source, major_column, minor_column, x_range, name, 
     )
 
     tools = [
-        bokeh.models.PanTool(dimensions=['x']),
-        bokeh.models.WheelZoomTool(dimensions=['x']),
+        bokeh.models.PanTool(dimensions='width'),
+        bokeh.models.WheelZoomTool(dimensions='width'),
         bokeh.models.BoxZoomTool(),
         bokeh.models.BoxSelectTool(),
         bokeh.models.ResetTool(),
@@ -86,10 +87,11 @@ def major_minor_segment_plot(source, major_column, minor_column, x_range, name, 
         plot_width=width, plot_height=200,
         tools=tools,
         logo=None,
-        title_text_font_size=bokeh.core.properties.value('10pt'),
         x_range=x_range,
         y_range=[-0.5, 6.5],
     )
+
+    p.title.text_font_size = bokeh.core.properties.value('10pt')
 
     p.quad(
         top=major_column, bottom=0, left='plot_start', right='plot_end',
@@ -127,8 +129,8 @@ def breakpoints_plot(source, x_range, width=1000):
     )
 
     tools = [
-        bokeh.models.PanTool(dimensions=['x']),
-        bokeh.models.WheelZoomTool(dimensions=['x']),
+        bokeh.models.PanTool(dimensions='width'),
+        bokeh.models.WheelZoomTool(dimensions='width'),
         bokeh.models.BoxSelectTool(),
         bokeh.models.ResetTool(),
         bokeh.models.TapTool(),
@@ -140,10 +142,11 @@ def breakpoints_plot(source, x_range, width=1000):
         plot_width=width, plot_height=150,
         tools=tools,
         logo=None,
-        title_text_font_size=bokeh.core.properties.value('10pt'),
         x_range=x_range,
         y_range=['+', '-'],
     )
+
+    p.title.text_font_size = bokeh.core.properties.value('10pt')
 
     p.triangle(
         x='plot_position', y='strand', size=10, angle='strand_angle',
@@ -523,8 +526,9 @@ def build_solutions_panel(solutions_source, read_depth_source):
         plot_width=1000, plot_height=300,
         tools='pan,wheel_zoom,reset',
         logo=None,
-        title_text_font_size=bokeh.core.properties.value('10pt'),
     )
+
+    readdepth_plot.title.text_font_size = bokeh.core.properties.value('10pt')
 
     readdepth_plot.patch('read_depth', 'minor_density', color='blue', alpha=0.5, source=read_depth_source)
     readdepth_plot.patch('read_depth', 'major_density', color='red', alpha=0.5, source=read_depth_source)
@@ -634,7 +638,7 @@ def create_solutions_visualization(results_filename, html_filename):
     tabs = bokeh.models.Tabs()
     tabs.tabs.append(build_solutions_panel(solutions_source, read_depth_source))
     tabs.tabs.append(build_genome_panel(cnv_selected_source, brk_selected_source, chromosome_plot_info))
-    input_box = bokeh.models.VBoxForm(solution_select)
+    input_box = bokeh.models.WidgetBox(solution_select)
     main_box = bokeh.models.HBox(input_box, tabs)
 
     bokeh.plotting.save(main_box)
