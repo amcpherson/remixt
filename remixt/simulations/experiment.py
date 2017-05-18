@@ -877,6 +877,8 @@ class GenomeCollectionSampler(object):
         self.num_ancestral_events = params.get('num_ancestral_events', 25)
         self.num_descendent_events = params.get('num_descendent_events', 10)
 
+        self.M = params['M']
+
         self.ploidy = params.get('ploidy', 2.5)
         self.ploidy_max_error = params.get('ploidy_max_error', 0.2)
 
@@ -897,8 +899,10 @@ class GenomeCollectionSampler(object):
 
         wt_genome = self.rh_sampler.sample_wild_type()
 
-        ancestral_genome = None
+        genomes = [wt_genome]
 
+        success = False
+        ancestral_genome = None
         for anc_iter in xrange(100):
             ancestral_genomes = self.rh_sampler.sample_rearrangement_history(wt_genome, self.num_ancestral_events)
             ancestral_genomes = np.array(ancestral_genomes)
@@ -920,9 +924,11 @@ class GenomeCollectionSampler(object):
                 continue
 
             ancestral_genome = ancestral_genomes[0]
+            genomes.append(ancestral_genomes[0])
+            success = True
             break
 
-        if ancestral_genome is None:
+        if not success:
             raise ValueError('unable to simulate ancestral genome')
 
         def subclone_fitness(genome, fitness):
@@ -930,28 +936,30 @@ class GenomeCollectionSampler(object):
                 genome.proportion_divergent(ancestral_genome), loc=self.proportion_subclonal, scale=self.proportion_subclonal_stddev)
             return fitness + divergent_log_p
 
-        descendent_genome = None
+        for m in range(self.M - 2, self.M):
+            success = False
+            for desc_iter in xrange(100):
+                descendent_genomes = self.rh_sampler.sample_rearrangement_history(
+                    ancestral_genome, self.num_descendent_events, fitness_callback=subclone_fitness)
+                descendent_genomes = np.array(descendent_genomes)
 
-        for desc_iter in xrange(100):
-            descendent_genomes = self.rh_sampler.sample_rearrangement_history(
-                ancestral_genome, self.num_descendent_events, fitness_callback=subclone_fitness)
-            descendent_genomes = np.array(descendent_genomes)
+                subclonal_proportions = np.array([genome.proportion_divergent(ancestral_genome) for genome in descendent_genomes])
+                subclonal_errors = np.absolute(subclonal_proportions - self.proportion_subclonal)
+                descendent_genomes = descendent_genomes[subclonal_errors < self.proportion_subclonal_max_error]
 
-            subclonal_proportions = np.array([genome.proportion_divergent(ancestral_genome) for genome in descendent_genomes])
-            subclonal_errors = np.absolute(subclonal_proportions - self.proportion_subclonal)
-            descendent_genomes = descendent_genomes[subclonal_errors < self.proportion_subclonal_max_error]
+                if len(descendent_genomes) == 0:
+                    print 'failed subclonal'
+                    continue
 
-            if len(descendent_genomes) == 0:
-                print 'failed subclonal'
-                continue
+                genomes.append(descendent_genomes[0])
 
-            descendent_genome = descendent_genomes[0]
-            break
+                success = True
+                break
 
-        if descendent_genome is None:
-            raise ValueError('unable to simulate descendant genome')
+            if not success:
+                raise ValueError('unable to simulate descendant genome')
 
-        return GenomeCollection([wt_genome, ancestral_genome, descendent_genome])
+        return GenomeCollection(genomes)
 
 
 class GenomeMixture(object):
@@ -1086,8 +1094,14 @@ class GenomeMixtureSampler(object):
 
         if self.frac_clone_1 is None:
             frac[1:] = np.random.dirichlet([self.frac_clone_concentration] * (M-1)) * (1 - self.frac_normal)
-        else:
+        elif M == 3:
             frac[1:] = np.array([self.frac_clone_1, 1. - self.frac_normal - self.frac_clone_1])
+        elif M == 4:
+            frac_clones_2_3 = 1. - self.frac_normal - self.frac_clone_1
+            frac_clones_2_3 = np.random.dirichlet([self.frac_clone_concentration] * (M-2)) * frac_clones_2_3
+            frac[1:] = np.array([self.frac_clone_1] + list(frac_clones_2_3))
+        else:
+            raise Exception('Case not handled')
 
         assert abs(1. - np.sum(frac)) < 1e-8
 
