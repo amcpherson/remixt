@@ -271,6 +271,8 @@ def plot_cnv_scatter(ax, cnv, major_col='major', minor_col='minor', highlight_co
 
     """
 
+    cnv = cnv[['chromosome', 'start', 'end', 'length', major_col, minor_col]].replace(np.inf, np.nan).dropna()
+
     # Create color map for chromosomes
     chromosomes = remixt.utils.sort_chromosome_names(cnv['chromosome'].unique())
 
@@ -613,7 +615,7 @@ def gc_plot(gc_table_filename, plot_filename):
     fig.savefig(plot_filename, format='pdf', bbox_inches='tight')
 
 
-def plot_depth(ax, read_depth, annotated=()):
+def plot_depth(ax, read_depth, minor_modes=None):
     """ Plot read depth of major minor and total as a density
 
     Args:
@@ -621,7 +623,7 @@ def plot_depth(ax, read_depth, annotated=()):
         read_depth (pandas.DataFrame): observed major, minor, and total read depth and lengths
 
     KwArgs:
-        annotated (list): depths to annotate with verticle lines
+        minor_modes (list): annotate minor modes with verticle lines
 
     """
 
@@ -634,10 +636,18 @@ def plot_depth(ax, read_depth, annotated=()):
     remixt.utils.filled_density_weighted(ax, read_depth['major'].values, read_depth['length'].values, 'red', 0.5, 0.0, depth_max, cov)
     remixt.utils.filled_density_weighted(ax, read_depth['total'].values, read_depth['length'].values, 'grey', 0.5, 0.0, depth_max, cov)
 
-    ylim = ax.get_ylim()
-    for depth in annotated:
-        ax.plot([depth, depth], [0, 1e16], 'g', lw=2)
-    ax.set_ylim(ylim)
+    if minor_modes is not None:
+        init_h_mono = np.array(remixt.analysis.readdepth.calculate_candidate_h_monoclonal(minor_modes))
+
+        h_normal = init_h_mono[0, 0]
+        h_tumour = init_h_mono[:, 1] + h_normal
+
+        plt.axvline(h_normal, lw=1, color='g')
+        for x in h_tumour:
+            plt.axvline(x, lw=1, color='g', ls=':')
+
+    ax.set_xlabel('Haploid Read Depth')
+    ax.set_ylabel('Density')
 
 
 def plot_experiment(experiment_plot_filename, experiment_filename):
