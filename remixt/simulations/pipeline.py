@@ -402,12 +402,17 @@ def evaluate_cn_results(genome_mixture, cn_data_table, order_true, order_pred, a
     cn_pred = cn_pred[cn_data_index['idx_2'].values,:,:]
     segment_lengths = (cn_data_index['end'] - cn_data_index['start']).values
 
-    # Allow for clone copy number swapping if the mix fractions are close to equal
-    if allow_swap:
-        cn_correct = (cn_true == cn_pred).all(axis=(1, 2)) | (cn_true == cn_pred[:,::-1,:]).all(axis=(1, 2))
+    # Handle different number of clones
+    if cn_true.shape[1] != cn_pred.shape[1]:
+        proportion_cn_correct = -1.
+
     else:
-        cn_correct = (cn_true == cn_pred).all(axis=(1, 2))
-    proportion_cn_correct = float((cn_correct * segment_lengths).sum()) / float(segment_lengths.sum())
+        # Allow for clone copy number swapping if the mix fractions are close to equal
+        if allow_swap:
+            cn_correct = (cn_true == cn_pred).all(axis=(1, 2)) | (cn_true == cn_pred[:,::-1,:]).all(axis=(1, 2))
+        else:
+            cn_correct = (cn_true == cn_pred).all(axis=(1, 2))
+        proportion_cn_correct = float((cn_correct * segment_lengths).sum()) / float(segment_lengths.sum())
 
     is_dom_cn_correct = np.all(cn_true[:,0,:] == cn_pred[:,0,:], axis=1)
 
@@ -476,21 +481,21 @@ def evaluate_brk_cn_results(genome_mixture, brk_cn_table, order_true, order_pred
 
     """
 
-    M = genome_mixture.M
-
     # List of column names for known true copy number
     true_cols = []
-    for m in xrange(1, M):
+    for m in xrange(1, genome_mixture.M):
         true_cols.append('true_cn_{}'.format(m))
 
     # List of column names for minimized known true copy number
     min_true_cols = []
-    for m in xrange(1, M):
+    for m in xrange(1, genome_mixture.M):
         min_true_cols.append('min_true_cn_{}'.format(m))
 
     # List of column names for predicted copy number
     pred_cols = []
-    for m in xrange(1, M):
+    for m in itertools.count(1):
+        if 'cn_{}'.format(m) not in brk_cn_table:
+            break
         pred_cols.append('cn_{}'.format(m))
 
     data = genome_mixture.breakpoint_segment_data.set_index('prediction_id')
@@ -531,11 +536,16 @@ def evaluate_brk_cn_results(genome_mixture, brk_cn_table, order_true, order_pred
     # Ensure predicted tumour clones are consistent
     cn_pred = data[pred_cols].values[:, order_pred]
 
-    # Allow for clone copy number swapping if the mix fractions are close to equal
-    if allow_swap:
-        cn_correct = (cn_true == cn_pred).all(axis=(1,)) | (cn_true == cn_pred[:, ::-1]).all(axis=(1,))
+    # Handle different number of clones
+    if cn_true.shape[1] != cn_pred.shape[1]:
+        cn_correct = -1.
+
     else:
-        cn_correct = (cn_true == cn_pred).all(axis=(1,))
+        # Allow for clone copy number swapping if the mix fractions are close to equal
+        if allow_swap:
+            cn_correct = (cn_true == cn_pred).all(axis=(1,)) | (cn_true == cn_pred[:, ::-1]).all(axis=(1,))
+        else:
+            cn_correct = (cn_true == cn_pred).all(axis=(1,))
 
     # Calculate correctness per prediction
     data['cn_correct'] = cn_correct
@@ -579,8 +589,6 @@ def evaluate_results(genome_mixture, cn_table, brk_cn_table, mix_pred):
     copy number predictions.
 
     """
-
-    assert genome_mixture.M == 3
 
     # Return empty evaluation for empty results
     if len(cn_table.index) == 0 or mix_pred.shape[0] == 0:
@@ -676,8 +684,8 @@ def evaluate_likelihood_results(
     segment_lengths = (cn_data_index['end'] - cn_data_index['start']).values
 
     evaluation = {}
-    evaluation['correct_outlier_total_proportion'] = (is_outlier_total_correct * segment_lengths).sum() / segment_lengths.sum()
-    evaluation['correct_outlier_allele_proportion'] = (is_outlier_allele_correct * segment_lengths).sum() / segment_lengths.sum()
+    evaluation['correct_outlier_total_proportion'] = (is_outlier_total_correct * segment_lengths).sum() / float(segment_lengths.sum())
+    evaluation['correct_outlier_allele_proportion'] = (is_outlier_allele_correct * segment_lengths).sum() / float(segment_lengths.sum())
     evaluation = pd.Series(evaluation)
 
     return {'outlier_evaluation': evaluation}
@@ -755,7 +763,9 @@ def merge_evaluations(merged_filename, sim_defs, evaluation_filenames, key_names
         if not isinstance(key, tuple):
             key = (key,)
 
-        for table_name in ('/cn_evaluation', '/brk_cn_evaluation', '/mix_results'):
+        for table_name in ('/cn_evaluation', '/brk_cn_evaluation', '/mix_results', 'outlier_evaluation'):
+            if table_name not in store:
+                continue
             table = store[table_name]
             for value, name in zip(key, key_names):
                 table[name] = value
