@@ -646,7 +646,7 @@ def plot_depth(ax, read_depth, minor_modes=None):
         for x in h_tumour:
             plt.axvline(x, lw=1, color='g', ls=':')
 
-    ax.set_xlabel('Haploid Read Depth')
+    ax.set_xlabel('Read Depth')
     ax.set_ylabel('Density')
 
 
