@@ -141,6 +141,7 @@ def fit(experiment, init_params, config):
     num_update_iter = remixt.config.get_param(config, 'num_update_iter')
     disable_breakpoints = remixt.config.get_param(config, 'disable_breakpoints')
     is_female = remixt.config.get_param(config, 'is_female')
+    do_h_update = remixt.config.get_param(config, 'do_h_update')
 
     # For convergence testing purposes, provide optimal initialization
     # based on simulated breakpoint copy number
@@ -181,6 +182,7 @@ def fit(experiment, init_params, config):
         normal_copies=normal_copies,
         disable_breakpoints=disable_breakpoints,
         breakpoint_init=breakpoint_init,
+        do_h_update=do_h_update,
     )
     
     model.num_em_iter = num_em_iter

@@ -71,6 +71,7 @@ class BreakpointModel(object):
         self.disable_breakpoints = kwargs.get('disable_breakpoints', False)
         self.breakpoint_init = kwargs.get('breakpoint_init', None)
         self.normal_copies = kwargs.get('normal_copies', np.array([[1, 1]] * self.N))
+        self.do_h_update = kwargs.get('do_h_update', True)
 
         if self.max_depth is None:
             raise ValueError('must specify max depth')
@@ -409,7 +410,8 @@ class BreakpointModel(object):
             for j in xrange(self.num_update_iter):
                 self.variational_update()
 
-            self.em_update_h()
+            if self.do_h_update:
+                self.em_update_h()
 
             self.em_update_params()
 
