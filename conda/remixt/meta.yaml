@@ -1,10 +1,13 @@
 package:
   name: remixt
-  version: '0.5.3'
+  version: '0.5.4'
 
 source:
   git_url: https://dranew@bitbucket.org/dranew/remixt.git
-  git_rev: v0.5.3
+  git_rev: v0.5.4
+
+build:
+  number: 0
 
 requirements:
   build:
@@ -31,4 +34,6 @@ requirements:
 about:
   home: http://bitbucket.org/dranew/remixt
   summary: 'ReMixT is a tool for joint inference of clone specific segment and breakpoint copy number in whole genome sequencing data'
+  license: MIT
+  license_file: LICENSE
 
