@@ -236,3 +236,6 @@ Often a call to qsub requires specific command line parameters to request the co
 
     --submit asyncqsub --nativespec "-q all.q -l mem_free={mem}G"
 
+# License
+
+ReMixT is released under the [MIT License](http://www.opensource.org/licenses/MIT).
