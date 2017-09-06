@@ -58,7 +58,7 @@ def create_bedgraph(alignment_filename, bedgraph_filename):
             mqual_table.append((origin_chromosome, origin_position, mapping_quality))
         mqual_table = pd.DataFrame(mqual_table, columns=['chromosome', 'position', 'quality'])
         mqual_table['chromosome_index'] = np.searchsorted(np.unique(mqual_table['chromosome']), mqual_table['chromosome'])
-        mqual_table.sort(['chromosome_index', 'position'], inplace=True)
+        mqual_table.sort_values(['chromosome_index', 'position'], inplace=True)
         mqual_table['chromosome_diff'] = mqual_table['chromosome_index'].diff()
         mqual_table['position_diff'] = mqual_table['position'].diff() - 1
         mqual_table['quality_diff'] = mqual_table['quality'].diff()

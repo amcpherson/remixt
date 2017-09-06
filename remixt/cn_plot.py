@@ -38,7 +38,7 @@ def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor', do_fill=Fal
     quad_color_major = colorConverter.to_rgba(segment_color_major, alpha=0.5)
     quad_color_minor = colorConverter.to_rgba(segment_color_minor, alpha=0.5)
 
-    cnv = cnv.sort('start')
+    cnv = cnv.sort_values('start')
 
     def create_segments(df, field):
         segments = np.array([[df['start'].values, df[field].values], [df['end'].values, df[field].values]])

@@ -30,8 +30,8 @@ def calculate_segment_counts(seqdata_filename, segments):
         except StopIteration:
             chrom_reads = pd.DataFrame(columns=['start', 'end'])
 
-        chrom_segs.sort('start', inplace=True)
-        chrom_reads.sort('start', inplace=True)
+        chrom_segs.sort_values('start', inplace=True)
+        chrom_reads.sort_values('start', inplace=True)
 
         chrom_segs['count'] = remixt.segalg.contained_counts(
             chrom_segs[['start', 'end']].values,

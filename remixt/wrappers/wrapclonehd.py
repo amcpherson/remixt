@@ -47,7 +47,7 @@ def write_cna(cna_filename, seqdata_filename, chromosome_lengths, segment_length
 
             reads = next(remixt.seqdataio.read_read_data(seqdata_filename, chromosome=chrom))
 
-            reads.sort('start', inplace=True)
+            reads.sort_values('start', inplace=True)
 
             segments = create_segments(chromosome_lengths[chrom], segment_length)
 

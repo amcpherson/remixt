@@ -54,7 +54,7 @@ def match_breakpoints(bp1, bp2, search_range=400):
         be1['search_start'] = be1['position'] - search_range
         be1['search_end'] = be1['position'] + search_range
 
-        be2.sort('position', inplace=True)
+        be2.sort_values('position', inplace=True)
         be2.reset_index(drop=True, inplace=True)
 
         idx1, idx2 = remixt.segalg.interval_position_overlap(

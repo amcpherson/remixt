@@ -155,7 +155,7 @@ class RearrangedGenome(object):
 
             chromosome_ids = [str(a) for a in xrange(1, num_chroms + 1)]
             chromosome_lengths = np.random.dirichlet([chrom_length_concentration] * num_chroms) * genome_length
-            chromosome_lengths.sort()
+            chromosome_lengths.sort_values()
             chromosome_lengths = chromosome_lengths[::-1]
 
         chrom_pvals = chromosome_lengths.astype(float) / float(chromosome_lengths.sum())

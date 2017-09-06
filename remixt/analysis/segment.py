@@ -68,7 +68,7 @@ def create_segments(segment_filename, config, ref_data_dir, breakpoint_filename=
             changepoints.append((row['chromosome_2'], row['position_2']))
 
     changepoints = pd.DataFrame(changepoints, columns=['chromosome', 'position'])
-    changepoints.sort(['chromosome', 'position'], inplace=True)
+    changepoints.sort_values(['chromosome', 'position'], inplace=True)
 
     # Create segments from changepoints
     segments = list()
@@ -100,7 +100,7 @@ def create_segments(segment_filename, config, ref_data_dir, breakpoint_filename=
 
     # Sort segments by placement in chromosome list, and position
     segments = segments.merge(pd.DataFrame(list(enumerate(chromosomes)), columns=['chromosome_idx', 'chromosome']))
-    segments.sort(['chromosome_idx', 'start'], inplace=True)
+    segments.sort_values(['chromosome_idx', 'start'], inplace=True)
 
     segments.to_csv(segment_filename, sep='\t', index=False, columns=['chromosome', 'start', 'end'])
 
@@ -135,8 +135,8 @@ def count_segment_reads(seqdata_filename, chromosome, segments, filter_duplicate
     )
 
     # Sort in preparation for search
-    reads.sort('start', inplace=True)
-    segments.sort('start', inplace=True)
+    reads.sort_values('start', inplace=True)
+    segments.sort_values('start', inplace=True)
     
     # Count segment reads
     segments['readcount'] = remixt.segalg.contained_counts(

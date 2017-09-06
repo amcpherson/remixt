@@ -321,7 +321,7 @@ def infer_haps(haps_filename, snp_genotype_filename, chromosome, temp_directory,
     haps_allele2['allele'] = 1 - haps_allele2['allele']
 
     haps = pd.concat([haps, haps_allele2], ignore_index=True)
-    haps.sort(['position', 'allele_id'], inplace=True)
+    haps.sort_values(['position', 'allele_id'], inplace=True)
 
     haps['chromosome'] = chromosome
 
@@ -389,7 +389,7 @@ def count_allele_reads(seqdata_filename, haps, chromosome, segments, filter_dupl
     alleles.drop_duplicates('fragment_id', inplace=True)
 
     # Sort in preparation for search, reindex to allow for subsequent merge
-    segments = segments.sort('start').reset_index(drop=True)
+    segments = segments.sort_values('start').reset_index(drop=True)
 
     # Annotate segment for start and end of each read
     alleles['segment_idx'] = remixt.segalg.find_contained_segments(
