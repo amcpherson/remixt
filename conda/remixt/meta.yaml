@@ -15,11 +15,15 @@ requirements:
     - cython
     - numpy
     - boost_source ==1.60.0
+    - zlib
+    - bzip2
 
   run:
     - python
     - numpy
     - scipy
+    - zlib
+    - bzip2
     - pandas >=0.17.1
     - pytables
     - pypeliner >=0.4.1
