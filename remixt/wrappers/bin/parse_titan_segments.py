@@ -47,7 +47,7 @@ def main(args):
     seg_data['total_cn'] = seg_data['minor_cn'] + seg_data['major_cn']
     
     # Sort data
-    seg_data = seg_data.sort(columns=['chrom', 'beg'])
+    seg_data = seg_data.sort_values(columns=['chrom', 'beg'])
     
     # Compute dominant genotype
     seg_data['dominant_major_cn'] = seg_data['major_cn']
