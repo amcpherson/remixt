@@ -18,6 +18,7 @@ before_install:
 install:
   - conda install -q python=$TRAVIS_PYTHON_VERSION conda-build anaconda-client setuptools
   - conda build conda/$PACKAGENAME
+  - echo conda install --use-local $PACKAGENAME
   - conda install --use-local $PACKAGENAME
 
 # Run test
