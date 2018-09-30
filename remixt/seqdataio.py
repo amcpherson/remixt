@@ -17,7 +17,7 @@ def _get_key(record_type, chromosome):
 def _unique_index_append(store, key, data):
     try:
         nrows = store.get_storer(key).nrows
-    except AttributeError:
+    except (AttributeError, KeyError):
         nrows = 0
     data.index = pd.Series(data.index) + nrows
     if nrows == 0:
@@ -134,7 +134,7 @@ def _get_seq_data_nrows(seqdata_filename, key):
     with pd.HDFStore(seqdata_filename, 'r') as store:
         try:
             return store.get_storer(key).nrows
-        except AttributeError:
+        except (AttributeError, KeyError):
             return 0
 
 
