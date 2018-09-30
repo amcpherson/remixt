@@ -11,6 +11,8 @@ before_install:
   - conda update --yes -q conda
   - conda config --set always_yes true
   - conda config --set anaconda_upload no
+  - conda config --add channels https://conda.anaconda.org/dranew
+  - conda config --add channels 'bioconda'
 
 # Install packages
 install:
