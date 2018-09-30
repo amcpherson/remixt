@@ -26,6 +26,7 @@ install:
 
 # Run test
 script:
+  - which nosetests
   - nosetests tests
 
 after_success:
