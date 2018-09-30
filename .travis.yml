@@ -20,9 +20,10 @@ before_install:
 # Install packages
 install:
   - conda install -q python=$TRAVIS_PYTHON_VERSION conda-build anaconda-client setuptools
-  - conda build conda/$PACKAGENAME
-  - echo conda install --use-local $PACKAGENAME
-  - conda install --use-local $PACKAGENAME
+#  - conda build conda/$PACKAGENAME
+#  - echo conda install --use-local $PACKAGENAME
+#  - echo conda install --use-local $PACKAGENAME
+  - conda install $PACKAGENAME
 
 # Run test
 script:
