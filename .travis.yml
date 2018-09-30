@@ -14,7 +14,7 @@ before_install:
 
 # Install packages
 install:
-  - conda install -q python=$TRAVIS_PYTHON_VERSION pip requests conda-build jinja2 anaconda-client 
+  - conda install -q python=$TRAVIS_PYTHON_VERSION conda-build jinja2 anaconda-client
   - conda build conda/$PACKAGENAME
   - conda install --use-local $PACKAGENAME
 
