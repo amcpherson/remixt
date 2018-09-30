@@ -25,7 +25,8 @@ install:
 
 # Run test
 script:
-  - nosetests tests
+  - remixt -h
+#  - nosetests tests
 
 after_success:
 # Change permissions for Anaconda deployment script
