@@ -1,41 +1,33 @@
 language: python
 python:
-  - 2.7
-
+- 2.7
 env:
+  matrix:
   - PACKAGENAME=remixt
-
-# Setup anaconda
+  global:
+    secure: Hx9080ucB5a5n/Ij3a1LTQrf8AeuNQpQYkw9PRj9aixw8V+ISdCFGogHot2cjnJxAaui5CdSQ/wJ1nMFE/SMfB7OVvodR4I+lMGDS/JvcxhdVRFAefFxjEIbf3Fust7qq3xmfDt5K0PHE1I90PGZG+KxlPaGXgXFL+3AbXn3ejjYSqDeNWV8XBndaMqtEtIPOVXZ+l2y2UGnj+WxpqfPle2H7yvLfBkN9jKCOFsCxl09a/wc4mLvpIZyjOK2F+RrgptSxBCdcBIqaRR23EAtKs5iPH3QsRVYSwUIK2uUCtxfeOunLioTjvjNMVG5P0MAG4EPUcTDtlXK1MmaYdAJCmNG9MWSC8w9SO5Tpz1O+kpdJ4wR3EP88bxiqM2TPTc3faEZ2gIkFPn3JpClo4lzBnJ7hS4EnyW9hU7rlRqHe0da2v2pyBpg38AGdSjGwewrWD97rSdXF/Pljp3MMzrdhTCD91+WdrGXMnj2p4n7ApNA3/RGHFTPwggVWInS91gaVnyJ703wvBBhLtHF8Wk/mn6aPP1ZI5nN+XOKKbe5dGfxKepn69LbYbQZYFQf/PA8ruS+lf4N2W3Wr1DakmIzqL9H6WlU0Zq6xrcnhvFZwLgfaQuKi8gft86WjbvMzrGoSbWV4JG5pzQiUzFPMyX103M9WQtJpgN61cvrxOaw0qk=
 before_install:
-  - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
-  - chmod +x miniconda.sh
-  - ./miniconda.sh -b
-  - export PATH=$HOME/miniconda2/bin:$PATH
-  - conda update --yes -q conda
-  - conda config --set always_yes true
-  - conda config --set anaconda_upload no
-  - conda config --add channels https://conda.anaconda.org/dranew
-  - conda config --add channels 'bioconda'
-
-# Install packages
+- wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+- chmod +x miniconda.sh
+- "./miniconda.sh -b"
+- export PATH=$HOME/miniconda2/bin:$PATH
+- conda update --yes -q conda
+- conda config --set always_yes true
+- conda config --set anaconda_upload no
+- conda config --add channels https://conda.anaconda.org/dranew
+- conda config --add channels 'bioconda'
 install:
-  - conda install -q python=$TRAVIS_PYTHON_VERSION conda-build anaconda-client setuptools nose
-  - conda build conda/$PACKAGENAME
-  - conda install --use-local $PACKAGENAME
-
-# Run test
+- conda install -q python=$TRAVIS_PYTHON_VERSION conda-build anaconda-client setuptools
+  nose
+- conda build conda/$PACKAGENAME
+- conda install --use-local $PACKAGENAME
 script:
-  - remixt -h
-#  - nosetests tests
-
+- remixt -h
 after_success:
-# Change permissions for Anaconda deployment script
-  - chmod +x ./deploy_anaconda.sh
-
+- chmod +x ./deploy_anaconda.sh
 deploy:
- # Deploy to Anaconda.org
-  - provider: script
-    script: ./deploy_anaconda.sh
-    on:
-      tags: true
-    skip_cleanup: true
+- provider: script
+  script: "./deploy_anaconda.sh"
+  on:
+    tags: true
+  skip_cleanup: true
