@@ -6,7 +6,7 @@ import remixt.config
 import remixt.utils
 
 
-def create_ref_data(config, ref_data_dir, ref_data_sentinal):
+def create_ref_data(config, ref_data_dir, ref_data_sentinal, bwa_index_genome=False):
     try:
         os.makedirs(ref_data_dir)
     except OSError:
@@ -39,9 +39,10 @@ def create_ref_data(config, ref_data_dir, ref_data_sentinal):
         remixt.utils.wget(remixt.config.get_filename(config, ref_data_dir, 'gap_url'), remixt.config.get_filename(config, ref_data_dir, 'gap_table'))
     auto_sentinal.run(wget_gap_table)
 
-    def bwa_index():
-        pypeliner.commandline.execute('bwa', 'index', remixt.config.get_filename(config, ref_data_dir, 'genome_fasta'))
-    auto_sentinal.run(bwa_index)
+    if bwa_index_genome:
+        def bwa_index():
+            pypeliner.commandline.execute('bwa', 'index', remixt.config.get_filename(config, ref_data_dir, 'genome_fasta'))
+        auto_sentinal.run(bwa_index)
 
     def samtools_faidx():
         pypeliner.commandline.execute('samtools', 'faidx', remixt.config.get_filename(config, ref_data_dir, 'genome_fasta'))

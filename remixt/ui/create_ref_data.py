@@ -24,6 +24,10 @@ def add_arguments(argparser):
     argparser.add_argument('-c', '--config',
         help='Configuration filename')
 
+    argparser.add_argument('-b', '--bwa_index_genome',
+        action='store_true',
+        help='Index the genome for bwa, used for tests/benchmarking')
+
     argparser.set_defaults(func=run)
 
 
