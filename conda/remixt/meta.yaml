@@ -5,7 +5,7 @@ package:
   version: {{ data.get('version') }}
 
 source:
-  git_url: git@github.com:amcpherson/remixt.git
+  git_url: git@github.com/amcpherson/remixt.git
   git_rev: v{{ data.get('version') }}
 
 build:
