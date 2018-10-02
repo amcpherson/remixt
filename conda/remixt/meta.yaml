@@ -1,10 +1,12 @@
+{% set data = load_setup_py_data() %}
+
 package:
   name: remixt
-  version: '0.5.5'
+  version: {{ data.get('version') }}
 
 source:
   git_url: https://dranew@bitbucket.org/dranew/remixt.git
-  git_rev: v0.5.5
+  git_rev: v{{ data.get('version') }}
 
 build:
   number: 0
