@@ -17,7 +17,7 @@ before_install:
 - conda config --add channels 'bioconda'
 install:
 - conda install -q python=$TRAVIS_PYTHON_VERSION conda-build anaconda-client setuptools
-  nose
+  nose numpy cython
 - conda build conda/$PACKAGENAME
 - conda install --use-local $PACKAGENAME
 script:
