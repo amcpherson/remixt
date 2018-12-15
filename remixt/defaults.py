@@ -144,3 +144,7 @@ num_update_iter                             = 5
 # Disable breakpoints for benchmarking purposes
 disable_breakpoints                         = False
 
+# For debug purposes, disable update of the h parameter
+do_h_update                                 = True
+
+
