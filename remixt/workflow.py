@@ -3,15 +3,6 @@ import pypeliner
 import pypeliner.managed as mgd
 
 import remixt.config
-import remixt.analysis.gcbias
-import remixt.analysis.haplotype
-import remixt.analysis.pipeline
-import remixt.analysis.readcount
-import remixt.analysis.segment
-import remixt.analysis.stats
-import remixt.cn_plot
-import remixt.seqdataio
-import remixt.utils
 
 
 def create_extract_seqdata_workflow(
@@ -35,11 +26,11 @@ def create_extract_seqdata_workflow(
         name='create_chromosome_seqdata',
         axes=('chromosome',),
         ctx={'mem': 16},
-        func=remixt.seqdataio.create_chromosome_seqdata,
+        func='remixt.seqdataio.create_chromosome_seqdata',
         args=(
             mgd.TempOutputFile('seqdata', 'chromosome'),
-            mgd.InputFile(bam_filename),
-            mgd.InputFile(snp_positions_filename),
+            mgd.InputFile(bam_filename, extensions=['.bai']),
+            snp_positions_filename,
             mgd.InputInstance('chromosome'),
             bam_max_fragment_length,
             bam_max_soft_clipped,
@@ -50,7 +41,7 @@ def create_extract_seqdata_workflow(
     workflow.transform(
         name='merge_seqdata',
         ctx={'mem': 16},
-        func=remixt.seqdataio.merge_seqdata,
+        func='remixt.seqdataio.merge_seqdata',
         args=(
             mgd.OutputFile(seqdata_filename),
             mgd.TempInputFile('seqdata', 'chromosome'),
@@ -80,7 +71,7 @@ def create_infer_haps_workflow(
             name='infer_snp_genotype_from_normal',
             axes=('chromosome',),
             ctx={'mem': 16},
-            func=remixt.analysis.haplotype.infer_snp_genotype_from_normal,
+            func='remixt.analysis.haplotype.infer_snp_genotype_from_normal',
             args=(
                 mgd.TempOutputFile('snp_genotype.tsv', 'chromosome'),
                 mgd.InputFile(normal_seqdata_filename),
@@ -99,7 +90,7 @@ def create_infer_haps_workflow(
             name='infer_snp_genotype_from_tumour',
             axes=('chromosome',),
             ctx={'mem': 16},
-            func=remixt.analysis.haplotype.infer_snp_genotype_from_tumour,
+            func='remixt.analysis.haplotype.infer_snp_genotype_from_tumour',
             args=(
                 mgd.TempOutputFile('snp_genotype.tsv', 'chromosome'),
                 mgd.InputFile('tumour_seqdata', 'tumour_id', fnames=seqdata_filenames),
@@ -112,7 +103,7 @@ def create_infer_haps_workflow(
         name='infer_haps',
         axes=('chromosome',),
         ctx={'mem': 16},
-        func=remixt.analysis.haplotype.infer_haps,
+        func='remixt.analysis.haplotype.infer_haps',
         args=(
             mgd.TempOutputFile('haps.tsv', 'chromosome'),
             mgd.TempInputFile('snp_genotype.tsv', 'chromosome'),
@@ -126,7 +117,7 @@ def create_infer_haps_workflow(
     workflow.transform(
         name='merge_haps',
         ctx={'mem': 16},
-        func=remixt.utils.merge_tables,
+        func='remixt.utils.merge_tables',
         args=(
             mgd.OutputFile(haps_filename),
             mgd.TempInputFile('haps.tsv', 'chromosome'),
@@ -148,7 +139,7 @@ def create_calc_bias_workflow(
     workflow.transform(
         name='calc_fragment_stats',
         ctx={'mem': 16},
-        func=remixt.analysis.stats.calculate_fragment_stats,
+        func='remixt.analysis.stats.calculate_fragment_stats',
         ret=mgd.TempOutputObj('fragstats'),
         args=(
             mgd.InputFile(tumour_seqdata_filename),
@@ -159,7 +150,7 @@ def create_calc_bias_workflow(
     workflow.transform(
         name='sample_gc',
         ctx={'mem': 16},
-        func=remixt.analysis.gcbias.sample_gc,
+        func='remixt.analysis.gcbias.sample_gc',
         args=(
             mgd.TempOutputFile('gcsamples.tsv'),
             mgd.InputFile(tumour_seqdata_filename),
@@ -172,7 +163,7 @@ def create_calc_bias_workflow(
     workflow.transform(
         name='gc_lowess',
         ctx={'mem': 16},
-        func=remixt.analysis.gcbias.gc_lowess,
+        func='remixt.analysis.gcbias.gc_lowess',
         args=(
             mgd.TempInputFile('gcsamples.tsv'),
             mgd.TempOutputFile('gcloess.tsv'),
@@ -182,7 +173,7 @@ def create_calc_bias_workflow(
 
     workflow.transform(
         name='split_segments',
-        func=remixt.utils.split_table,
+        func='remixt.utils.split_table',
         args=(
             mgd.TempOutputFile('segments.tsv', 'segment_rows_idx'),
             mgd.InputFile(segment_filename),
@@ -194,7 +185,7 @@ def create_calc_bias_workflow(
         name='gc_map_bias',
         axes=('segment_rows_idx',),
         ctx={'mem': 16},
-        func=remixt.analysis.gcbias.gc_map_bias,
+        func='remixt.analysis.gcbias.gc_map_bias',
         args=(
             mgd.TempInputFile('segments.tsv', 'segment_rows_idx'),
             mgd.TempInputObj('fragstats').prop('fragment_mean'),
@@ -208,7 +199,7 @@ def create_calc_bias_workflow(
 
     workflow.transform(
         name='merge_biases',
-        func=remixt.utils.merge_tables,
+        func='remixt.utils.merge_tables',
         args=(
             mgd.TempOutputFile('biases.tsv'),
             mgd.TempInputFile('biases.tsv', 'segment_rows_idx'),
@@ -217,7 +208,7 @@ def create_calc_bias_workflow(
 
     workflow.transform(
         name='biased_length',
-        func=remixt.analysis.gcbias.biased_length,
+        func='remixt.analysis.gcbias.biased_length',
         args=(
             mgd.OutputFile(segment_length_filename),
             mgd.TempInputFile('biases.tsv'),
@@ -247,7 +238,7 @@ def create_prepare_counts_workflow(
         name='segment_readcount',
         axes=('tumour_id',),
         ctx={'mem': 20},
-        func=remixt.analysis.readcount.segment_readcount,
+        func='remixt.analysis.readcount.segment_readcount',
         args=(
             mgd.TempOutputFile('segment_counts.tsv', 'tumour_id'),
             mgd.InputFile(segment_filename),
@@ -260,7 +251,7 @@ def create_prepare_counts_workflow(
         name='haplotype_allele_readcount',
         axes=('tumour_id',),
         ctx={'mem': 20},
-        func=remixt.analysis.readcount.haplotype_allele_readcount,
+        func='remixt.analysis.readcount.haplotype_allele_readcount',
         args=(
             mgd.TempOutputFile('allele_counts.tsv', 'tumour_id'),
             mgd.InputFile(segment_filename),
@@ -273,7 +264,7 @@ def create_prepare_counts_workflow(
     workflow.transform(
         name='phase_segments',
         ctx={'mem': 16},
-        func=remixt.analysis.readcount.phase_segments,
+        func='remixt.analysis.readcount.phase_segments',
         args=(
             mgd.TempInputFile('allele_counts.tsv', 'tumour_id'),
             mgd.TempOutputFile('phased_allele_counts.tsv', 'tumour_id', axes_origin=[]),
@@ -284,7 +275,7 @@ def create_prepare_counts_workflow(
         name='prepare_readcount_table',
         axes=('tumour_id',),
         ctx={'mem': 16},
-        func=remixt.analysis.readcount.prepare_readcount_table,
+        func='remixt.analysis.readcount.prepare_readcount_table',
         args=(
             mgd.TempInputFile('segment_counts.tsv', 'tumour_id'),
             mgd.TempInputFile('phased_allele_counts.tsv', 'tumour_id'),
@@ -308,7 +299,7 @@ def create_fit_model_workflow(
 
     workflow.transform(
         name='init',
-        func=remixt.analysis.pipeline.init,
+        func='remixt.analysis.pipeline.init',
         ret=mgd.TempOutputObj('init_params', 'init_id'),
         args=(
             mgd.TempOutputFile('init_results'),
@@ -320,7 +311,7 @@ def create_fit_model_workflow(
     workflow.transform(
         name='fit',
         axes=('init_id',),
-        func=remixt.analysis.pipeline.fit_task,
+        func='remixt.analysis.pipeline.fit_task',
         args=(
             mgd.TempOutputFile('fit_results', 'init_id'),
             mgd.InputFile(experiment_filename),
@@ -331,7 +322,7 @@ def create_fit_model_workflow(
 
     workflow.transform(
         name='collate',
-        func=remixt.analysis.pipeline.collate,
+        func='remixt.analysis.pipeline.collate',
         args=(
             mgd.OutputFile(results_filename),
             mgd.InputFile(experiment_filename),
@@ -381,7 +372,7 @@ def create_remixt_seqdata_workflow(
 
     workflow.transform(
         name='create_segments',
-        func=remixt.analysis.segment.create_segments,
+        func='remixt.analysis.segment.create_segments',
         args=(
             mgd.OutputFile(segment_filename),
             config,
@@ -394,7 +385,7 @@ def create_remixt_seqdata_workflow(
 
     workflow.subworkflow(
         name='infer_haps_workflow',
-        func=remixt.workflow.create_infer_haps_workflow,
+        func='remixt.workflow.create_infer_haps_workflow',
         args=(
             mgd.InputFile('seqdata', 'sample_id', fnames=seqdata_filenames),
             mgd.OutputFile(haplotypes_filename),
@@ -408,7 +399,7 @@ def create_remixt_seqdata_workflow(
 
     workflow.subworkflow(
         name='prepare_counts_workflow',
-        func=remixt.workflow.create_prepare_counts_workflow,
+        func='remixt.workflow.create_prepare_counts_workflow',
         args=(
             mgd.InputFile(segment_filename),
             mgd.InputFile(haplotypes_filename),
@@ -421,7 +412,7 @@ def create_remixt_seqdata_workflow(
     workflow.subworkflow(
         name='calc_bias_workflow',
         axes=('tumour_id',),
-        func=remixt.workflow.create_calc_bias_workflow,
+        func='remixt.workflow.create_calc_bias_workflow',
         args=(
             mgd.InputFile('seqdata', 'tumour_id', fnames=seqdata_filenames),
             mgd.TempInputFile('rawcounts', 'tumour_id'),
@@ -435,7 +426,7 @@ def create_remixt_seqdata_workflow(
         name='create_experiment',
         axes=('tumour_id',),
         ctx={'mem': 8},
-        func=remixt.analysis.experiment.create_experiment,
+        func='remixt.analysis.experiment.create_experiment',
         args=(
             mgd.InputFile('counts', 'tumour_id', template=counts_table_template),
             mgd.InputFile(breakpoint_filename),
@@ -447,7 +438,7 @@ def create_remixt_seqdata_workflow(
         name='ploidy_analysis_plots',
         axes=('tumour_id',),
         ctx={'mem': 8},
-        func=remixt.cn_plot.ploidy_analysis_plots,
+        func='remixt.cn_plot.ploidy_analysis_plots',
         args=(
             mgd.InputFile('experiment', 'tumour_id', template=experiment_template),
             mgd.OutputFile('plots', 'tumour_id', template=ploidy_plots_template),
@@ -457,7 +448,7 @@ def create_remixt_seqdata_workflow(
     workflow.subworkflow(
         name='fit_model',
         axes=('tumour_id',),
-        func=remixt.workflow.create_fit_model_workflow,
+        func='remixt.workflow.create_fit_model_workflow',
         args=(
             mgd.InputFile('experiment', 'tumour_id', template=experiment_template),
             mgd.OutputFile('results', 'tumour_id', fnames=results_filenames),
@@ -506,7 +497,7 @@ def create_remixt_bam_workflow(
     workflow.subworkflow(
         name='extract_seqdata_workflow',
         axes=('sample_id',),
-        func=remixt.workflow.create_extract_seqdata_workflow,
+        func='remixt.workflow.create_extract_seqdata_workflow',
         args=(
             mgd.InputFile('bam', 'sample_id', fnames=bam_filenames),
             mgd.OutputFile('seqdata', 'sample_id', template=seqdata_template),
@@ -517,7 +508,7 @@ def create_remixt_bam_workflow(
 
     workflow.subworkflow(
         name='remixt_seqdata_workflow',
-        func=create_remixt_seqdata_workflow,
+        func='create_remixt_seqdata_workflow',
         args=(
             mgd.InputFile(breakpoint_filename),
             mgd.InputFile('seqdata', 'sample_id', template=seqdata_template),
