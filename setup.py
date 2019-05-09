@@ -23,7 +23,7 @@ def find_files(directory, pattern):
 bamtools_sources = []
 bamtools_sources += list(find_files(bamtools_api_dir, '*.cpp'))
 bamtools_sources += list(find_files(bamtools_utils_dir, '*.cpp'))
-bamtools_sources = filter(lambda a: not a.endswith('win_p.cpp'), bamtools_sources)
+bamtools_sources = list(filter(lambda a: not a.endswith('win_p.cpp'), bamtools_sources))
 
 libraries = []
 if 'linux' in sys.platform:
