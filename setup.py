@@ -26,8 +26,13 @@ bamtools_sources += list(find_files(bamtools_utils_dir, '*.cpp'))
 bamtools_sources = list(filter(lambda a: not a.endswith('win_p.cpp'), bamtools_sources))
 
 libraries = []
+extra_compile_args = ['-g']
+extra_link_args = ['-g']
 if 'linux' in sys.platform:
     libraries.append('rt')
+elif sys.platform == 'darwin':
+    extra_compile_args.extend(['-stdlib=libc++'])
+    extra_link_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.9'])
 
 extensions = [
     Extension(
@@ -35,13 +40,15 @@ extensions = [
         sources=['remixt/bamreader.pyx', 'src/BamAlleleReader.cpp'] + bamtools_sources,
         include_dirs=['src', external_dir, bamtools_dir, numpy.get_include()],
         libraries=['z', 'bz2'],
-        extra_compile_args=['-g'],
+        extra_compile_args=extra_compile_args,
+        extra_link_args=extra_link_args,
     ),
     Extension(
         name='remixt.bpmodel',
         sources=['remixt/bpmodel.pyx'],
         include_dirs=[numpy.get_include()],
-        extra_compile_args=['-g', '-Wno-unused-function'],
+        extra_compile_args=extra_compile_args,
+        extra_link_args=extra_link_args,
     ),
 ]
 
