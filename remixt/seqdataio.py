@@ -65,7 +65,7 @@ def merge_seqdata(out_filename, in_filenames):
     """
 
     with pd.HDFStore(out_filename, 'w', complevel=9, complib='zlib') as out_store:
-        for in_filename in in_filenames.itervalues():
+        for in_filename in in_filenames.values():
             with pd.HDFStore(in_filename, 'r') as in_store:
                 for key in in_store.keys():
                     out_store.put(key, in_store[key], format='table')
@@ -144,7 +144,7 @@ def _read_seq_data_chunks(seqdata_filename, record_type, chromosome, chunksize, 
     if nrows == 0:
         yield empty_data[record_type]
     else:
-        for i in xrange(nrows//chunksize + 1):
+        for i in range(nrows//chunksize + 1):
             yield post(pd.read_hdf(seqdata_filename, key, start=i*chunksize, stop=(i+1)*chunksize))
 
 

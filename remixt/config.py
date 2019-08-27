@@ -38,7 +38,7 @@ def get_chromosome_lengths(config, ref_data_dir):
 
 
 def get_chromosomes(config, ref_data_dir):
-    return get_chromosome_lengths(config, ref_data_dir).keys()
+    return list(get_chromosome_lengths(config, ref_data_dir).keys())
     
     
 def get_sample_config(config, sample_id):

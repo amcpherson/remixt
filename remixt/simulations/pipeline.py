@@ -22,14 +22,14 @@ def read_sim_defs(sim_defs_filename):
 
     settings_dicts = dict()
 
-    for name, settings in sim_defs.iteritems():
+    for name, settings in sim_defs.items():
 
         if not name.endswith('_settings'):
             continue
 
         name = name[:-len('_settings')]
 
-        permute = [zip(itertools.repeat(key), values) for key, values in settings.iteritems()]
+        permute = [zip(itertools.repeat(key), values) for key, values in settings.items()]
         product = itertools.product(*permute)
 
         # Any settings with tuples of strings as keys represent settings
@@ -56,7 +56,7 @@ def read_sim_defs(sim_defs_filename):
 
         settings_df['name'] = name
 
-        for key, value in default_settings.iteritems():
+        for key, value in default_settings.items():
             if key not in settings_df:
                 settings_df[key] = value
 
@@ -80,18 +80,18 @@ def create_simulations(sim_defs_filename, config, ref_data_dir):
         return '{}_{}_{}'.format(sim_name, sim_idx, rep_idx)
 
     simulations = dict()
-    for sim_name, sim_params in sim_defs['simulations'].iteritems():
+    for sim_name, sim_params in sim_defs['simulations'].items():
         num_simulations = sim_params['num_simulations']
         num_replicates = sim_params['num_replicates']
         random_seed = sim_params['random_seed_start']
 
-        for sim_idx in xrange(num_simulations):
-            for rep_idx in xrange(num_replicates):
+        for sim_idx in range(num_simulations):
+            for rep_idx in range(num_replicates):
                 simulations[get_sim_instance_name(sim_name, sim_idx, rep_idx)] = sim_defs['defaults'].copy()
                 simulations[get_sim_instance_name(sim_name, sim_idx, rep_idx)]['random_seed'] = random_seed
                 random_seed += 1
 
-        for sim_config_name, sim_config_value in sim_params.iteritems():
+        for sim_config_name, sim_config_value in sim_params.items():
             if sim_config_name == 'num_simulations':
                 continue
 
@@ -107,10 +107,10 @@ def create_simulations(sim_defs_filename, config, ref_data_dir):
                 raise TypeError('sim config length mismatch for {}, {}'.format(sim_name, sim_config_name))
 
             for sim_idx, value in enumerate(sim_config_value):
-                for rep_idx in xrange(num_replicates):
+                for rep_idx in range(num_replicates):
                     simulations[get_sim_instance_name(sim_name, sim_idx, rep_idx)][sim_config_name] = value
 
-    for sim_instance_name, sim_params in simulations.iteritems():
+    for sim_instance_name, sim_params in simulations.items():
         if 'chromosome_lengths' not in sim_params:
             if 'chromosomes' in sim_params:
                 chromosomes = sim_params['chromosomes']
@@ -483,12 +483,12 @@ def evaluate_brk_cn_results(genome_mixture, brk_cn_table, order_true, order_pred
 
     # List of column names for known true copy number
     true_cols = []
-    for m in xrange(1, genome_mixture.M):
+    for m in range(1, genome_mixture.M):
         true_cols.append('true_cn_{}'.format(m))
 
     # List of column names for minimized known true copy number
     min_true_cols = []
-    for m in xrange(1, genome_mixture.M):
+    for m in range(1, genome_mixture.M):
         min_true_cols.append('min_true_cn_{}'.format(m))
 
     # List of column names for predicted copy number
@@ -514,7 +514,7 @@ def evaluate_brk_cn_results(genome_mixture, brk_cn_table, order_true, order_pred
     true_balanced_breakpoints = genome_mixture.genome_collection.collapsed_balanced_breakpoints()
 
     # Add true copy number and balanced indicator to table
-    for prediction_id, breakpoint in genome_mixture.detected_breakpoints.iteritems():
+    for prediction_id, breakpoint in genome_mixture.detected_breakpoints.items():
         if breakpoint not in true_brk_cn:
             continue
         data.loc[prediction_id, true_cols] = true_brk_cn[breakpoint][1:]
@@ -733,7 +733,7 @@ def evaluate_results_task(
         evaluation.update(evaluate_likelihood_results(experiment, cn_table))
 
     with pd.HDFStore(evaluation_filename, 'w') as store:
-        for key, data in evaluation.iteritems():
+        for key, data in evaluation.items():
             store['/' + key] = data
 
 
@@ -757,7 +757,7 @@ def merge_evaluations(merged_filename, sim_defs, evaluation_filenames, key_names
     merged_store['/simulations'] = sim_defs_table
 
     tables = collections.defaultdict(list)
-    for key, evaluation_filename in evaluation_filenames.iteritems():
+    for key, evaluation_filename in evaluation_filenames.items():
         store = pd.HDFStore(evaluation_filename, 'r')
 
         if not isinstance(key, tuple):
@@ -773,7 +773,7 @@ def merge_evaluations(merged_filename, sim_defs, evaluation_filenames, key_names
 
         merged_store['/brk_cn_table/' + '/'.join(key)] = store['/brk_cn_table']
     
-    for table_name, table in tables.iteritems():
+    for table_name, table in tables.items():
         merged_store[table_name] = pd.DataFrame(table)
 
 

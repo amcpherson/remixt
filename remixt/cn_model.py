@@ -56,7 +56,7 @@ class BreakpointModel(object):
 
         self.N = x.shape[0]
 
-        self.breakpoint_ids, self.breakpoints = zip(*breakpoints.iteritems())
+        self.breakpoint_ids, self.breakpoints = zip(*breakpoints.items())
         
         self.max_copy_number = kwargs.get('max_copy_number', 6)
         self.max_copy_number_diff = kwargs.get('max_copy_number_diff', 1)
@@ -91,7 +91,7 @@ class BreakpointModel(object):
 
         # Count the number of segments in the new segmentation
         self.N1 = 0
-        for n in xrange(-1, self.N):
+        for n in range(-1, self.N):
             if n in breakpoint_segment:
                 self.N1 += len(breakpoint_segment[n])
                 if (n, n + 1) not in adjacencies:
@@ -119,7 +119,7 @@ class BreakpointModel(object):
 
         # There may be a breakend at the start of the first segment,
         # in which case there will be a breakend with segment n=-1
-        for n in xrange(-1, self.N):
+        for n in range(-1, self.N):
             if n >= 0:
                 # Map old segment n to n_new
                 self.seg_fwd_remap[n] = n_new
@@ -348,7 +348,7 @@ class BreakpointModel(object):
         if norm > 0.:
             return weights / norm
         else:
-            print 'nothing for ' + name
+            print ('nothing for ' + name)
             return None
 
     def fit(self, h_init):
@@ -393,7 +393,7 @@ class BreakpointModel(object):
             for k, bp in enumerate(self.breakpoints):
                 cn = self.breakpoint_init[bp]
 
-                for s in xrange(self.model.num_brk_states):
+                for s in range(self.model.num_brk_states):
                     if np.all(cn == brk_states[s]):
                         p_breakpoint[k, s] = 1000.
 
@@ -406,8 +406,8 @@ class BreakpointModel(object):
         if self.prev_elbo is None:
             self.prev_elbo = self.model.calculate_elbo()
 
-        for i in xrange(self.num_em_iter):
-            for j in xrange(self.num_update_iter):
+        for i in range(self.num_em_iter):
+            for j in range(self.num_update_iter):
                 self.variational_update()
 
             if self.do_h_update:
@@ -420,24 +420,24 @@ class BreakpointModel(object):
             self.prev_elbo_diff = elbo - self.prev_elbo
             self.prev_elbo = elbo
 
-            print '[{}] completed iteration {}'.format(_gettime(), i)
-            print '[{}]     elbo: {:.10f}'.format(_gettime(), self.prev_elbo)
-            print '[{}]     elbo diff: {:.10f}'.format(_gettime(), self.prev_elbo_diff)
-            print '[{}]     h = {}'.format(_gettime(), np.asarray(self.model.h))
-            for name, value in self.get_likelihood_param_values().iteritems():
-                print '[{}]     {} = {}'.format(_gettime(), name, value)
+            print ('[{}] completed iteration {}'.format(_gettime(), i))
+            print ('[{}]     elbo: {:.10f}'.format(_gettime(), self.prev_elbo))
+            print ('[{}]     elbo diff: {:.10f}'.format(_gettime(), self.prev_elbo_diff))
+            print ('[{}]     h = {}'.format(_gettime(), np.asarray(self.model.h)))
+            for name, value in self.get_likelihood_param_values().items():
+                print ('[{}]     {} = {}'.format(_gettime(), name, value))
 
     @contextlib.contextmanager
     def elbo_check(self, name, threshold=-1e-6):
-        print '[{}] optimizing {}'.format(_gettime(), name)
+        print ('[{}] optimizing {}'.format(_gettime(), name))
         if not self.check_elbo:
             yield
             return
         elbo_before = self.model.calculate_elbo()
         yield
         elbo_after = self.model.calculate_elbo()
-        print '[{}]     elbo: {:.10f}'.format(_gettime(), elbo_after)
-        print '[{}]     elbo diff: {:.10f}'.format(_gettime(), elbo_after - elbo_before)
+        print ('[{}]     elbo: {:.10f}'.format(_gettime(), elbo_after))
+        print ('[{}]     elbo diff: {:.10f}'.format(_gettime(), elbo_after - elbo_before))
         if elbo_after - elbo_before < threshold:
             raise Exception('elbo error for step {}!'.format(name))
 
@@ -524,7 +524,7 @@ class BreakpointModel(object):
         elbo_after = self.model.calculate_expected_log_likelihood(np.ones((self.model.num_segments,), dtype=int))
 
         if elbo_after < elbo_before:
-            print '[{}] h rejected, elbo before: {}, after: {}'.format(_gettime(), elbo_before, elbo_after)
+            print ('[{}] h rejected, elbo before: {}, after: {}'.format(_gettime(), elbo_before, elbo_after))
             self.model.h = h_before
 
         else:
@@ -557,7 +557,7 @@ class BreakpointModel(object):
 
         elbo_after = self.model.calculate_expected_log_likelihood(np.ones((self.model.num_segments,), dtype=int))
         if elbo_after < elbo_before:
-            print '[{}] {} rejected, elbo before: {}, after: {}'.format(_gettime(), name, elbo_before, elbo_after)
+            print ('[{}] {} rejected, elbo before: {}, after: {}'.format(_gettime(), name, elbo_before, elbo_after))
             setattr(self.model, name, value_before)
 
         else:
@@ -651,7 +651,7 @@ def decode_breakpoints_naive(cn, adjacencies, breakpoints):
 
     brk_cn = dict()
 
-    for breakpoint_id, breakpoint in breakpoints.iteritems():
+    for breakpoint_id, breakpoint in breakpoints.items():
 
         # Calculate the copy number 'flow' at each breakend
         breakend_cn = dict()

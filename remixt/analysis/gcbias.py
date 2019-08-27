@@ -141,7 +141,7 @@ def gc_lowess(gc_samples_filename, gc_dist_filename, gc_table_filename, gc_resol
 
     gc_binned = gc_samples.groupby('gc_bin')['count'] \
                           .agg({'sum':np.sum, 'len':len, 'mean':np.mean}) \
-                          .reindex(xrange(gc_resolution+1)) \
+                          .reindex(range(gc_resolution+1)) \
                           .fillna(0) \
                           .reset_index() \
                           .rename(columns={'index':'gc_bin'}) \
@@ -211,7 +211,7 @@ class GCCurve(object):
         """ Tabulate GC probabilities for a specific fragment length
         """
         if l not in self.cache:
-            self.cache[l] = np.array([self.predict(float(x)/float(l)) for x in xrange(0, l + 1)])
+            self.cache[l] = np.array([self.predict(float(x)/float(l)) for x in range(0, l + 1)])
         return self.cache[l]
 
 
@@ -265,7 +265,7 @@ def calculate_segment_gc_map_bias(gc_cumsum, mappability, gc_dist, fragment_dist
     """
     bias = 0.
 
-    for fragment_length in xrange(fragment_min, fragment_max+1, fragment_step):
+    for fragment_length in range(fragment_min, fragment_max+1, fragment_step):
         if fragment_length < read_length:
             continue
 

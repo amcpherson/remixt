@@ -16,7 +16,7 @@ class Sentinal(object):
     @property
     def unfinished(self):
         if os.path.exists(self.sentinal_filename):
-            print 'sentinal file ' + self.sentinal_filename + ' exists'
+            print ('sentinal file ' + self.sentinal_filename + ' exists')
             return False
         return True
     def __enter__(self):

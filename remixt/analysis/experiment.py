@@ -135,7 +135,7 @@ def get_wild_type_adjacencies(segment_data, max_seg_gap):
 
     # Adjacent segments in the same chromosome
     adjacencies = set()
-    for idx in xrange(len(segment_data.index) - 1):
+    for idx in range(len(segment_data.index) - 1):
         same_chrom = segment_data.iloc[idx]['chromosome'] == segment_data.iloc[idx+1]['chromosome']
         gap_length = segment_data.iloc[idx+1]['start'] - segment_data.iloc[idx]['end']
         if same_chrom and gap_length <= max_seg_gap:
@@ -313,7 +313,7 @@ class Experiment(object):
     def chains(self):
         chain_start = [0]
         chain_end = [len(self.count_data.index)]
-        for idx in xrange(len(self.count_data.index) - 1):
+        for idx in range(len(self.count_data.index) - 1):
             if (idx, idx+1) not in self.adjacencies:
                 chain_end.append(idx+1)  # Half-open interval indexing [start, end)
                 chain_start.append(idx+1)
@@ -369,7 +369,7 @@ def create_cn_table(experiment, cn, h, phi=None):
 
     data = create_segment_table(experiment)
 
-    for m in xrange(0, cn.shape[1]):
+    for m in range(0, cn.shape[1]):
         data['major_{0}'.format(m)] = cn[:, m, 0]
         data['minor_{0}'.format(m)] = cn[:, m, 1]
 

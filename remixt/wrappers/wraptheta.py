@@ -167,7 +167,7 @@ class ThetaAnalysis(object):
 
         chrom_idx = pd.DataFrame({
             'chromosome':chromosomes,
-            'chrom_idx':xrange(len(chromosomes)),
+            'chrom_idx':range(len(chromosomes)),
         })
 
         chrom_idx_filename = self.get_analysis_filename('chrom_idx.tsv')

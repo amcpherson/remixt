@@ -196,11 +196,11 @@ def simulate_mixture_read_data(read_data_filename, genomes, read_depths, snps, p
             fragment_data = dict(list(fragment_data.groupby(segment_data['chromosome'])))
 
             # Overlap with SNPs and output per chromosome
-            for chromosome, chrom_fragments in fragment_data.iteritems():
+            for chromosome, chrom_fragments in fragment_data.items():
 
                 # Reindex for subsequent index based merge
                 chrom_fragments.reset_index(drop=True, inplace=True)
-                chrom_fragments['fragment_id'] = xrange(len(chrom_fragments.index))
+                chrom_fragments['fragment_id'] = range(len(chrom_fragments.index))
                 chrom_fragments['fragment_id'] += chromosome_fragment_id_start[chromosome]
                 chromosome_fragment_id_start[chromosome] += len(chrom_fragments.index)
 
@@ -311,7 +311,7 @@ def resample_mixture_read_data(read_data_filename, source_filename, genomes, rea
     chromosome_fragment_id_start = collections.Counter()
 
     for chromosome, chrom_read_depth_data in read_depth_data.groupby('chromosome'):
-        print 'chromosome'
+        print ('chromosome')
         
         # Get source fragments contained within each segment
         # Note: each source fragment will be duplicated for each allele, and
@@ -327,7 +327,7 @@ def resample_mixture_read_data(read_data_filename, source_filename, genomes, rea
         sampled_fragments = pd.DataFrame(
             data=0,
             columns=['start', 'end', 'allele'],
-            index=xrange(source_fragments['resample_count'].sum()),
+            index=range(source_fragments['resample_count'].sum()),
             dtype=np.int)
         sampled_fragments.values[:] = np.repeat(
             source_fragments[['start', 'end', 'allele']].values,
@@ -336,7 +336,7 @@ def resample_mixture_read_data(read_data_filename, source_filename, genomes, rea
 
         # Reindex for subsequent index based merge
         sampled_fragments.reset_index(drop=True, inplace=True)
-        sampled_fragments['fragment_id'] = xrange(len(sampled_fragments.index))
+        sampled_fragments['fragment_id'] = range(len(sampled_fragments.index))
         sampled_fragments['fragment_id'] += chromosome_fragment_id_start[chromosome]
         chromosome_fragment_id_start[chromosome] += len(sampled_fragments.index)
 
@@ -344,21 +344,21 @@ def resample_mixture_read_data(read_data_filename, source_filename, genomes, rea
         chrom_snps = snps['/chromosome_{}'.format(chromosome)][['position', 'is_alt_0', 'is_alt_1']]
 
         # Overlap snp positions and fragment intervals
-        print sampled_fragments
-        print chrom_snps
+        print (sampled_fragments)
+        print (chrom_snps)
         fragment_idx, snp_idx = remixt.segalg.interval_position_overlap(
             sampled_fragments[['start', 'end']].values,
             chrom_snps['position'].values,
         )
-        print 'done'
+        print ('done')
 
         # Create fragment snp table
         fragment_snps = pd.DataFrame({'snp_idx':snp_idx, 'fragment_idx':fragment_idx})
-        print 'merge1'
+        print ('merge1')
         fragment_snps = fragment_snps.merge(sampled_fragments, left_on='fragment_idx', right_index=True)
-        print 'merge2'
+        print ('merge2')
         fragment_snps = fragment_snps.merge(chrom_snps, left_on='snp_idx', right_index=True)
-        print 'done'
+        print ('done')
 
         # Keep only snps falling within reads
         fragment_snps = fragment_snps[
@@ -382,9 +382,9 @@ def resample_mixture_read_data(read_data_filename, source_filename, genomes, rea
         fragment_snps['is_alt'] = np.where(base_call_error, 1-fragment_snps['is_alt'], fragment_snps['is_alt'])
 
         # Write out a chunk of data
-        print 'done'
+        print ('done')
         writer.write(chromosome, sampled_fragments, fragment_snps)
-        print 'done'
+        print ('done')
 
     writer.close()
 

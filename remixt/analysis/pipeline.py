@@ -104,7 +104,7 @@ def init(
 
     with pd.HDFStore(init_results_filename, 'w') as store:
         store['read_depth'] = read_depth
-        store['minor_modes'] = pd.Series(minor_modes, index=xrange(len(minor_modes)))
+        store['minor_modes'] = pd.Series(minor_modes, index=range(len(minor_modes)))
 
     return dict(enumerate(init_params))
 
@@ -149,14 +149,14 @@ def fit(experiment, init_params, config):
     if config.get('optimal_initialization', False):
         breakpoint_init = experiment.genome_mixture.genome_collection.collapsed_breakpoint_copy_number()
         
-        for bp in experiment.genome_mixture.detected_breakpoints.itervalues():
+        for bp in experiment.genome_mixture.detected_breakpoints.values():
             if bp not in breakpoint_init:
                 breakpoint_init[bp] = np.zeros((experiment.genome_mixture.M,))
 
         swap = (experiment.h[1] < experiment.h[2]) != (h_init[1] < h_init[2])
 
         if swap:
-            for bp, cn in breakpoint_init.iteritems():
+            for bp, cn in breakpoint_init.items():
                 cn = cn.copy()
                 cn[1:] = cn[1:][::-1]
                 breakpoint_init[bp] = cn
@@ -244,9 +244,9 @@ def store_fit_results(store, experiment, fit_results, key_prefix):
 
     brk_cn_table = remixt.analysis.experiment.create_brk_cn_table(brk_cn, experiment.breakpoint_segment_data)
 
-    store[key_prefix + '/h'] = pd.Series(h, index=xrange(len(h)))
+    store[key_prefix + '/h'] = pd.Series(h, index=range(len(h)))
     store[key_prefix + '/cn'] = cn_table
-    store[key_prefix + '/mix'] = pd.Series(h / h.sum(), index=xrange(len(h)))
+    store[key_prefix + '/mix'] = pd.Series(h / h.sum(), index=range(len(h)))
     store[key_prefix + '/brk_cn'] = brk_cn_table
 
 
@@ -268,7 +268,7 @@ def collate(collate_filename, experiment_filename, init_results_filename, fit_re
 
     # Extract the statistics for selecting solutions
     stats_table = list()
-    for init_id, results_filename in fit_results_filenames.iteritems():
+    for init_id, results_filename in fit_results_filenames.items():
         results = pickle.load(open(results_filename))
         stats = dict(results['stats'])
         stats['init_id'] = init_id
@@ -280,13 +280,13 @@ def collate(collate_filename, experiment_filename, init_results_filename, fit_re
         collated['stats'] = stats_table
 
         with pd.HDFStore(init_results_filename, 'r') as results:
-            for key, value in results.iteritems():
+            for key, value in results.items():
                 collated[key] = results[key]
 
         with open(experiment_filename, 'r') as f:
             experiment = pickle.load(f)
 
-        for init_id, results_filename in fit_results_filenames.iteritems():
+        for init_id, results_filename in fit_results_filenames.items():
             results = pickle.load(open(results_filename))
             store_fit_results(collated, experiment, results, 'solutions/solution_{0}'.format(init_id))
 

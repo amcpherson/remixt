@@ -242,7 +242,7 @@ def create_chromosome_color_map(chromosomes):
     color_map = plt.get_cmap('Dark2')
 
     chromosome_colors = list()
-    for i in xrange(len(chromosomes)):
+    for i in range(len(chromosomes)):
         if len(chromosomes) == 1:
             f = 0.
         else:

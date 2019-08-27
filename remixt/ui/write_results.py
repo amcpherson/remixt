@@ -25,7 +25,7 @@ def write_results_tables(**args):
     brk_cn.to_csv(args['brk_cn_filename'], sep='\t', index=False)
 
     metadata = dict()
-    for key, value in stats.iteritems():
+    for key, value in stats.items():
         try:
             metadata[key] = np.asscalar(value)
         except AttributeError:

@@ -21,7 +21,7 @@ cdef extern from "BamAlleleReader.h":
         int position
         int isAlt
     cdef cppclass CAlleleReader "AlleleReader":
-        void CAlleleReader(std::string bamFilename,
+        void CAlleleReader(string bamFilename,
             string snpFilename,
             string chromosome,
             int maxFragmentLength,
