@@ -81,8 +81,8 @@ def perfect_cn_prior(cn):
 
     cn_prior = np.zeros((cn_max + 2, cn_max + 2))
 
-    for n in xrange(cn.shape[0]):
-        for m in xrange(1, cn.shape[1]):
+    for n in range(cn.shape[0]):
+        for m in range(1, cn.shape[1]):
             cn_1 = int(cn[n,m,0])
             cn_2 = int(cn[n,m,1])
             if cn_1 > cn_max or cn_2 > cn_max:
@@ -175,8 +175,8 @@ class remixt_unittest(unittest.TestCase):
         built_cns = set()
         for cn in model.build_cn_states():
             cn_tuple = list()
-            for m in xrange(3):
-                for ell in xrange(2):
+            for m in range(3):
+                for ell in range(2):
                     cn_tuple.append(cn[0,m,ell])
             cn_tuple = tuple(cn_tuple)
             self.assertNotIn(cn_tuple, built_cns)
@@ -184,10 +184,10 @@ class remixt_unittest(unittest.TestCase):
 
         # Build the naive way
         expected_cns = set()
-        for b1 in xrange(cn_max+1):
-            for b2 in xrange(cn_max+1):
-                for d1 in xrange(-cn_dev_max, cn_dev_max+1):
-                    for d2 in xrange(-cn_dev_max, cn_dev_max+1):
+        for b1 in range(cn_max+1):
+            for b2 in range(cn_max+1):
+                for d1 in range(-cn_dev_max, cn_dev_max+1):
+                    for d2 in range(-cn_dev_max, cn_dev_max+1):
                         if b1 + d1 < 0 or b2 + d2 < 0 or b1 + d1 > cn_max or b2 + d2 > cn_max:
                             continue
                         if (b1 != b2 or b1+d1 != b2+d2) and (b1 <= b2 and b1+d1 <= b2+d2):
@@ -215,16 +215,16 @@ class remixt_unittest(unittest.TestCase):
         adjacencies = [(0, 1), (1, 2)]
         breakpoints = [frozenset([(0, 1), (2, 0)])]
 
-        for i in xrange(1000):
-            print i
+        for i in range(1000):
+            print (i)
             random.seed(i)
             np.random.seed(i)
 
             # Modify copy number from known true
             cn_init = cn.copy()
-            for n in xrange(N):
+            for n in range(N):
                 m = np.random.randint(low=1, high=M)
-                for allele in xrange(2):
+                for allele in range(2):
                     cn_init[n, m, allele] += np.random.randint(low=-1, high=1)
 
             # print np.random.randint(low=-1, high=1, size=cn_init[:, 1:, :].shape)
@@ -236,10 +236,10 @@ class remixt_unittest(unittest.TestCase):
             graph.optimize()
 
             if not np.all(graph.breakpoint_copy_number[['cn_1', 'cn_2']].values == np.array([1, 0])):
-                print cn
-                print cn_init
-                print graph.segment_cn
-                print graph.breakpoint_copy_number
+                print (cn)
+                print (cn_init)
+                print (graph.segment_cn)
+                print (graph.breakpoint_copy_number)
                 import IPython; IPython.embed(); raise
 
             self.assertTrue(np.all(graph.breakpoint_copy_number[['cn_1', 'cn_2']].values == np.array([1, 0])))
@@ -281,7 +281,7 @@ class remixt_unittest(unittest.TestCase):
         emission = likelihood.NegBinBetaBinLikelihood(experiment.x, experiment.l)
         emission.h = h_init
 
-        print experiment.h, h_init
+        print (experiment.h, h_init)
 
         N = experiment.l.shape[0]
         M = experiment.h.shape[0]
@@ -328,13 +328,13 @@ class remixt_unittest(unittest.TestCase):
 
         evaluation = remixt.simulations.pipeline.evaluate_results(experiment.genome_mixture, cn_table, brk_cn_table, h / h.sum())
         with pd.HDFStore('test.h5', 'w') as store:
-            for key, data in evaluation.iteritems():
+            for key, data in evaluation.items():
                 store['/' + key] = data
 
-        print 'creating visualization'
+        print ('creating visualization')
         remixt.visualize.create_genome_visualization(cn_table, brk_cn_table, 'test.html')
 
-        print 'plotting result'
+        print ('plotting result')
         fig = remixt.cn_plot.experiment_plot(experiment, cn, h, maxcopies=8)
         fig.savefig('test_result.pdf')
 
@@ -393,7 +393,7 @@ class remixt_unittest(unittest.TestCase):
 
         genome.create(rparams)
 
-        for _ in xrange(20):
+        for _ in range(20):
             genome.rearrange(rparams)
 
         cn_1 = copy.deepcopy(genome.segment_copy_number)
@@ -416,13 +416,13 @@ class remixt_unittest(unittest.TestCase):
 
         genome.create(rparams)
 
-        for _ in xrange(10):
+        for _ in range(10):
             genome.rearrange(rparams)
 
         cn_1 = copy.deepcopy(genome.segment_copy_number)
         brks_1 = copy.deepcopy(genome.breakpoints)
 
-        for _ in xrange(10):
+        for _ in range(10):
             genome.rearrange(rparams)
 
         genome.rewind(10)
@@ -446,7 +446,7 @@ class remixt_unittest(unittest.TestCase):
 
         genome.create(rparams)
 
-        for _ in xrange(10):
+        for _ in range(10):
             genome.rearrange(rparams)
 
         germline_genome = {

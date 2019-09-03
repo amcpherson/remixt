@@ -153,7 +153,7 @@ class RearrangedGenome(object):
             genome_length = params['genome_length']
             chrom_length_concentration = params['chrom_length_concentration']
 
-            chromosome_ids = [str(a) for a in xrange(1, num_chroms + 1)]
+            chromosome_ids = [str(a) for a in range(1, num_chroms + 1)]
             chromosome_lengths = np.random.dirichlet([chrom_length_concentration] * num_chroms) * genome_length
             chromosome_lengths.sort_values()
             chromosome_lengths = chromosome_lengths[::-1]
@@ -200,7 +200,7 @@ class RearrangedGenome(object):
 
             for allele in (0, 1):
 
-                chrom_segs = xrange(segment_idx, segment_idx+num_seg)
+                chrom_segs = range(segment_idx, segment_idx+num_seg)
                 chrom_alleles = [allele]*num_seg
                 chrom_orient = [1]*num_seg
 
@@ -220,7 +220,7 @@ class RearrangedGenome(object):
 
         """
         for chromosome_idx, chromosome in enumerate(self.chromosomes):
-            for segment_idx in xrange(len(chromosome)):
+            for segment_idx in range(len(chromosome)):
                 next_segment_idx = (segment_idx + 1) % len(chromosome)
                 yield (chromosome_idx, next_segment_idx)
 
@@ -732,7 +732,7 @@ class RearrangementHistorySampler(object):
 
         swarm = [genome_init] * self.num_swarm
 
-        for _ in xrange(num_events):
+        for _ in range(num_events):
             new_swarm = list()
             for genome in swarm:
                 genome = genome.copy()
@@ -757,7 +757,7 @@ def _collapse_allele_bp(allele_bp):
 
 def _sum_brk_cn_alleles(allele_brk_cn):
     total_brk_cn = {}
-    for allele_bp, cn in allele_brk_cn.iteritems():
+    for allele_bp, cn in allele_brk_cn.items():
         total_bp = _collapse_allele_bp(allele_bp)
         if total_bp not in total_brk_cn:
             total_brk_cn[total_bp] = cn
@@ -800,13 +800,13 @@ class GenomeCollection(object):
                 self.breakpoints.add(frozenset([brkend_1, brkend_2]))
 
         self.breakpoint_copy_number = collections.defaultdict(lambda: np.zeros(self.M))
-        for m in xrange(self.M):
-            for breakpoint, brk_cn in self.genomes[m].breakpoint_copy_number.iteritems():
+        for m in range(self.M):
+            for breakpoint, brk_cn in self.genomes[m].breakpoint_copy_number.items():
                 self.breakpoint_copy_number[breakpoint][m] = brk_cn
         self.breakpoint_copy_number = dict(self.breakpoint_copy_number)
 
         self.balanced_breakpoints = set()
-        for breakpoint, brk_cn in self.breakpoint_copy_number.iteritems():
+        for breakpoint, brk_cn in self.breakpoint_copy_number.items():
             brk_cn_sum = 0
             for (n, ell), side_1 in breakpoint:
                 if side_1 == 1:
@@ -903,7 +903,7 @@ class GenomeCollectionSampler(object):
 
         success = False
         ancestral_genome = None
-        for anc_iter in xrange(100):
+        for anc_iter in range(100):
             ancestral_genomes = self.rh_sampler.sample_rearrangement_history(wt_genome, self.num_ancestral_events)
             ancestral_genomes = np.array(ancestral_genomes)
 
@@ -912,7 +912,7 @@ class GenomeCollectionSampler(object):
             ancestral_genomes = ancestral_genomes[ploidy_errors < self.ploidy_max_error]
 
             if len(ancestral_genomes) == 0:
-                print 'failed ploidy'
+                print ('failed ploidy')
                 continue
 
             loh_proportions = np.array([genome.proportion_loh() for genome in ancestral_genomes])
@@ -920,7 +920,7 @@ class GenomeCollectionSampler(object):
             ancestral_genomes = ancestral_genomes[loh_errors < self.proportion_loh_max_error]
 
             if len(ancestral_genomes) == 0:
-                print 'failed loh'
+                print ('failed loh')
                 continue
 
             ancestral_genome = ancestral_genomes[0]
@@ -938,7 +938,7 @@ class GenomeCollectionSampler(object):
 
         for m in range(self.M - 2, self.M):
             success = False
-            for desc_iter in xrange(100):
+            for desc_iter in range(100):
                 descendent_genomes = self.rh_sampler.sample_rearrangement_history(
                     ancestral_genome, self.num_descendent_events, fitness_callback=subclone_fitness)
                 descendent_genomes = np.array(descendent_genomes)
@@ -948,7 +948,7 @@ class GenomeCollectionSampler(object):
                 descendent_genomes = descendent_genomes[subclonal_errors < self.proportion_subclonal_max_error]
 
                 if len(descendent_genomes) == 0:
-                    print 'failed subclonal'
+                    print ('failed subclonal')
                     continue
 
                 genomes.append(descendent_genomes[0])
@@ -975,7 +975,7 @@ class GenomeMixture(object):
         # Table of breakpoint information including chromosome position
         # info and prediction ids
         breakpoint_segment_data = list()
-        for prediction_id, breakpoint in self.detected_breakpoints.iteritems():
+        for prediction_id, breakpoint in self.detected_breakpoints.items():
             breakpoint_info = {'prediction_id': prediction_id}
             for breakend_idx, breakend in enumerate(breakpoint):
                 n, side = breakend
@@ -1175,7 +1175,7 @@ class Experiment(object):
     def chains(self):
         chain_start = [0]
         chain_end = [self.N]
-        for idx in xrange(self.N - 1):
+        for idx in range(self.N - 1):
             if (idx, idx+1) not in self.adjacencies:
                 chain_end.append(idx+1)  # Half-open interval indexing [start, end)
                 chain_start.append(idx+1)
@@ -1375,7 +1375,7 @@ class ExperimentSampler(object):
         # whether the major allele refers to the first (a) allele
         # TODO: perhaps easiers to just do minor/major/total
         major_is_allele_a = x[:, 0] > x[:, 1]
-        for n in xrange(N):
+        for n in range(N):
             if not major_is_allele_a[n]:
                 x[n, 0], x[n, 1] = x[n, 1], x[n, 0]
 

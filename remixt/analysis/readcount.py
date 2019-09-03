@@ -45,7 +45,7 @@ def phase_segments(allele_counts_filenames, phased_allele_counts_filenames):
     tumour_ids = allele_counts_filenames.keys()
 
     allele_count_tables = list()
-    for allele_counts_filename in allele_counts_filenames.itervalues():
+    for allele_counts_filename in allele_counts_filenames.values():
         allele_count_tables.append(pd.read_csv(allele_counts_filename, sep='\t', converters={'chromosome': str}))
 
     phased_allele_counts_tables = remixt.analysis.haplotype.phase_segments(*allele_count_tables)

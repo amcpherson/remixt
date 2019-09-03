@@ -22,7 +22,7 @@ class ProbabilityError(ValueError):
 
         """
 
-        for name, value in variables.iteritems():
+        for name, value in variables.items():
             message += '\n{0}={1}'.format(name, value)
 
         ValueError.__init__(self, message)

@@ -42,7 +42,7 @@ def match_breakpoints(bp1, bp2, search_range=400):
 
     be_matched = list()
 
-    for (chromosome, strand), be1 in be1_gb.iteritems():
+    for (chromosome, strand), be1 in be1_gb.items():
         
         if (chromosome, strand) not in be2_gb:
             continue

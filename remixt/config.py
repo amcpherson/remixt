@@ -27,16 +27,18 @@ def get_chromosome_lengths(config, ref_data_dir):
     chromosome_lengths = remixt.utils.read_chromosome_lengths(genome_fai)
     
     chromosomes = set(remixt.config.get_param(config, 'chromosomes'))
+
+    filtered_chromosome_lengths = {}
     
     for chrom in chromosome_lengths.keys():
-        if chrom not in chromosomes:
-            del chromosome_lengths[chrom]
+        if chrom in chromosomes:
+            filtered_chromosome_lengths[chrom] = chromosome_lengths[chrom]
     
-    return chromosome_lengths
+    return filtered_chromosome_lengths
 
 
 def get_chromosomes(config, ref_data_dir):
-    return get_chromosome_lengths(config, ref_data_dir).keys()
+    return list(get_chromosome_lengths(config, ref_data_dir).keys())
     
     
 def get_sample_config(config, sample_id):

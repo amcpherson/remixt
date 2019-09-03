@@ -178,7 +178,7 @@ class BreakpointDatabase(object):
             for side in ('1', '2'):
                 self.positions[(row['chromosome_'+side], row['strand_'+side])].append(row['position_'+side])
                 self.prediction_ids[(row['chromosome_'+side], row['strand_'+side], row['position_'+side])].add((row['prediction_id'], side))
-        for key in self.positions.iterkeys():
+        for key in self.positions.keys():
             self.positions[key] = sorted(self.positions[key])
 
     def query(self, row, extend=0):

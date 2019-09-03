@@ -279,21 +279,21 @@ class CloneHDAnalysis(object):
                     names = line[1:].split()
                     if len(names) == 2 and names[1] == 'clones':
                         summary_info['num_clones'] = int(names[0])
-                        names = ['mass'] + ['frac_'+str(i+1) for i in xrange(int(names[0]))]
+                        names = ['mass'] + ['frac_'+str(i+1) for i in range(int(names[0]))]
                 else:
                     values = line.split()
                     summary_info.update(dict(zip(names, values)))
 
         with open(output_mix_filename, 'w') as output_mix_file:
 
-            mix = [float(summary_info['frac_'+str(i+1)]) for i in xrange(summary_info['num_clones'])]
+            mix = [float(summary_info['frac_'+str(i+1)]) for i in range(summary_info['num_clones'])]
             mix = [1-sum(mix)] + mix
 
             output_mix_file.write('\t'.join([str(a) for a in mix]) + '\n')
 
         cn_table = None
 
-        for clone_id in xrange(1, summary_info['num_clones']+1):
+        for clone_id in range(1, summary_info['num_clones']+1):
 
             cna_filename = self.get_analysis_filename('tumour.cna.subclone-{0}.txt'.format(clone_id))
 

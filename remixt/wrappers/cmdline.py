@@ -77,7 +77,7 @@ def interface(Tool):
             haplotype_filename=args.haplotype_filename,
         )
 
-        print 'Number of initializations = {0}'.format(num_init)
+        print ('Number of initializations = {0}'.format(num_init))
 
     elif args.command == 'run':
 

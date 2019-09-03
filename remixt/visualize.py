@@ -18,7 +18,7 @@ chromosomes = [str(a) for a in range(1, 23)] + ['X']
 def _create_chromosome_colors(chromosomes):
     color_map = matplotlib.pyplot.get_cmap('Set1')
     chromosome_colors = list()
-    for i in xrange(len(chromosomes)):
+    for i in range(len(chromosomes)):
         rgb_color = color_map(float(i) / float(len(chromosomes)))
         hex_color = matplotlib.colors.rgb2hex(rgb_color)
         chromosome_colors.append(hex_color)
@@ -576,7 +576,7 @@ def create_source_select(sources, title, name):
         callback_code += "source_{}.trigger('change');\n".format(idx)
 
         callback_args["source_{}".format(idx)] = to_source
-        for s_name, s_data in from_sources.iteritems():
+        for s_name, s_data in from_sources.items():
             callback_args['source_{}_{}'.format(idx, s_name)] = s_data
 
     callback = bokeh.models.CustomJS(args=callback_args, code=callback_code)

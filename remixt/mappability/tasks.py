@@ -9,9 +9,9 @@ import remixt.utils
 def create_kmers(genome_fasta, k, kmers_filename):
     with open(kmers_filename, 'w') as kmers_file:
         genome_sequences = dict(remixt.utils.read_sequences(genome_fasta))
-        for chromosome, sequence in genome_sequences.iteritems():
+        for chromosome, sequence in genome_sequences.items():
             chromosome = chromosome.split()[0]
-            for start in xrange(len(sequence)):
+            for start in range(len(sequence)):
                 kmer = sequence[start:start+k].upper()
                 if len(kmer) < k:
                     continue
@@ -79,7 +79,7 @@ def create_bedgraph(alignment_filename, bedgraph_filename):
 
 def merge_files_by_line(in_filenames, out_filename):
     with pd.HDFStore(out_filename, 'w') as store:
-        for in_filename in in_filenames.itervalues():
+        for in_filename in in_filenames.values():
             data = pd.read_csv(
                 in_filename, sep='\t', header=None,
                 names=['chromosome', 'start', 'end', 'quality'],

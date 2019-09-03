@@ -144,7 +144,7 @@ def infer_snp_genotype_from_tumour(snp_genotype_filename, seqdata_filenames, chr
     
     # Calculate total reference alternate read counts in all tumours
     snp_counts_df = pd.DataFrame(columns=['position', 'ref_count', 'alt_count']).astype(int)
-    for tumour_id, seqdata_filename in seqdata_filenames.iteritems():
+    for tumour_id, seqdata_filename in seqdata_filenames.items():
         snp_counts_df = pd.concat([snp_counts_df, read_snp_counts(seqdata_filename, chromosome)], ignore_index=True)
         snp_counts_df = snp_counts_df.groupby('position').sum().reset_index()
 

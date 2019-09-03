@@ -24,7 +24,7 @@ def identify_balanced_rearrangements(H):
         M.add_edge(*transverse_edge, cost=transverse_edge_cost)
 
     for edge in H.edges_iter():
-        for multi_edge_idx, edge_attr in H[edge[0]][edge[1]].iteritems():
+        for multi_edge_idx, edge_attr in H[edge[0]][edge[1]].items():
             color = edge_attr['color']
             colored_node_1 = edge[0] + (color,)
             colored_node_2 = edge[1] + (color,)
@@ -66,18 +66,18 @@ def identify_balanced_rearrangements(H):
 
 def minimize_breakpoint_copies(adjacencies, brk_cn):
     min_brk_cn = dict()
-    for brk, cn in brk_cn.iteritems():
+    for brk, cn in brk_cn.items():
         min_brk_cn[brk] = cn.copy()
 
-    num_clones = max([cn.shape[0] for cn in brk_cn.itervalues()])
+    num_clones = max([cn.shape[0] for cn in brk_cn.values()])
 
     while True:
         has_changed = False
         
-        for m in xrange(num_clones):
+        for m in range(num_clones):
             H = networkx.MultiGraph()
             
-            for brk, cn in min_brk_cn.iteritems():
+            for brk, cn in min_brk_cn.items():
                 if cn[m] > 0:
                     H.add_edge(*brk, color=1)
                     

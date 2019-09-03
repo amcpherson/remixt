@@ -23,7 +23,7 @@ def create_sim_alleles(chromosome, config, ref_data_dir, recomb_rate=20.0/1.e8):
 
     """
 
-    print chromosome
+    print (chromosome)
 
     hap_filename = remixt.config.get_filename(config, ref_data_dir, 'haplotypes', chromosome=chromosome)
     legend_filename = remixt.config.get_filename(config, ref_data_dir, 'legend', chromosome=chromosome)
@@ -67,7 +67,7 @@ def create_sim_alleles(chromosome, config, ref_data_dir, recomb_rate=20.0/1.e8):
     individual_idx_1 = individual_idx * 2 + 1
 
     # Select nucleotide codes based on individual
-    hap_data = pd.read_csv(hap_filename, compression='gzip', sep=' ', dtype=np.uint8, header=None, names=xrange(num_1kg_individuals*2), usecols=individual_cols).values
+    hap_data = pd.read_csv(hap_filename, compression='gzip', sep=' ', dtype=np.uint8, header=None, names=range(num_1kg_individuals*2), usecols=individual_cols).values
     data['is_alt_0'] = hap_data[data.index.values,individual_idx_0]
     data['is_alt_1'] = hap_data[data.index.values,individual_idx_1]
 

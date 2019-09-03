@@ -60,13 +60,13 @@ def naive_norm_const(cn_states, framelogprob, model):
     num_cn_states = cn_states.shape[0]
 
     log_transmat = np.empty((num_segments, num_cn_states, num_cn_states))
-    for seg_idx in xrange(num_segments - 1):
+    for seg_idx in range(num_segments - 1):
         model.calculate_log_transmat(seg_idx, log_transmat[seg_idx, :, :])
 
     norm_const = 0.
     for seg_states in itertools.product(range(num_cn_states), repeat=num_segments):
         log_prob = framelogprob[range(num_segments), seg_states].sum()
-        for seg_idx in xrange(num_segments - 1):
+        for seg_idx in range(num_segments - 1):
             log_prob += log_transmat[seg_idx, seg_states[seg_idx], seg_states[seg_idx + 1]]
         norm_const += np.exp(log_prob)
 
@@ -78,13 +78,13 @@ def naive_posterior_marginal(cn_states, framelogprob, model, query_seg_idx):
     num_cn_states = cn_states.shape[0]
 
     log_transmat = np.empty((num_segments, num_cn_states, num_cn_states))
-    for seg_idx in xrange(num_segments - 1):
+    for seg_idx in range(num_segments - 1):
         model.calculate_log_transmat(seg_idx, log_transmat[seg_idx, :, :])
 
     posterior_marginal = np.zeros((num_cn_states,))
     for seg_states in itertools.product(range(num_cn_states), repeat=num_segments):
         log_prob = framelogprob[range(num_segments), seg_states].sum()
-        for seg_idx in xrange(num_segments - 1):
+        for seg_idx in range(num_segments - 1):
             log_prob += log_transmat[seg_idx, seg_states[seg_idx], seg_states[seg_idx + 1]]
         posterior_marginal[seg_states[query_seg_idx]] += np.exp(log_prob)
 
@@ -99,7 +99,7 @@ num_replicates = 1
 class model_unittest(unittest.TestCase):
 
     def test_total_transition_expectation_opt(self):
-        for i in xrange(num_replicates):
+        for i in range(num_replicates):
             for orientation in (1, -1):
                 p_breakpoint = np.random.dirichlet((4.,) * (cn_max + 1))
 
@@ -124,7 +124,7 @@ class model_unittest(unittest.TestCase):
 
         num_cn_states = cn_states.shape[0]
 
-        for i in xrange(num_replicates):
+        for i in range(num_replicates):
             for brk_orient in (1, -1):
                 p_breakpoint = np.random.dirichlet((4.,) * brk_states.shape[0])
                 p_allele = np.random.dirichlet((4.,) * 2)
@@ -177,7 +177,7 @@ class model_unittest(unittest.TestCase):
 
         num_brk_states = brk_states.shape[0]
 
-        for i in xrange(num_replicates):
+        for i in range(num_replicates):
             for brk_orient in (1, -1):
                 p_cn = np.random.dirichlet((4.,) * cn_states.shape[0], size=cn_states.shape[0])
                 p_allele = np.random.dirichlet((4.,) * 2)
@@ -212,7 +212,7 @@ class model_unittest(unittest.TestCase):
 
         num_segments = 3
 
-        for i in xrange(num_replicates):
+        for i in range(num_replicates):
 
             model = remixt.vhmm.RemixtModel(
                 3, num_segments, 0,
@@ -231,7 +231,7 @@ class model_unittest(unittest.TestCase):
             betas = np.zeros((num_segments, num_cn_states))
             remixt.vhmm.sum_product(model, framelogprob, alphas, betas)
 
-            for seg_idx in xrange(num_segments):
+            for seg_idx in range(num_segments):
                 posterior_marginal_1 = naive_posterior_marginal(cn_states, framelogprob, model, seg_idx)
 
                 gamma = alphas[seg_idx] + betas[seg_idx]
@@ -257,7 +257,7 @@ class model_unittest(unittest.TestCase):
 
         breakpoint_idx = np.zeros((num_segments,), dtype=np.int64) - 1
         breakends = np.random.choice(num_segments, size=num_breakpoints * 2)
-        for i in xrange(num_breakpoints):
+        for i in range(num_breakpoints):
             breakpoint_idx[breakends[2 * i]] = i
             breakpoint_idx[breakends[2 * i + 1]] = i
 
@@ -302,8 +302,8 @@ class model_unittest(unittest.TestCase):
         model.p_garbage[:, 2, 1] = model.prior_allele_garbage
         model.p_garbage[:, 2, :] /= model.p_garbage[:, 2, :].sum(axis=1)[:, np.newaxis]
 
-        for m in xrange(num_clones):
-            for ell in xrange(num_alleles):
+        for m in range(num_clones):
+            for ell in range(num_alleles):
                 model.posterior_marginals[m, ell, :, :] = np.random.random(size=(num_segments, cn_max + 1))
                 model.posterior_marginals[m, ell, :, :] /= model.posterior_marginals[m, ell, :, :].sum(axis=1)[:, np.newaxis]
 
@@ -320,18 +320,18 @@ class model_unittest(unittest.TestCase):
         model = self.create_random_model(num_segments, num_clones, num_alleles)
         x = np.random.randint(100000, size=(num_segments, 3))
 
-        for m in xrange(num_clones):
-            for ell in xrange(num_alleles):
+        for m in range(num_clones):
+            for ell in range(num_alleles):
                 elbo_1 = model.calculate_elbo(x)
                 model.update(x)
                 elbo_2 = model.calculate_elbo(x)
-                print elbo_2 - elbo_1
+                print (elbo_2 - elbo_1)
                 self.assertTrue(elbo_2 - elbo_1 > -1e-10)
 
     def test_update(self):
         num_segments = 4
 
-        for i in xrange(num_replicates):
+        for i in range(num_replicates):
 
             cn = np.array([[[1, 1],
                             [1, 1],
@@ -365,18 +365,18 @@ class model_unittest(unittest.TestCase):
                 1.0,
             )
 
-            print h
+            print (h)
 
             model.prior_variance = 1e5
 
             model.h = np.array([0.2, 0.3, 0.1])
 
-            print np.asarray(model.cn_states)
+            print (np.asarray(model.cn_states))
 
             model.init_p_cn()
 
-            print model.posterior_marginals
-            print model.get_cn()
+            print (model.posterior_marginals)
+            print (model.get_cn())
 
             # model.posterior_marginals[0, :, :, :] = (
             #     np.array([[[0.01, 0.99],
@@ -389,18 +389,18 @@ class model_unittest(unittest.TestCase):
             #                [0.01, 0.99]]]))
 
             elbo_prev = None
-            for i in xrange(20):
+            for i in range(20):
                 elbo = model.update()
-                print 'elbo', elbo
-                print 'h', np.asarray(model.h)
+                print ('elbo', elbo)
+                print ('h', np.asarray(model.h))
                 if elbo_prev is not None:
-                    print 'diff:', elbo - elbo_prev
+                    print ('diff:', elbo - elbo_prev)
                     self.assertTrue(elbo - elbo_prev > -1e-5)
                 elbo_prev = elbo
 
-            print model.get_cn()
-            print np.asarray(model.p_garbage)
-            print np.argmax(model.p_garbage, axis=-1)
+            print (model.get_cn())
+            print (np.asarray(model.p_garbage))
+            print (np.argmax(model.p_garbage, axis=-1))
 
             brk_cn = np.argmax(model.p_breakpoint, axis=-1)
             self.assertTrue(np.all(brk_cn == np.array([0, 1, 0])))
@@ -409,7 +409,7 @@ class model_unittest(unittest.TestCase):
     def test_update_swap(self):
         num_segments = 4
 
-        for i in xrange(num_replicates):
+        for i in range(num_replicates):
 
             cn = np.array([[[1, 1],
                             [0, 1]],
@@ -440,7 +440,7 @@ class model_unittest(unittest.TestCase):
                 1.0,
             )
 
-            print h
+            print (h)
 
             model.prior_variance = 1e5
 
@@ -448,7 +448,7 @@ class model_unittest(unittest.TestCase):
 
             model.init_p_cn()
 
-            print model.get_cn()
+            print (model.get_cn())
 
             # model.posterior_marginals[0, :, :, :] = (
             #     np.array([[[0.01, 0.99],
@@ -461,28 +461,28 @@ class model_unittest(unittest.TestCase):
             #                [0.01, 0.99]]]))
 
             elbo_prev = None
-            for i in xrange(20):
+            for i in range(20):
                 elbo = model.update()
-                print 'elbo', elbo
-                print 'h', model.h
+                print ('elbo', elbo)
+                print ('h', model.h)
                 if elbo_prev is not None:
-                    print 'diff:', elbo - elbo_prev
+                    print ('diff:', elbo - elbo_prev)
                     self.assertTrue(elbo - elbo_prev > -1e-5)
                 elbo_prev = elbo
 
-            print model.get_cn()
+            print (model.get_cn())
 
-            print np.asarray(model.p_allele)
+            print (np.asarray(model.p_allele))
 
             for n in range(2):
                 for v in range(2):
                     for w in range(2):
-                        print n, v, w, model.p_allele[n, v, w]
+                        print (n, v, w, model.p_allele[n, v, w])
 
-            print np.asarray(model.p_breakpoint)
+            print (np.asarray(model.p_breakpoint))
 
             brk_cn = np.argmax(model.p_breakpoint, axis=-1)
-            print brk_cn
+            print (brk_cn)
 
             self.assertTrue(np.all(brk_cn == np.array([0, 1, 0])))
 
