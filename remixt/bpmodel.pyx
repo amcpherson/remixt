@@ -3,6 +3,8 @@
 # cython: boundscheck=False
 # cython: wraparound=False
 # cython: cdivision=True
+# cython: language_level=3
+
 from libc.math cimport exp, log, fabs, lgamma, isnan
 import numpy as np
 import scipy
@@ -63,6 +65,13 @@ cdef void _argmax2(np.float64_t[:, :] values, np.int64_t[:] indices):
                 vmax = values[i, j]
                 indices[0] = i
                 indices[1] = j
+
+
+cdef np.float64_t _logsumpair(np.float64_t x, np.float64_t y):
+    cdef np.float64_t vmax = max(x, y)
+    cdef np.float64_t power_sum = exp(x-vmax) + exp(y-vmax)
+
+    return log(power_sum) + vmax
 
 
 cdef np.float64_t _logsum(np.float64_t[:] X):
@@ -1235,6 +1244,52 @@ cpdef void sum_product(
                 work_buffer[j] = (log_transmat[n, i, j] + framelogprob[n + 1, j]
                     + betas[n + 1, j])
             betas[n, i] = _logsum(work_buffer)
+
+
+cpdef void sum_product_2paramtrans(
+        np.float64_t[:, :] framelogprob,
+        np.float64_t[:, :] alphas,
+        np.float64_t[:, :] betas,
+        np.float64_t e0,
+        np.float64_t e1,
+    ) except *:
+    """ Sum product algorithm for chain topology distributions.
+    """
+
+    cdef int n, i
+    cdef np.ndarray[np.float64_t, ndim = 1] work_buffer
+
+    cdef int n_observations = framelogprob.shape[0]
+    cdef int n_components = framelogprob.shape[1]
+
+    work_buffer = np.zeros((n_components,))
+
+    cdef np.float64_t log_e0 = log(e0)
+    cdef np.float64_t log_e1 = log(e1)
+
+    cdef np.float64_t notrans
+
+    for i in range(n_components):
+        alphas[0, i] = framelogprob[0, i]
+
+    for n in range(1, n_observations):
+        notrans = log_e0 + _logsum(alphas[n - 1, :])
+        for i in range(n_components):
+            alphas[n, i] = _logsumpair(notrans, log_e1 + alphas[n - 1, i]) + framelogprob[n, i]
+        for i in range(n_components):
+            alphas[n, i] = alphas[n, i]
+
+    for i in range(n_components):
+        betas[n_observations - 1, i] = 0.0
+
+    for n in range(n_observations - 2, -1, -1):
+        for i in range(n_components):
+            work_buffer[i] = framelogprob[n + 1, i] + betas[n + 1, i]
+        notrans = log_e0 + _logsum(work_buffer)
+        for i in range(n_components):
+            betas[n, i] = _logsumpair(notrans, log_e1 + framelogprob[n + 1, i] + betas[n + 1, i])
+        for i in range(n_components):
+            betas[n, i] = betas[n, i]
 
 
 @cython.wraparound(True)
