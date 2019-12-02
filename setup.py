@@ -1,10 +1,8 @@
 import fnmatch
 import os
 import sys
-import numpy
 import versioneer
 from setuptools import setup, find_packages, Extension
-from Cython.Build import cythonize
 
 
 external_dir = os.path.abspath('src/external')
@@ -38,7 +36,7 @@ extensions = [
     Extension(
         name='remixt.bamreader',
         sources=['remixt/bamreader.pyx', 'src/BamAlleleReader.cpp'] + bamtools_sources,
-        include_dirs=['src', external_dir, bamtools_dir, numpy.get_include()],
+        include_dirs=['src', external_dir, bamtools_dir],
         libraries=['z', 'bz2'],
         extra_compile_args=extra_compile_args,
         extra_link_args=extra_link_args,
@@ -46,7 +44,6 @@ extensions = [
     Extension(
         name='remixt.bpmodel',
         sources=['remixt/bpmodel.pyx'],
-        include_dirs=[numpy.get_include()],
         extra_compile_args=extra_compile_args,
         extra_link_args=extra_link_args,
     ),
@@ -64,6 +61,11 @@ setup(
     download_url='https://bitbucket.org/dranew/remixt/get/v{}.tar.gz'.format(versioneer.get_version()),
     keywords=['scientific', 'sequence analysis', 'cancer'],
     classifiers=[],
-    ext_modules=cythonize(extensions),
+    ext_modules=extensions,
+    setup_requires=[
+        'setuptools>=18.0',
+        'cython',
+    ],
     entry_points={'console_scripts': ['remixt = remixt.ui.main:main']},
 )
+
