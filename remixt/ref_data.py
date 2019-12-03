@@ -62,7 +62,7 @@ def create_ref_data(config, ref_data_dir, ref_data_sentinal, bwa_index_genome=Fa
                 if chromosome == 'X':
                     phased_chromosome = remixt.config.get_param(config, 'phased_chromosome_x')
                 legend_filename = remixt.config.get_filename(config, ref_data_dir, 'legend', chromosome=phased_chromosome)
-                with gzip.open(legend_filename, 'r') as legend_file:
+                with gzip.open(legend_filename, 'rt') as legend_file:
                     for line in legend_file:
                         if line.startswith('id'):
                             continue
