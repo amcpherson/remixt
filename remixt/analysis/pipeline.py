@@ -23,7 +23,7 @@ def init(
     max_copy_number = remixt.config.get_param(config, 'max_copy_number')
     random_seed = config.get('random_seed', 1234)
 
-    with open(experiment_filename, 'r') as f:
+    with open(experiment_filename, 'rb') as f:
         experiment = pickle.load(f)
 
     np.random.seed(random_seed)
@@ -115,12 +115,12 @@ def fit_task(
     init_params,
     config,
 ):
-    with open(experiment_filename, 'r') as f:
+    with open(experiment_filename, 'rb') as f:
         experiment = pickle.load(f)
         
     fit_results = fit(experiment, init_params, config)
     
-    with open(results_filename, 'w') as f:
+    with open(results_filename, 'wb') as f:
         pickle.dump(fit_results, f)
 
 
@@ -269,7 +269,7 @@ def collate(collate_filename, experiment_filename, init_results_filename, fit_re
     # Extract the statistics for selecting solutions
     stats_table = list()
     for init_id, results_filename in fit_results_filenames.items():
-        results = pickle.load(open(results_filename))
+        results = pickle.load(open(results_filename, 'rb'))
         stats = dict(results['stats'])
         stats['init_id'] = init_id
         stats_table.append(stats)
@@ -283,11 +283,11 @@ def collate(collate_filename, experiment_filename, init_results_filename, fit_re
             for key, value in results.items():
                 collated[key] = results[key]
 
-        with open(experiment_filename, 'r') as f:
+        with open(experiment_filename, 'rb') as f:
             experiment = pickle.load(f)
 
         for init_id, results_filename in fit_results_filenames.items():
-            results = pickle.load(open(results_filename))
+            results = pickle.load(open(results_filename, 'rb'))
             store_fit_results(collated, experiment, results, 'solutions/solution_{0}'.format(init_id))
 
         store_optimal_solution(stats_table, collated, config)

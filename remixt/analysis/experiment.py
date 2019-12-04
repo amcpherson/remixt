@@ -237,7 +237,7 @@ def create_experiment(count_filename, breakpoint_filename, experiment_filename, 
 
     experiment = Experiment(count_data, breakpoint_data, max_brk_dist=max_brk_dist)
 
-    with open(experiment_filename, 'w') as f:
+    with open(experiment_filename, 'wb') as f:
         pickle.dump(experiment, f)
 
 

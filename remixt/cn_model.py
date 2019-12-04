@@ -248,7 +248,7 @@ class BreakpointModel(object):
 
             cn_states[frozenset([cn_key, cn_swapped_key])] = cn
 
-        cn_states = np.array(cn_states.values())
+        cn_states = np.array(list(cn_states.values()))
 
         return cn_states
 
@@ -473,7 +473,7 @@ class BreakpointModel(object):
                 self.update_param(name)
 
     def _create_sample(self, weights=None):
-        sample_size = min(200, self.model.num_segments / 10)
+        sample_size = int(min(200, self.model.num_segments / 10))
         sample_idxs = np.random.choice(self.model.num_segments, size=sample_size, replace=False, p=weights)
         sample = np.zeros((self.model.num_segments,), dtype=int)
         sample[sample_idxs] = 1

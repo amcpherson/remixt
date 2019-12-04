@@ -691,7 +691,7 @@ def ploidy_analysis_plots(experiment_filename, plots_filename):
 
     """
 
-    with open(experiment_filename, 'r') as experiment_file:
+    with open(experiment_filename, 'rb') as experiment_file:
         experiment = pickle.load(experiment_file)
 
     read_depth = remixt.analysis.readdepth.calculate_depth(experiment)

@@ -83,7 +83,7 @@ def create_infer_haps_workflow(
     else:
         workflow.setobj(
             obj=mgd.OutputChunks('tumour_id'),
-            value=seqdata_filenames.keys(),
+            value=list(seqdata_filenames.keys()),
         )
 
         workflow.transform(
@@ -231,7 +231,7 @@ def create_prepare_counts_workflow(
 
     workflow.setobj(
         obj=mgd.OutputChunks('tumour_id'),
-        value=tumour_filenames.keys(),
+        value=list(tumour_filenames.keys()),
     )
 
     workflow.transform(
@@ -344,9 +344,9 @@ def create_remixt_seqdata_workflow(
     ref_data_dir,
     normal_id=None,
 ):
-    sample_ids = seqdata_filenames.keys()
+    sample_ids = list(seqdata_filenames.keys())
     
-    tumour_ids = seqdata_filenames.keys()
+    tumour_ids = list(seqdata_filenames.keys())
     if normal_id is not None:
         tumour_ids.remove(normal_id)
 
@@ -472,9 +472,9 @@ def create_remixt_bam_workflow(
     ref_data_dir,
     normal_id=None,
 ):
-    sample_ids = bam_filenames.keys()
+    sample_ids = list(bam_filenames.keys())
     
-    tumour_ids = bam_filenames.keys()
+    tumour_ids = list(bam_filenames.keys())
     if normal_id is not None:
         tumour_ids.remove(normal_id)
 
@@ -508,7 +508,7 @@ def create_remixt_bam_workflow(
 
     workflow.subworkflow(
         name='remixt_seqdata_workflow',
-        func='create_remixt_seqdata_workflow',
+        func='remixt.workflow.create_remixt_seqdata_workflow',
         args=(
             mgd.InputFile(breakpoint_filename),
             mgd.InputFile('seqdata', 'sample_id', template=seqdata_template),

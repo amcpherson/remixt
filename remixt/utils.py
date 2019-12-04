@@ -68,11 +68,11 @@ def weighted_percentile(data, weights, percentile, num_samples=10000):
 
 
 def read_sequences(fasta_filename):
-    with open(fasta_filename, 'r') as fasta_file:
+    with open(fasta_filename, 'rt') as fasta_file:
         seq_id = None
         sequences = []
-        for line in fasta_file:
-            line = line.rstrip()
+        for line in fasta_file.readlines():
+            line = str(line.rstrip())
             if len(line) == 0:
                 continue
             if line[0] == '>':
@@ -128,7 +128,7 @@ def read_table_raw(filename):
 
 def split_table(output_filenames, input_filename, num_rows):
     input_data = read_table_raw(input_filename)
-    for idx, start_row in enumerate(xrange(0, len(input_data.index), num_rows)):
+    for idx, start_row in enumerate(range(0, len(input_data.index), num_rows)):
         input_data.iloc[start_row:start_row+num_rows,].to_csv(output_filenames[idx], sep='\t', index=False)
 
 

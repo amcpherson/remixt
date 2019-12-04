@@ -183,7 +183,7 @@ def read_gc_cumsum(genome_fasta, chromosome):
     for c, s in remixt.utils.read_sequences(genome_fasta):
         if c == chromosome:
             s = np.array(list(s.upper()), dtype=np.character)
-            gc_indicator = ((s == 'G') | (s == 'C')) * 1
+            gc_indicator = ((s == b'G') | (s == b'C')) * 1
 
     gc_cumsum = gc_indicator.cumsum()
 
