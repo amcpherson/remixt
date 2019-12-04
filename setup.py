@@ -4,6 +4,10 @@ import sys
 import versioneer
 from setuptools import setup, find_packages, Extension
 
+class get_numpy_include(object):
+    def __str__(self):
+        import numpy
+        return numpy.get_include()
 
 external_dir = os.path.abspath('src/external')
 
@@ -36,16 +40,19 @@ extensions = [
     Extension(
         name='remixt.bamreader',
         sources=['remixt/bamreader.pyx', 'src/BamAlleleReader.cpp'] + bamtools_sources,
-        include_dirs=['src', external_dir, bamtools_dir],
+        include_dirs=['src', external_dir, bamtools_dir, get_numpy_include()],
         libraries=['z', 'bz2'],
         extra_compile_args=extra_compile_args,
         extra_link_args=extra_link_args,
+        language="c++",
     ),
     Extension(
         name='remixt.bpmodel',
         sources=['remixt/bpmodel.pyx'],
+        include_dirs=[get_numpy_include()],
         extra_compile_args=extra_compile_args,
         extra_link_args=extra_link_args,
+        language="c++",
     ),
 ]
 
