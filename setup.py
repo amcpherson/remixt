@@ -4,7 +4,7 @@ import sys
 import versioneer
 from setuptools import setup, find_packages, Extension
 
-class get_numpy_include(object):
+class get_numpy_include(str):
     def __str__(self):
         import numpy
         return numpy.get_include()
@@ -70,6 +70,7 @@ setup(
     classifiers=[],
     ext_modules=extensions,
     setup_requires=[
+        'numpy',
         'setuptools>=18.0',
         'cython',
     ],
