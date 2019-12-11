@@ -188,12 +188,15 @@ First use the `remixt create_ref_data` sub-command to create a reference dataset
 
 Use `wget` to retrieve a precomputed mappability file.
 
-    wget ftp://ftp.bcgsc.ca/public/shahlab/ReMixT/hg19.100.bwa.mappability.h5 --directory-prefix $WORK_DIR/ref_data/
+    wget https://remixttestdata.blob.core.windows.net/data/hg19.100.bwa.mappability.h5 --directory-prefix $WORK_DIR/ref_data/
 
 Use `wget` to retrieve the example bam files and their indices for chromosome 15, and the breakpoints file with chromosome 15 breakpoints.
 
-    wget ftp://ftp.bcgsc.ca/public/shahlab/ReMixT/HCC1395*chr15.bam* --directory-prefix $WORK_DIR/
-    wget ftp://ftp.bcgsc.ca/public/shahlab/ReMixT/HCC1395_breakpoints.tsv --directory-prefix $WORK_DIR/
+    wget https://remixttestdata.blob.core.windows.net/data/HCC1395_chr15.bam --directory-prefix $WORK_DIR/
+    wget https://remixttestdata.blob.core.windows.net/data/HCC1395_chr15.bam.bai --directory-prefix $WORK_DIR/
+    wget https://remixttestdata.blob.core.windows.net/data/HCC1395BL_chr15.bam --directory-prefix $WORK_DIR/
+    wget https://remixttestdata.blob.core.windows.net/data/HCC1395BL_chr15.bam.bai --directory-prefix $WORK_DIR/
+    wget https://remixttestdata.blob.core.windows.net/data/HCC1395_breakpoints.tsv --directory-prefix $WORK_DIR/
 
 Use the `remixt run` sub-command to run a remixt analysis.
 
