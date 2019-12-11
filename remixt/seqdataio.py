@@ -3,6 +3,8 @@ import pandas as pd
 
 import remixt.bamreader
 
+import os
+
 
 empty_data = {
     'fragments': remixt.bamreader.create_fragment_table(0),
@@ -53,6 +55,29 @@ def create_chromosome_seqdata(seqdata_filename, bam_filename, snp_filename, chro
         while reader.ReadAlignments(10000000):
             _unique_index_append(store, _get_key('fragments', chromosome), reader.GetFragmentTable())
             _unique_index_append(store, _get_key('alleles', chromosome), reader.GetAlleleTable())
+
+
+
+def create_seqdata(seqdata_filename, bam_filename, snp_filename, max_fragment_length, max_soft_clipped, check_proper_pair, tempdir, chromosomes):
+
+    try:
+        os.makedirs(tempdir)
+    except:
+        pass
+
+    all_seqdata = {}
+
+    for chrom in chromosomes:
+        chrom_seqdata = os.path.join(tempdir, "{}_seqdata.h5".format(chrom))
+        all_seqdata[chrom] = chrom_seqdata
+
+        create_chromosome_seqdata(
+            chrom_seqdata, bam_filename, snp_filename,
+            chrom, max_fragment_length, max_soft_clipped,
+            check_proper_pair
+        )
+
+    merge_seqdata(seqdata_filename, all_seqdata)
 
 
 def merge_seqdata(out_filename, in_filenames):
