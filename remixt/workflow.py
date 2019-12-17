@@ -10,6 +10,7 @@ def create_extract_seqdata_workflow(
      seqdata_filename,
      config,
      ref_data_dir,
+     no_parallelism=False
 ):
     chromosomes = remixt.config.get_chromosomes(config, ref_data_dir)
     snp_positions_filename = remixt.config.get_filename(config, ref_data_dir, 'snp_positions')
@@ -22,31 +23,48 @@ def create_extract_seqdata_workflow(
 
     workflow.setobj(obj=mgd.OutputChunks('chromosome'), value=chromosomes)
 
-    workflow.transform(
-        name='create_chromosome_seqdata',
-        axes=('chromosome',),
-        ctx={'mem': 16},
-        func='remixt.seqdataio.create_chromosome_seqdata',
-        args=(
-            mgd.TempOutputFile('seqdata', 'chromosome'),
-            mgd.InputFile(bam_filename, extensions=['.bai']),
-            snp_positions_filename,
-            mgd.InputInstance('chromosome'),
-            bam_max_fragment_length,
-            bam_max_soft_clipped,
-            bam_check_proper_pair,
-        ),
-    )
+    if no_parallelism:
+        workflow.transform(
+            name='create_seqdata',
+            ctx={'mem': 16},
+            func='remixt.seqdataio.create_seqdata',
+            args=(
+                mgd.OutputFile(seqdata_filename),
+                mgd.InputFile(bam_filename, extensions=['.bai']),
+                snp_positions_filename,
+                bam_max_fragment_length,
+                bam_max_soft_clipped,
+                bam_check_proper_pair,
+                mgd.TempSpace('create_seqdata_temp'),
+                chromosomes
+            )
+        )
+    else:
+        workflow.transform(
+            name='create_chromosome_seqdata',
+            axes=('chromosome',),
+            ctx={'mem': 16},
+            func='remixt.seqdataio.create_chromosome_seqdata',
+            args=(
+                mgd.TempOutputFile('seqdata', 'chromosome'),
+                mgd.InputFile(bam_filename, extensions=['.bai']),
+                snp_positions_filename,
+                mgd.InputInstance('chromosome'),
+                bam_max_fragment_length,
+                bam_max_soft_clipped,
+                bam_check_proper_pair,
+            ),
+        )
 
-    workflow.transform(
-        name='merge_seqdata',
-        ctx={'mem': 16},
-        func='remixt.seqdataio.merge_seqdata',
-        args=(
-            mgd.OutputFile(seqdata_filename),
-            mgd.TempInputFile('seqdata', 'chromosome'),
-        ),
-    )
+        workflow.transform(
+            name='merge_seqdata',
+            ctx={'mem': 16},
+            func='remixt.seqdataio.merge_seqdata',
+            args=(
+                mgd.OutputFile(seqdata_filename),
+                mgd.TempInputFile('seqdata', 'chromosome'),
+            ),
+        )
 
     return workflow
 
