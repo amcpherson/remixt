@@ -275,8 +275,20 @@ def infer_haps(haps_filename, snp_genotype_filename, chromosome, temp_directory,
         sample_log_filename = sample_prefix + '.log'
         sample_haps_filename = sample_prefix + '.haps'
         sample_sample_filename = sample_prefix + '.sample'
-        pypeliner.commandline.execute('shapeit', '-convert', '--input-graph', hgraph_filename, '--output-sample', 
-                                      sample_prefix, '--seed', str(s), '-L', sample_log_filename)
+        # FIXUP: sampling often fails with a segfault, retry at least 3 times
+        success = False
+        for _ in range(3):
+            try:
+                pypeliner.commandline.execute(
+                    'shapeit', '-convert', '--input-graph', hgraph_filename, '--output-sample',
+                    sample_prefix, '--seed', str(s), '-L', sample_log_filename)
+                success = True
+                break
+            except pypeliner.commandline.CommandLineException:
+                print(f'failed sampling with seed {s}, retrying')
+                continue
+        if not success:
+            raise Exception(f'failed to sample three times with seed {s}')
         sample_haps = pd.read_csv(sample_haps_filename, sep=' ', header=None, 
                                   names=['id', 'id2', 'position', 'ref', 'alt', 'allele1', 'allele2'],
                                   usecols=['position', 'allele1', 'allele2'])
