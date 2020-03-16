@@ -1,4 +1,4 @@
-FROM continuumio/miniconda
+FROM continuumio/miniconda3
 ARG app_version
 
 MAINTAINER Andrew McPherson <andrew.mcpherson@gmail.com>
