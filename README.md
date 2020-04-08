@@ -239,6 +239,16 @@ Often a call to qsub requires specific command line parameters to request the co
 
     --submit asyncqsub --nativespec "-q all.q -l mem_free={mem}G"
 
+# Build
+
+## Docker builds
+
+To build a destruct docker image, for instance version v0.5.11, run the following docker command:
+
+    docker build --build-arg app_version=v0.5.11 -t amcpherson/remixt:v0.5.11 .
+    docker push amcpherson/remixt:v0.5.11
+
 # License
 
 ReMixT is released under the [MIT License](http://www.opensource.org/licenses/MIT).
+
