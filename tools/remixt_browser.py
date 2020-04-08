@@ -10,7 +10,7 @@ import argparse
 
 argparser = argparse.ArgumentParser()
 argparser.add_argument('results_filename', help='ReMixT Results Filename')
-argparser.add_argument('--solution_idx', help='solution index')
+argparser.add_argument('--init_id', help='initialization id for selected solution')
 argparser.add_argument('--positions', help='annotate positions')
 argparser.add_argument('--breakpoints', help='annotate breakpoints')
 argparser.add_argument('--max_copies', help='maximum copies to display', type=float, default=5.0)
@@ -20,17 +20,17 @@ chromosomes = [str(a) for a in range(1, 23)] + ['X']
 chromosome_indices = dict([(chromosome, idx) for idx, chromosome in enumerate(chromosomes)])
 
 with pd.HDFStore(args.results_filename, 'r') as store:
-    idx = args.solution_idx
-    if idx is None:
-        idx = store['stats'].iloc[0]['idx']
-    cnv = store['solutions/{0}/cn'.format(idx)]
+    init_id = args.init_id
+    if init_id is None:
+        init_id = store['stats'].sort_values('elbo').iloc[0]['init_id']
+    cnv = store['solutions/solution_{0}/cn'.format(init_id)]
 cnv = cnv.replace([np.inf, -np.inf], np.nan).dropna()
 
 cnv = cnv.loc[(cnv['chromosome'].isin(chromosomes))]
 
 cnv['chr_index'] = cnv['chromosome'].apply(lambda a: chromosome_indices[a])
 
-cnv = cnv.sort(['chr_index', 'start'])
+cnv = cnv.sort_values(['chr_index', 'start'])
 
 chromosome_length = cnv.groupby('chromosome', sort=False)['end'].max()
 chromosome_end = np.cumsum(chromosome_length)
@@ -85,7 +85,7 @@ minor_segments = list()
 major_connectors = list()
 minor_connectors = list()
 
-for (idx, row), (next_idx, next_row) in itertools.izip_longest(cnv.iterrows(), cnv.iloc[1:].iterrows(), fillvalue=(None, None)):
+for (idx, row), (next_idx, next_row) in itertools.zip_longest(cnv.iterrows(), cnv.iloc[1:].iterrows(), fillvalue=(None, None)):
     major_segments.append([(row['plot_start'], row['major_raw']), (row['plot_end'], row['major_raw'])])
     minor_segments.append([(row['plot_start'], row['minor_raw']), (row['plot_end'], row['minor_raw'])])
     if next_row is not None and next_row['plot_start'] - row['plot_end'] < mingap and next_row['chromosome'] == row['chromosome']:
@@ -174,7 +174,7 @@ class Picker(object):
             except ValueError:
                 return
 
-            print breakpoint_infos[ind]
+            print(breakpoint_infos[ind])
 
         elif isinstance(event.artist, matplotlib.patches.Rectangle):
             try:
@@ -197,7 +197,7 @@ class Picker(object):
 
             # Print the segment to the terminal
             cnv_region = cnv.iloc[event.ind[0]]
-            print 'selected: {0}:{1}-{2} {3} {4}'.format(cnv_region['chromosome'], int(cnv_region['start']), int(cnv_region['end']), cnv_region['major_raw'], cnv_region['minor_raw'])
+            print('selected: {0}:{1}-{2} {3} {4}'.format(cnv_region['chromosome'], int(cnv_region['start']), int(cnv_region['end']), cnv_region['major_raw'], cnv_region['minor_raw']))
 
             self.select_segment(event.ind)
 
