@@ -140,7 +140,7 @@ def gc_lowess(gc_samples_filename, gc_dist_filename, gc_table_filename, gc_resol
     gc_samples['gc_bin'] = (gc_samples['gc'] * gc_resolution).round()
 
     gc_binned = gc_samples.groupby('gc_bin')['count'] \
-                          .agg({'sum':np.sum, 'len':len, 'mean':np.mean}) \
+                          .agg([sum, len, np.mean]) \
                           .reindex(range(gc_resolution+1)) \
                           .fillna(0) \
                           .reset_index() \
