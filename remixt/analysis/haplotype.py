@@ -264,7 +264,7 @@ def infer_haps(haps_filename, snp_genotype_filename, chromosome, temp_directory,
     sample_filename = remixt.config.get_filename(config, ref_data_dir, 'sample')
     pypeliner.commandline.execute('shapeit', '-M', genetic_map_filename, '-R', hap_filename, legend_filename, sample_filename,
                                   '-G', temp_gen_filename, temp_sample_filename, '--output-graph', hgraph_filename, chr_x_flag,
-                                  '--no-mcmc', '-L', hgraph_logs_prefix)
+                                  '--no-mcmc', '-L', hgraph_logs_prefix, '--seed', '12345')
 
     # Run shapeit to sample from phased haplotype graph
     sample_template = os.path.join(temp_directory, 'sampled.{0}')
