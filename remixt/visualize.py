@@ -1,4 +1,5 @@
 import os
+import logging
 import numpy as np
 import pandas as pd
 import math
@@ -7,6 +8,7 @@ import matplotlib.pyplot
 import bokeh.models
 import bokeh.plotting
 import bokeh.core.properties
+import bokeh.layouts
 import scipy.stats
 
 import remixt.utils
@@ -42,7 +44,7 @@ def major_minor_scatter_plot(source):
         title='raw major vs minor',
         plot_width=1000, plot_height=500,
         tools='pan,wheel_zoom,box_select,reset,lasso_select',
-        logo=None,
+        # logo=None,
         x_range=[-0.5, 6.5],
         y_range=[-0.5, 4.5],
     )
@@ -86,6 +88,7 @@ def major_minor_segment_plot(source, major_column, minor_column, x_range, name, 
         title=name + ' chromosome major/minor',
         plot_width=width, plot_height=200,
         tools=tools,
+        # logo=None,
         toolbar_location='above',
         x_range=x_range,
         y_range=[-0.5, 6.5],
@@ -141,7 +144,7 @@ def breakpoints_plot(source, x_range, width=1000):
         title='break ends',
         plot_width=width, plot_height=150,
         tools=tools,
-        logo=None,
+        # logo=None,
         x_range=x_range,
         y_range=['+', '-'],
     )
@@ -168,7 +171,7 @@ def setup_genome_plot_axes(p, chromosome_plot_info):
     p.xgrid.band_fill_color = "navy"
 
     p.xaxis[0].ticker = bokeh.models.FixedTicker(ticks=chromosome_bounds)
-    p.xaxis[0].major_label_text_font_size = bokeh.core.properties.value('0pt')
+    p.xaxis[0].major_label_text_font_size = '0pt'
 
     p.text(x=chromosome_mids, y=-0.5, text=chromosomes, text_font_size=bokeh.core.properties.value('0.5em'), text_align='center')
 
@@ -348,7 +351,7 @@ def build_genome_panel(cnv_source, brk_source, chromosome_plot_info, width=1000)
     data_table = bokeh.models.DataTable(source=brk_source, columns=columns, width=1000, height=1000)
 
     panel = bokeh.models.Panel(title='Genome View', closable=False)
-    panel.child = bokeh.models.VBox(scatter_plot, line_plot1, line_plot2, line_plot3, line_plot4, line_plot5, brk_plot, data_table)
+    panel.child = bokeh.layouts.column(scatter_plot, line_plot1, line_plot2, line_plot3, line_plot4, line_plot5, brk_plot, data_table)
 
     return panel
 
@@ -371,7 +374,7 @@ def create_genome_visualization(cn, brk_cn, html_filename):
 
     tabs = bokeh.models.Tabs()
     tabs.tabs.append(build_genome_panel(cnv_source, brk_source, chromosome_plot_info))
-    main_box = bokeh.models.HBox(tabs)
+    main_box = bokeh.layouts.row(tabs)
 
     bokeh.plotting.save(main_box)
 
@@ -411,8 +414,8 @@ def retrieve_chromosome_plot_info(store, solution, chromosome=''):
     return create_chromosome_plot_info(cnv, chromosome=chromosome)
 
 
-def create_cnv_brk_sources(store, solution, chromosome_plot_info):
-    """ Create ColumnDataSource for copy number and breakpoints given a specific solution
+def create_cnv_brk_data(store, solution, chromosome_plot_info):
+    """ Create dataframes for copy number and breakpoints given a specific solution
     """
     cnv = retrieve_cnv_data(store, solution)
     cnv_data = prepare_cnv_data(cnv, chromosome_plot_info)
@@ -421,10 +424,7 @@ def create_cnv_brk_sources(store, solution, chromosome_plot_info):
     assert cnv_data.notnull().all().all()
     assert brk_data.notnull().all().all()
 
-    cnv_source = bokeh.models.ColumnDataSource(cnv_data)
-    brk_source = bokeh.models.ColumnDataSource(brk_data)
-
-    return cnv_source, brk_source
+    return cnv_data, brk_data
 
 
 def retrieve_solution_data(store):
@@ -458,21 +458,8 @@ def retrieve_solution_data(store):
     return solutions_df
 
 
-class gaussian_kde_set_covariance(scipy.stats.gaussian_kde):
-    def __init__(self, dataset, covariance):
-        self.covariance = covariance
-        scipy.stats.gaussian_kde.__init__(self, dataset)
-
-    def _compute_covariance(self):
-        self.inv_cov = 1.0 / self.covariance
-        self._norm_factor = np.sqrt(2 * np.pi * self.covariance) * self.n
-
-
-def _weighted_density(xs, data, weights, cov):
-    weights = weights.astype(float)
-    resample_prob = weights / weights.sum()
-    samples = np.random.choice(data, size=10000, replace=True, p=resample_prob)
-    density = gaussian_kde_set_covariance(samples, cov)
+def _weighted_density(xs, data, weights, bw_method=0.01):
+    density = scipy.stats.gaussian_kde(data, weights=weights, bw_method=bw_method)
     ys = density(xs)
     ys[0] = 0.0
     ys[-1] = 0.0
@@ -484,15 +471,13 @@ def prepare_read_depth_data(store, solution):
     """
     read_depth_df = store['read_depth']
 
-    cov = 0.0000001
-
     read_depth_min = 0.0
     read_depth_max = remixt.utils.weighted_percentile(read_depth_df['total'].values, read_depth_df['length'].values, 95)
     read_depths = [read_depth_min] + list(np.linspace(read_depth_min, read_depth_max, 2000)) + [read_depth_max]
 
-    minor_density = _weighted_density(read_depths, read_depth_df['minor'], read_depth_df['length'], cov)
-    major_density = _weighted_density(read_depths, read_depth_df['major'], read_depth_df['length'], cov)
-    total_density = _weighted_density(read_depths, read_depth_df['total'], read_depth_df['length'], cov)
+    minor_density = _weighted_density(read_depths, read_depth_df['minor'], read_depth_df['length'])
+    major_density = _weighted_density(read_depths, read_depth_df['major'], read_depth_df['length'])
+    total_density = _weighted_density(read_depths, read_depth_df['total'], read_depth_df['length'])
 
     data = pd.DataFrame({
         'read_depth': read_depths,
@@ -525,7 +510,7 @@ def build_solutions_panel(solutions_source, read_depth_source):
         title='major/minor/total read depth',
         plot_width=1000, plot_height=300,
         tools='pan,wheel_zoom,reset',
-        logo=None,
+        # logo=None,
     )
 
     readdepth_plot.title.text_font_size = bokeh.core.properties.value('10pt')
@@ -538,7 +523,7 @@ def build_solutions_panel(solutions_source, read_depth_source):
     readdepth_plot.circle(x='haploid_tumour_mode', y=0, size=10, source=solutions_source, color='green')
 
     panel = bokeh.models.Panel(title='Solutions View', closable=False)
-    panel.child = bokeh.models.VBox(solutions_table, readdepth_plot)
+    panel.child = bokeh.layouts.column(solutions_table, readdepth_plot)
 
     return panel
 
@@ -558,26 +543,26 @@ def create_source_select(sources, title, name):
     the tuple is the datasource the user has selected, and the second item is a dictionary of possible data
     sources keyed by an id for the source.
     """
-    names = sources[0][1].keys()
+    names = list(sources[0][1].keys())
     initial_value = names[0]
     
-    callback_code = "var t = cb_obj.get('value');\n"
+    callback_code = "var t = cb_obj.value;\n"
     callback_args = {}
 
     for idx, (to_source, from_sources) in enumerate(sources):
-        to_source.data = from_sources[initial_value].data
+        to_source.data = bokeh.models.ColumnDataSource.from_df(from_sources[initial_value])
 
         for s_name in names:
-            callback_code += "if (t == '{}') {{\n".format(s_name)
-            callback_code += "  var d = source_{}_{}.get('data');\n".format(idx, s_name)
+            callback_code += f"if (t == '{s_name}') {{\n"
+            callback_code += f"  var d = source_{idx}_{s_name};\n"
             callback_code += "}\n"
 
-        callback_code += "source_{}.set('data', d);\n".format(idx)
-        callback_code += "source_{}.trigger('change');\n".format(idx)
+        callback_code += "source_{}.data = d;\n".format(idx)
+        callback_code += "source_{}.change.emit();\n".format(idx)
 
         callback_args["source_{}".format(idx)] = to_source
         for s_name, s_data in from_sources.items():
-            callback_args['source_{}_{}'.format(idx, s_name)] = s_data
+            callback_args['source_{}_{}'.format(idx, s_name)] = bokeh.models.ColumnDataSource.from_df(s_data)
 
     callback = bokeh.models.CustomJS(args=callback_args, code=callback_code)
 
@@ -586,9 +571,9 @@ def create_source_select(sources, title, name):
         name=name,
     )
     
-    source_select.options = from_sources.keys()
+    source_select.options = list(from_sources.keys())
     source_select.value = initial_value
-    source_select.callback = callback
+    source_select.js_on_change('value', callback)
     
     return source_select
 
@@ -602,16 +587,18 @@ def create_solutions_visualization(results_filename, html_filename):
         pass
     bokeh.plotting.output_file(html_filename)
 
+    logging.info('generating solutions tables')
+
     with pd.HDFStore(results_filename, 'r') as store:
         solutions = list(retrieve_solutions(store))
 
         chromosome_plot_info = retrieve_chromosome_plot_info(store, solutions[0])
-        cnv_selected_source, brk_selected_source = create_cnv_brk_sources(store, solutions[0], chromosome_plot_info)
+        cnv_selected_data, brk_selected_data = create_cnv_brk_data(store, solutions[0], chromosome_plot_info)
 
         cnv_solution_sources = {}
         brk_solution_sources = {}
         for solution in solutions:
-            cnv_source, brk_source = create_cnv_brk_sources(store, solution, chromosome_plot_info)
+            cnv_source, brk_source = create_cnv_brk_data(store, solution, chromosome_plot_info)
 
             cnv_solution_sources[solution] = cnv_source
             brk_solution_sources[solution] = brk_source
@@ -622,9 +609,14 @@ def create_solutions_visualization(results_filename, html_filename):
     assert solutions_data.notnull().all().all()
     assert read_depth_data.notnull().all().all()
 
+    logging.info('creating bokeh data sources')
+
+    cnv_selected_source = bokeh.models.ColumnDataSource(cnv_selected_data)
+    brk_selected_source = bokeh.models.ColumnDataSource(brk_selected_data)
     solutions_source = bokeh.models.ColumnDataSource(solutions_data)
     read_depth_source = bokeh.models.ColumnDataSource(read_depth_data)
 
+    # TODO: selecting the data source doesnt work
     solution_select = create_source_select(
         [
             (cnv_selected_source, cnv_solution_sources),
@@ -634,12 +626,14 @@ def create_solutions_visualization(results_filename, html_filename):
         'solutions',
     )
 
+    logging.info('building bokeh interface')
+
     # Create main interface
     tabs = bokeh.models.Tabs()
     tabs.tabs.append(build_solutions_panel(solutions_source, read_depth_source))
     tabs.tabs.append(build_genome_panel(cnv_selected_source, brk_selected_source, chromosome_plot_info))
-    input_box = bokeh.models.WidgetBox(solution_select)
-    main_box = bokeh.models.HBox(input_box, tabs)
+    input_box = bokeh.models.Column(solution_select)
+    main_box = bokeh.layouts.row(input_box, tabs)
 
     bokeh.plotting.save(main_box)
 
