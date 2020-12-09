@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 
 
+
 def write_results_tables(**args):
     store = pd.HDFStore(args['results_filename'], 'r')
 
@@ -11,6 +12,15 @@ def write_results_tables(**args):
 
     # Filter high proportion subclonal
     stats = stats[stats['proportion_divergent'] <= args['max_proportion_divergent']]
+
+    # Filter based on ploidy range
+    if args.get('max_ploidy') is not None:
+        stats = stats[stats['ploidy'] < args['max_ploidy']]
+    if args.get('min_ploidy') is not None:
+        stats = stats[stats['ploidy'] > args['min_ploidy']]
+
+    if stats.empty:
+        raise ValueError('filters to restrictive, no solutions')
 
     # Select highest elbo solution
     stats = stats.sort_values('elbo', ascending=False).iloc[0]
@@ -51,6 +61,12 @@ def add_arguments(argparser):
 
     argparser.add_argument('meta_filename',
         help='Output meta data filename')
+
+    argparser.add_argument('--max_ploidy', type=float, default=None,
+        help='Maximum ploidy')
+
+    argparser.add_argument('--min_ploidy', type=float, default=None,
+        help='Minimum ploidy')
 
     argparser.add_argument('--max_proportion_divergent', type=float, default=0.5,
         help='Maximum proportion of the genome divergent')
