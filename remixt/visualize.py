@@ -86,7 +86,7 @@ def major_minor_segment_plot(source, major_column, minor_column, x_range, name, 
         title=name + ' chromosome major/minor',
         plot_width=width, plot_height=200,
         tools=tools,
-        logo=None,
+        toolbar_location='above',
         x_range=x_range,
         y_range=[-0.5, 6.5],
     )
