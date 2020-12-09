@@ -74,6 +74,18 @@ setup(
         'setuptools>=18.0',
         'cython',
     ],
+    install_requires=[
+        'numpy',
+        'scipy',
+        'pandas',
+        'tables',
+        'pypeliner',
+        'statsmodels',
+        'scikit-learn',
+        'pyyaml',
+        'matplotlib',
+        'seaborn',
+        'bokeh',
+    ],
     entry_points={'console_scripts': ['remixt = remixt.ui.main:main']},
 )
-
