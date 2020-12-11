@@ -70,12 +70,12 @@ setup(
     classifiers=[],
     ext_modules=extensions,
     setup_requires=[
-        'numpy',
+        'numpy==1.19.4',
         'setuptools>=18.0',
         'cython',
     ],
     install_requires=[
-        'numpy',
+        'numpy==1.19.4',
         'scipy',
         'pandas',
         'tables',
