@@ -1,0 +1,1 @@
+docker run -v ${PWD}:/repo -w /repo -it conda/miniconda3-centos7 bash build_pip.sh

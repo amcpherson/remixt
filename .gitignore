@@ -9,4 +9,4 @@ remixt/*.c
 remixt/*.so
 .DS_Store
 *env*
-*build*
+build/*
