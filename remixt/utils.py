@@ -2,23 +2,12 @@ import csv
 import os
 import string
 import shutil
-import scipy
-import scipy.stats
 import itertools
 import collections
 import bisect
 import numpy as np
 import pandas as pd
 import pypeliner.commandline
-
-
-class gaussian_kde_set_covariance(scipy.stats.gaussian_kde):
-    def __init__(self, dataset, covariance):
-        self.covariance = covariance
-        scipy.stats.gaussian_kde.__init__(self, dataset)
-    def _compute_covariance(self):
-        self.inv_cov = 1.0 / self.covariance
-        self._norm_factor = np.sqrt(2*np.pi*self.covariance) * self.n
 
 
 class TempRandomSeed(object):
@@ -32,34 +21,12 @@ class TempRandomSeed(object):
             np.random.set_state(self.rng_state)
 
 
-def filled_density(ax, data, c, a, xmin, xmax, cov, rotate=False):
-    density = gaussian_kde_set_covariance(data, cov)
-    xs = [xmin] + list(np.linspace(xmin, xmax, 2000)) + [xmax]
-    ys = density(xs)
-    ys[0] = 0.0
-    ys[-1] = 0.0
-    if rotate:
-        ax.plot(ys, xs, color=c, alpha=a)
-        ax.fill_betweenx(xs, ys, color=c, alpha=a)
-    else:
-        ax.plot(xs, ys, color=c, alpha=a)
-        ax.fill(xs, ys, color=c, alpha=a)
-
-
 def weighted_resample(data, weights, num_samples=10000):
     norm_weights = weights.astype(float) / float(weights.sum())
     with TempRandomSeed():
         counts = np.random.multinomial(num_samples, norm_weights)
     samples = np.repeat(data, counts)
     return samples
-
-
-def filled_density_weighted(ax, data, weights, c, a, xmim, xmax, cov, rotate=False):
-    weights = weights.astype(float)
-    resample_prob = weights / weights.sum()
-    with TempRandomSeed():
-        samples = np.random.choice(data, size=10000, replace=True, p=resample_prob)
-    filled_density(ax, samples, c, a, xmim, xmax, cov, rotate=rotate)
 
 
 def weighted_percentile(data, weights, percentile, num_samples=10000):

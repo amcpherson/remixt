@@ -21,6 +21,15 @@ def calculate_depth(experiment):
     """
 
     data = remixt.analysis.experiment.create_segment_table(experiment)
+    
+    data['segment_length'] = data['end'] - data['start'] + 1
+    data['length_ratio'] = data['length'] / data['segment_length']
+    data['allele_readcount'] = data['minor_readcount'] + data['major_readcount']
+
+    data['high_quality'] = (
+        (data['length'] > np.percentile(data['length'].values, 10)) &
+        (data['allele_readcount'] > np.percentile(data['allele_readcount'].values, 10)) &
+        (data['length_ratio'] > np.percentile(data['length_ratio'].values, 10)))
 
     phi = remixt.likelihood.estimate_phi(experiment.x)
     p = remixt.likelihood.proportion_measureable_matrix(phi)
@@ -42,6 +51,7 @@ def calculate_depth(experiment):
         'major',
         'minor',
         'total',
+        'high_quality',
     ]]
 
     return data

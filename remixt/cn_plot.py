@@ -4,6 +4,7 @@ import itertools
 import pickle
 import pandas as pd
 import numpy as np
+import scipy
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.colors import colorConverter
@@ -14,6 +15,22 @@ import matplotlib.backends.backend_pdf
 
 import remixt.analysis.experiment
 import remixt.analysis.readdepth
+
+
+def filled_density_weighted(ax, data, weights, c, a, xmin, xmax, cov, rotate=False):
+    """ Weighted filled density plot.
+    """
+    density = scipy.stats.gaussian_kde(data, bw_method=cov, weights=weights)
+    xs = [xmin] + list(np.linspace(xmin, xmax, 2000)) + [xmax]
+    ys = density(np.array(xs))
+    ys[0] = 0.0
+    ys[-1] = 0.0
+    if rotate:
+        ax.plot(ys, xs, color=c, alpha=a)
+        ax.fill_betweenx(xs, ys, color=c, alpha=a)
+    else:
+        ax.plot(xs, ys, color=c, alpha=a)
+        ax.fill(xs, ys, color=c, alpha=a)
 
 
 def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor', do_fill=False,):
@@ -209,12 +226,12 @@ def plot_cnv_genome_density(fig, transform, cnv):
     box = matplotlib.transforms.Bbox([[0.7, 0.05], [0.95, 0.95]])
     ax = fig.add_axes(transform.transform_bbox(box))
 
-    cov = 0.001
+    cov = 0.05
     data = cnv[['minor_raw', 'major_raw', 'length']].replace(np.inf, np.nan).dropna()
-    remixt.utils.filled_density_weighted(
+    filled_density_weighted(
         ax, data['minor_raw'].values, data['length'].values,
         'blue', 0.5, ylim[0], ylim[1], cov, rotate=True)
-    remixt.utils.filled_density_weighted(
+    filled_density_weighted(
         ax, data['major_raw'].values, data['length'].values,
         'red', 0.5, ylim[0], ylim[1], cov, rotate=True)
     ax.set_ylim(ylim)
@@ -364,7 +381,7 @@ def plot_cnv_scatter_density(fig, transform, data, major_col='major', minor_col=
     ax.xaxis.tick_bottom()
     ax.yaxis.tick_left()
     ax.xaxis.grid(True)
-    remixt.utils.filled_density_weighted(
+    filled_density_weighted(
         ax, data[major_col].values, data['length'].values,
         '0.75', 0.5, xlim[0], xlim[1], 1e-7)
     ax.set_xlim(xlim)
@@ -380,7 +397,7 @@ def plot_cnv_scatter_density(fig, transform, data, major_col='major', minor_col=
     ax.xaxis.tick_bottom()
     ax.yaxis.tick_left()
     ax.yaxis.grid(True)
-    remixt.utils.filled_density_weighted(
+    filled_density_weighted(
         ax, data[minor_col].values, data['length'].values,
         '0.75', 0.5, ylim[0], ylim[1], 1e-7, rotate=True)
     ax.set_ylim(ylim)
@@ -632,9 +649,9 @@ def plot_depth(ax, read_depth, minor_modes=None):
     depth_max = np.percentile(total_depth_samples, 95)
     cov = 0.0000001
 
-    remixt.utils.filled_density_weighted(ax, read_depth['minor'].values, read_depth['length'].values, 'blue', 0.5, 0.0, depth_max, cov)
-    remixt.utils.filled_density_weighted(ax, read_depth['major'].values, read_depth['length'].values, 'red', 0.5, 0.0, depth_max, cov)
-    remixt.utils.filled_density_weighted(ax, read_depth['total'].values, read_depth['length'].values, 'grey', 0.5, 0.0, depth_max, cov)
+    filled_density_weighted(ax, read_depth['minor'].values, read_depth['length'].values, 'blue', 0.5, 0.0, depth_max, cov)
+    filled_density_weighted(ax, read_depth['major'].values, read_depth['length'].values, 'red', 0.5, 0.0, depth_max, cov)
+    filled_density_weighted(ax, read_depth['total'].values, read_depth['length'].values, 'grey', 0.5, 0.0, depth_max, cov)
 
     if minor_modes is not None:
         init_h_mono = np.array(remixt.analysis.readdepth.calculate_candidate_h_monoclonal(minor_modes))
@@ -724,7 +741,7 @@ def ploidy_analysis_plots(experiment_filename, plots_filename):
 
         box = matplotlib.transforms.Bbox([[0., 0.0], [1., 0.25]])
         transform = matplotlib.transforms.BboxTransformTo(box)
-        remixt.cn_plot.plot_cnv_genome_density(fig, transform, read_depth)
+        remixt.cn_plot.plot_cnv_genome_density(fig, transform, read_depth.query('high_quality'))
 
         pdf.savefig(bbox_inches='tight')
         plt.close()
