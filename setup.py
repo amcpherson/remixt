@@ -4,12 +4,16 @@ import sys
 import versioneer
 from setuptools import setup, find_packages, Extension
 
+NUMPY_VERSION = '1.19.4'
+
 class get_numpy_include(str):
     def __str__(self):
         import numpy
+        if numpy.__version__ != NUMPY_VERSION:
+            raise Exception(f'numpy compatibility error, {NUMPY_VERSION} != {numpy.__version__}')
         return numpy.get_include()
 
-external_dir = os.path.abspath('src/external')
+external_dir = 'src/external'
 
 bamtools_dir = os.path.join(external_dir, 'bamtools', 'src')
 bamtools_api_dir = os.path.join(bamtools_dir, 'api')
@@ -70,12 +74,12 @@ setup(
     classifiers=[],
     ext_modules=extensions,
     setup_requires=[
-        'numpy==1.19.4',
+        f'numpy=={NUMPY_VERSION}',
         'setuptools>=18.0',
         'cython',
     ],
     install_requires=[
-        'numpy==1.19.4',
+        f'numpy=={NUMPY_VERSION}',
         'scipy',
         'pandas',
         'tables',
