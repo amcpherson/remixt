@@ -4,9 +4,22 @@ ReMixT is a tool for joint inference of clone specific segment and breakpoint co
 
 ## Installation
 
+Conda is a prerequisite, install [anaconda python](https://store.continuum.io/cshop/anaconda/) from the continuum website.
+
+### Installing from pip
+
+The recommended method of installation for ReMixT is using `pip`.
+
+    pip install remixt
+
+You will also need to `shapeit` and `samtools` on your path.  They can be installed using conda:
+
+    conda install samtools
+    conda install -c dranew shapeit
+
 ### Installing from conda
 
-The recommended method of installation for ReMixT is using `conda`.  First install [anaconda python](https://store.continuum.io/cshop/anaconda/) from the continuum website.  Then add my channel, and the bioconda channel, and install ReMixT as follows.
+The conda distribution is now out of date.  However, to use conda, add my channel, and the bioconda channel, and install ReMixT as follows.
 
     conda config --add channels https://conda.anaconda.org/dranew
     conda config --add channels 'bioconda'
@@ -247,6 +260,13 @@ To build a destruct docker image, for instance version v0.5.13, run the followin
 
     docker build --build-arg app_version=v0.5.13 -t amcpherson/remixt:v0.5.13 .
     docker push amcpherson/remixt:v0.5.13
+
+## Pip build
+
+To build with pip and distribute to pypi, use the following commands:
+
+    python setup.py build_ext --force sdist
+    twine upload --repository pypi dist/*
 
 # License
 
