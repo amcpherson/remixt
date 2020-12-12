@@ -987,7 +987,7 @@ cdef class RemixtModel:
     cpdef void update_p_outlier_total(self) except *:
         """ Update the total read count outlier indicator approximating distributions.
         """
-
+        cdef int n, s, u
         cdef np.ndarray[np.float64_t, ndim=1] log_p_outlier_total = np.zeros((2,))
 
         for n in range(self.num_segments):
@@ -1025,7 +1025,7 @@ cdef class RemixtModel:
     cpdef void update_p_allele_swap(self) except *:
         """ Update the allele swap indicator approximating distributions.
         """
-
+        cdef int n, s, v, w
         cdef np.ndarray[np.float64_t, ndim=1] log_p_allele_swap = np.zeros((2,))
 
         for n in range(self.num_segments):
@@ -1127,7 +1127,7 @@ cdef class RemixtModel:
         approximating distribution.
         """
 
-        cdef int n, s, s_, u, v
+        cdef int n, s, s_, u, v, w
         cdef np.float64_t energy = 0.
         
         # Total likelihood factors
