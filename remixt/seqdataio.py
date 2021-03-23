@@ -235,7 +235,7 @@ def read_seq_data(seqdata_filename, record_type, chromosome, chunksize=None, pos
         return _read_seq_data_chunks(seqdata_filename, record_type, chromosome, chunksize, post=post)
 
 
-def read_fragment_data(seqdata_filename, chromosome, filter_duplicates=False, map_qual_threshold=1, chunksize=None):
+def read_fragment_data(seqdata_filename, chromosome, filter_duplicates=False, map_qual_threshold=1, keep_cols=False, chunksize=None):
     """ Read fragment data from a HDF seqdata file.
 
     Args:
@@ -245,6 +245,7 @@ def read_fragment_data(seqdata_filename, chromosome, filter_duplicates=False, ma
     KwArgs:
         filter_duplicates (bool): filter reads marked as duplicate
         map_qual_threshold (int): filter reads with less than this mapping quality
+        keep_cols (bool): keep all columns including those used to filter
         chunksize (int): number of rows to stream at a time, None for the entire file
 
     Yields:
@@ -259,12 +260,14 @@ def read_fragment_data(seqdata_filename, chromosome, filter_duplicates=False, ma
         if 'is_duplicate' in reads and filter_duplicates is not None:
             if filter_duplicates:
                 reads = reads[reads['is_duplicate'] == 0]
-            reads.drop(['is_duplicate'], axis=1, inplace=True)
+            if not keep_cols:
+                reads.drop(['is_duplicate'], axis=1, inplace=True)
 
         # Filter poor quality reads
         if 'mapping_quality' in reads and map_qual_threshold is not None:
             reads = reads[reads['mapping_quality'] >= map_qual_threshold]
-            reads.drop(['mapping_quality'], axis=1, inplace=True)
+            if not keep_cols:
+                reads.drop(['mapping_quality'], axis=1, inplace=True)
 
         return reads
 
