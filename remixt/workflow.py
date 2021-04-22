@@ -328,6 +328,7 @@ def create_fit_model_workflow(
 
     workflow.transform(
         name='fit',
+        ctx={'mem': 32},
         axes=('init_id',),
         func='remixt.analysis.pipeline.fit_task',
         args=(
