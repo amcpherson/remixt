@@ -99,7 +99,7 @@ gc_position_offset                          = 4
 fit_method                                  = 'hmm_graph'
 
 # Maximum copy number in state space for HMM
-max_copy_number                             = 8
+max_copy_number                             = 12
 
 # Tumour mixture fractions for initialization of haploid depth
 # parameter optimization
