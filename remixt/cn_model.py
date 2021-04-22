@@ -225,7 +225,7 @@ class BreakpointModel(object):
             'betabin_loh_M_1': (1., 200.),
         }
 
-    def create_cn_states(self, num_clones, num_alleles, cn_max, cn_diff_max):
+    def create_cn_states(self, num_clones, num_alleles, cn_max, cn_diff_max, cn_subclonal_max=12):
         """ Create a list of allele specific copy number states for a single segment.
         """
         num_tumour_vars = (num_clones - 1) * num_alleles
@@ -240,6 +240,9 @@ class BreakpointModel(object):
                 continue
 
             if not np.all(cn[1:, :].max(axis=0) - cn[1:, :].min(axis=0) <= cn_diff_max):
+                continue
+
+            if np.all(cn[1:, :].sum(axis=1) > cn_subclonal_max) and not np.all(cn[1:, :].max(axis=0) - cn[1:, :].min(axis=0) == 0):
                 continue
 
             # Ensure states are non-redundant under swapping
