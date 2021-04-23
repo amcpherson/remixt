@@ -256,7 +256,7 @@ Often a call to qsub requires specific command line parameters to request the co
 
 ## Docker builds
 
-To build a destruct docker image, for instance version v0.5.13, run the following docker command:
+To build a docker image, for instance version v0.5.13, run the following docker command:
 
     docker build --build-arg app_version=v0.5.13 -t amcpherson/remixt:v0.5.13 .
     docker push amcpherson/remixt:v0.5.13
