@@ -56,8 +56,7 @@ inline bool IsReadValidConcordant(const BamAlignment& alignment, double maxSoftC
 {
 	return (GetNumSoftClipped(alignment) <= maxSoftClipped &&
 	        alignment.IsMapped() &&
-	        !alignment.IsFailedQC() &&
-	        alignment.IsPrimaryAlignment());
+	        !alignment.IsFailedQC());
 }
 
 AlleleReader::AlleleReader(const string& bamFilename,
@@ -186,6 +185,12 @@ bool AlleleReader::ReadAlignments(int maxAlignments)
 		// Get next alignment if one is available
 		BamAlignment alignment;
 		finishedGetAlignments = !mBamReader.GetNextAlignment(alignment);
+
+		// Skip all secondary alignments
+		if (!alignment.IsPrimaryAlignment())
+		{
+			continue;
+		}
 
 		// Break out if finished getting alignments
 		if (finishedGetAlignments)
