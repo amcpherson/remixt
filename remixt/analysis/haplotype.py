@@ -1,8 +1,10 @@
 import os
+import glob
 import pandas as pd
 import numpy as np
 import scipy
 import scipy.stats
+import pysam
 import pypeliner
 
 import remixt.seqdataio
@@ -174,8 +176,246 @@ def infer_snp_genotype_from_tumour(snp_genotype_filename, seqdata_filenames, chr
     snp_counts_df.to_csv(snp_genotype_filename, sep='\t', columns=['position', 'AA', 'AB', 'BB'], index=False)
 
 
-def infer_haps(haps_filename, snp_genotype_filename, chromosome, temp_directory, config, ref_data_dir):
-    """ Infer haplotype blocks for a chromosome using shapeit
+def read_bcf_phased_genotypes(bcf_filename):
+    """ Read in a shapeit4 generated BCF file and return dataframe of phased alleles.
+
+    Parameters
+    ----------
+    bcf_filename : str
+        BCF file produced by shapeit4
+
+    Returns
+    -------
+    pandas.DataFrame
+        table of phased alleles
+    """
+    phased_genotypes = []
+
+    for r in pysam.VariantFile(bcf_filename, 'r'):
+        for alt in r.alts:
+            chromosome = r.chrom
+            position = r.pos
+            ref = r.ref
+
+            assert len(r.samples) == 1
+            gt_infos = r.samples[0].items()
+
+            assert len(gt_infos) == 1
+            assert gt_infos[0][0] == 'GT'
+            allele1, allele2 = gt_infos[0][1]
+
+            phased_genotypes.append([chromosome, position, ref, alt, allele1, allele2])
+
+    phased_genotypes = pd.DataFrame(
+        phased_genotypes,
+        columns=['chromosome', 'position', 'ref', 'alt', 'allele1', 'allele2'])
+
+    return phased_genotypes
+
+
+def read_phasing_samples(bcf_filenames):
+    """ Read a set of phasing samples from BCF files
+
+    Parameters
+    ----------
+    bcf_filenames : list of str
+        list of BCF of phased SNPs
+
+    Yields
+    ------
+    pandas.DataFrame
+        allele1 and allele2 (0/1) indexed by chrom, coord, ref, alt
+    """
+    for bcf_filename in bcf_filenames:
+        phasing = read_bcf_phased_genotypes(bcf_filename)
+        phasing.set_index(['chromosome', 'position', 'ref', 'alt'], inplace=True)
+        yield phasing
+
+
+def calculate_haplotypes(phasing_samples, changepoint_threshold=0.95):
+    """ Calculate haplotype from a set phasing samples.
+
+    Parameters
+    ----------
+    phasing_samples : list of pandas.Series
+        set of phasing samples for a set of SNPs
+    changepoint_threshold : float, optional
+        threshold on high confidence changepoint calls, by default 0.95
+
+    Returns
+    ------
+    pandas.Series
+        haplotype info indexed by chrom, coord, ref, alt
+    """
+
+    haplotypes = None
+    n_samples = 0
+
+    for phasing in phasing_samples:
+        # Select het positions
+        phasing = phasing[phasing['allele1'] != phasing['allele2']]
+
+        # Identify changepoints.  A changepoint occurs when the alternate allele
+        # of a heterozygous SNP is on a different haplotype allele from the alternate
+        # allele of the previous het SNP.
+        changepoints = phasing['allele1'].diff().abs().astype(float).fillna(0.0)
+
+        if haplotypes is None:
+            haplotypes = changepoints
+        else:
+            haplotypes += changepoints
+        n_samples += 1
+
+    haplotypes /= float(n_samples)
+
+    haplotypes = haplotypes.rename('fraction_changepoint').reset_index()
+
+    # Calculate confidence in either changepoint or no changepoint
+    haplotypes['changepoint_confidence'] = np.maximum(haplotypes['fraction_changepoint'], 1.0 - haplotypes['fraction_changepoint'])
+
+    # Calculate most likely call of changepoint or no changepoint
+    haplotypes['is_changepoint'] = haplotypes['fraction_changepoint'].round().astype(int)
+
+    # Threshold confident changepoint calls
+    haplotypes['not_confident'] = (haplotypes['changepoint_confidence'] < float(changepoint_threshold))
+
+    # Calculate hap label
+    haplotypes['chrom_different'] = haplotypes['chromosome'].ne(haplotypes['chromosome'].shift())
+    haplotypes['hap_label'] = (haplotypes['not_confident'] | haplotypes['chrom_different']).cumsum() - 1
+
+    # Calculate most likely alelle1
+    haplotypes['allele1'] = haplotypes['is_changepoint'].cumsum().mod(2)
+    haplotypes['allele2'] = 1 - haplotypes['allele1']
+
+    return haplotypes
+
+
+def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome, temp_directory, config, ref_data_dir):
+    """ Infer haplotype blocks for a chromosome using shapeit4 for grch38
+
+    Args:
+        haps_filename (str): output haplotype data file
+        snp_genotype_filename (str): input snp genotype file
+        chromosome (str): id of chromosome for which haplotype blocks will be inferred
+        temp_directory (str): directory in which shapeit temp files will be stored
+        config (dict): relavent shapeit parameters including thousand genomes paths
+        ref_data_dir (str): reference dataset directory
+
+    The output haps file will contain haplotype blocks for each heterozygous SNP position. The
+    file will be TSV format with the following columns:
+
+        'chromosome': het snp chromosome
+        'position': het snp position
+        'allele': binary indicator for reference (0) vs alternate (1) allele
+        'hap_label': label of the haplotype block
+        'allele_id': binary indicator of the haplotype allele
+    """
+
+    def write_null():
+        with open(haps_filename, 'w') as haps_file:
+            haps_file.write('chromosome\tposition\tallele\thap_label\tallele_id\n')
+
+    accepted_chromosomes = remixt.config.get_param(config, 'phased_1kg_chromosomes')
+    if str(chromosome) not in accepted_chromosomes:
+        write_null()
+        return
+    
+    # Temporary directory for shapeit files
+    try:
+        os.makedirs(temp_directory)
+    except OSError:
+        pass
+
+    snp_positions_filename = remixt.config.get_filename(config, ref_data_dir, 'snp_positions')
+
+    snp_positions = pd.read_csv(snp_positions_filename, sep='\t', names=['chromosome', 'position', 'ref', 'alt'], dtype={'chromosome': str})
+    snp_genotypes = pd.read_csv(snp_genotype_filename, sep='\t')
+
+    snp_genotypes = snp_genotypes.merge(snp_positions)
+
+    # Filter for heterozygous SNPs
+    snp_genotypes = snp_genotypes[(snp_genotypes['AB'] == 1) & (snp_genotypes['AA'] == 0) & (snp_genotypes['BB'] == 0)]
+
+    # Write out a VCF File
+    #
+    snp_genotypes['chromosome'] = 'chr' + snp_genotypes['chromosome'].str.replace('chr', '')
+    snp_genotypes['ID'] = snp_genotypes['chromosome'] + '_' + snp_genotypes['position'].astype(str) + '_' + snp_genotypes['ref'] + '_' + snp_genotypes['alt']
+    snp_genotypes['QUAL'] = '.'
+    snp_genotypes['FILTER'] = '.'
+    snp_genotypes['INFO'] = '.'
+    snp_genotypes['FORMAT'] = 'GT'
+    snp_genotypes['NORMAL'] = '0/1'
+
+    snp_genotypes = snp_genotypes.rename(columns={
+        'chromosome': '#CHROM',
+        'position': 'POS',
+        'ref': 'REF',
+        'alt': 'ALT',
+    })
+
+    cols = ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', 'NORMAL']
+
+    temp_vcf_filename = os.path.join(temp_directory, 'het_snps.vcf')
+
+    for filename in glob.glob(temp_vcf_filename + '*'):
+        try:
+            os.remove(filename)
+        except OSError:
+            pass
+
+    with open(temp_vcf_filename, 'w') as f:
+        f.write('##fileformat=VCFv4.2\n')
+        f.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
+        snp_genotypes[cols].to_csv(f, sep='\t', index=False)
+
+    temp_bcf_filename = os.path.join(temp_directory, 'het_snps.vcf')
+
+    pypeliner.commandline.execute('bgzip', '--force', temp_vcf_filename)
+    pypeliner.commandline.execute('tabix', temp_vcf_filename + '.gz')
+    pypeliner.commandline.execute('bcftools', 'view', '-O', 'b', temp_vcf_filename + '.gz', '-o', temp_bcf_filename)
+    pypeliner.commandline.execute('bcftools', 'index', temp_bcf_filename)
+
+    if chromosome == 'X':
+        bcf_reference_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_X_bcf_filename')
+    else:
+        bcf_reference_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_bcf_filename', chromosome=chromosome)
+
+    genetic_map_filename = remixt.config.get_filename(config, ref_data_dir, 'genetic_map_grch38_filename', chromosome=chromosome)
+
+    # Run shapeit to sample from phased haplotype graph
+    sample_template = os.path.join(temp_directory, 'sampled.{0}.bcf')
+    shapeit_num_samples = remixt.config.get_param(config, 'shapeit_num_samples')
+    sample_filenames = []
+    for s in range(shapeit_num_samples):
+        sample_filename = sample_template.format(s)
+        sample_filenames.append(sample_filename)
+        pypeliner.commandline.execute(
+            'shapeit4',
+            '--input', temp_bcf_filename,
+            '--map', genetic_map_filename,
+            '--region', f'chr{chromosome}',
+            '--reference', bcf_reference_filename,
+            '--output', sample_filename,
+            '--seed', str(s))
+        pypeliner.commandline.execute(
+            'bcftools', 'index', '-f', sample_filename)
+
+    shapeit_confidence_threshold = remixt.config.get_param(config, 'shapeit_confidence_threshold')
+
+    haplotypes = calculate_haplotypes(read_phasing_samples(sample_filenames), changepoint_threshold=shapeit_confidence_threshold)
+
+    haplotypes = pd.concat([
+        haplotypes.rename(columns={'allele1': 'allele'})[['chromosome', 'position', 'allele', 'hap_label']].assign(allele_id=0),
+        haplotypes.rename(columns={'allele2': 'allele'})[['chromosome', 'position', 'allele', 'hap_label']].assign(allele_id=1),
+    ]).reset_index()
+
+    haplotypes['chromosome'] = haplotypes['chromosome'].str.replace('chr', '')
+
+    haplotypes[['chromosome', 'position', 'allele', 'hap_label', 'allele_id']].to_csv(haps_filename, sep='\t', index=False)
+
+
+def infer_haps_grch37_shapeit2(haps_filename, snp_genotype_filename, chromosome, temp_directory, config, ref_data_dir):
+    """ Infer haplotype blocks for a chromosome using shapeit2 for grch37
 
     Args:
         haps_filename (str): output haplotype data file
@@ -340,6 +580,16 @@ def infer_haps(haps_filename, snp_genotype_filename, chromosome, temp_directory,
     haps = haps[['chromosome', 'position', 'allele', 'hap_label', 'allele_id']]
 
     haps.to_csv(haps_filename, sep='\t', index=False)
+
+
+def infer_haps(haps_filename, snp_genotype_filename, chromosome, temp_directory, config, ref_data_dir):
+    ensembl_genome_version = remixt.config.get_param(config, 'ensembl_genome_version')
+    if ensembl_genome_version == 'GRCh38':
+        infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome, temp_directory, config, ref_data_dir)
+    elif ensembl_genome_version == 'GRCh37':
+        infer_haps_grch37_shapeit2(haps_filename, snp_genotype_filename, chromosome, temp_directory, config, ref_data_dir)
+    else:
+        raise ValueError(f'unsupported genome version {ensembl_genome_version}')
 
 
 def count_allele_reads(seqdata_filename, haps, chromosome, segments, filter_duplicates=False, map_qual_threshold=1):

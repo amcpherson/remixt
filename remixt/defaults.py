@@ -22,7 +22,7 @@ chromosomes                                 = ['1', '2', '3', '4', '5', '6', '7'
 ensembl_assembly_url_template               = 'ftp://ftp.ensembl.org/pub/release-{ensembl_version}/fasta/homo_sapiens/dna/Homo_sapiens.{ensembl_genome_version}.dna.{ensembl_assembly}.fa.gz'
 
 # Ucsc genome version (must match ensembl version!)
-ucsc_genome_version                         = 'hg19'
+ucsc_genome_version                         = 'hg38'
 
 # Locally installed reference genome
 genome_fasta_template                       = '{ref_data_dir}/Homo_sapiens.{ensembl_genome_version}.{ensembl_version}.dna.chromosomes.fa'
@@ -57,6 +57,17 @@ legend_template                             = thousand_genomes_directory+'/ALL_1
 haplotypes_template                         = thousand_genomes_directory+'/ALL_1000G_phase1integrated_v3_chr{chromosome}_impute.hap.gz'
 genetic_map_template                        = thousand_genomes_directory+'/genetic_map_chr{chromosome}_combined_b37.txt'
 phased_chromosome_x                         = 'X_nonPAR'
+
+# Thousand genomes GRCH38
+phased_1kg_chromosomes                      = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', 'X']
+phased_1kg_vcf_url_template                 = 'http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/20201028_3202_phased/CCDG_14151_B01_GRM_WGS_2020-08-05_chr{chromosome}.filtered.shapeit2-duohmm-phased.vcf.gz'
+phased_1kg_X_vcf_url                        = 'http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/20201028_3202_phased/CCDG_14151_B01_GRM_WGS_2020-08-05_chrX.filtered.eagle2-phased.v2.vcf.gz'
+phased_1kg_vcf_filename_template            = '{ref_data_dir}/CCDG_14151_B01_GRM_WGS_2020-08-05_chr{chromosome}.filtered.shapeit2-duohmm-phased.vcf.gz'
+phased_1kg_X_vcf_filename_template          = '{ref_data_dir}/CCDG_14151_B01_GRM_WGS_2020-08-05_chrX.filtered.eagle2-phased.v2.vcf.gz'
+phased_1kg_bcf_filename_template            = '{ref_data_dir}/CCDG_14151_B01_GRM_WGS_2020-08-05_chr{chromosome}.filtered.shapeit2-duohmm-phased.bcf'
+phased_1kg_X_bcf_filename_template          = '{ref_data_dir}/CCDG_14151_B01_GRM_WGS_2020-08-05_chrX.filtered.eagle2-phased.v2.bcf'
+genetic_maps_grch38_url                     = 'https://github.com/odelaneau/shapeit4/blob/master/maps/genetic_maps.b38.tar.gz?raw=true'
+genetic_map_grch38_filename_template        = '{ref_data_dir}/chr{chromosome}.b38.gmap.gz'
 
 # Locally installed snps from thousand genomes
 snp_positions_template                      = '{ref_data_dir}/thousand_genomes_snps.tsv'

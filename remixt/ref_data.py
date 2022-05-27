@@ -1,5 +1,8 @@
 import os
 import gzip
+import pysam
+import pandas as pd
+
 import pypeliner.commandline
 
 import remixt.config
@@ -48,33 +51,91 @@ def create_ref_data(config, ref_data_dir, ref_data_sentinal, bwa_index_genome=Fa
         pypeliner.commandline.execute('samtools', 'faidx', remixt.config.get_filename(config, ref_data_dir, 'genome_fasta'))
     auto_sentinal.run(samtools_faidx)
 
-    def wget_thousand_genomes():
-        tar_filename = os.path.join(temp_directory, 'thousand_genomes_download.tar.gz')
-        remixt.utils.wget(remixt.config.get_param(config, 'thousand_genomes_impute_url'), tar_filename)
-        pypeliner.commandline.execute('tar', '-C', ref_data_dir, '-xzvf', tar_filename)
-        os.remove(tar_filename)
-    auto_sentinal.run(wget_thousand_genomes)
+    if remixt.config.get_param(config, 'ensembl_genome_version') == 'GRCh37':
+        def wget_thousand_genomes():
+            tar_filename = os.path.join(temp_directory, 'thousand_genomes_download.tar.gz')
+            remixt.utils.wget(remixt.config.get_param(config, 'thousand_genomes_impute_url'), tar_filename)
+            pypeliner.commandline.execute('tar', '-C', ref_data_dir, '-xzvf', tar_filename)
+            os.remove(tar_filename)
+        auto_sentinal.run(wget_thousand_genomes)
 
-    def create_snp_positions():
-        with open(remixt.config.get_filename(config, ref_data_dir, 'snp_positions'), 'w') as snp_positions_file:
-            for chromosome in remixt.config.get_chromosomes(config, ref_data_dir):
-                phased_chromosome = chromosome
+        def create_snp_positions():
+            with open(remixt.config.get_filename(config, ref_data_dir, 'snp_positions'), 'w') as snp_positions_file:
+                for chromosome in remixt.config.get_chromosomes(config, ref_data_dir):
+                    phased_chromosome = chromosome
+                    if chromosome == 'X':
+                        phased_chromosome = remixt.config.get_param(config, 'phased_chromosome_x')
+                    legend_filename = remixt.config.get_filename(config, ref_data_dir, 'legend', chromosome=phased_chromosome)
+                    with gzip.open(legend_filename, 'rt') as legend_file:
+                        for line in legend_file:
+                            if line.startswith('id'):
+                                continue
+                            row = line.split()
+                            rs_id = row[0]
+                            position = row[1]
+                            a0 = row[2]
+                            a1 = row[3]
+                            if len(a0) != 1 or len(a1) != 1:
+                                continue
+                            snp_positions_file.write('\t'.join([chromosome, position, a0, a1]) + '\n')
+        auto_sentinal.run(create_snp_positions)
+
+    elif remixt.config.get_param(config, 'ensembl_genome_version') == 'GRCh38':
+        def wget_thousand_genomes():
+            for chromosome in remixt.config.get_param(config, 'phased_1kg_chromosomes'):
                 if chromosome == 'X':
-                    phased_chromosome = remixt.config.get_param(config, 'phased_chromosome_x')
-                legend_filename = remixt.config.get_filename(config, ref_data_dir, 'legend', chromosome=phased_chromosome)
-                with gzip.open(legend_filename, 'rt') as legend_file:
-                    for line in legend_file:
-                        if line.startswith('id'):
+                    vcf_url = remixt.config.get_param(config, 'phased_1kg_X_vcf_url')
+                    vcf_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_X_vcf_filename', chromosome=chromosome)
+                else:
+                    vcf_url = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_vcf_url', chromosome=chromosome)
+                    vcf_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_vcf_filename', chromosome=chromosome)
+                remixt.utils.wget(vcf_url, vcf_filename)
+        auto_sentinal.run(wget_thousand_genomes)
+
+        def convert_bcf():
+            for chromosome in remixt.config.get_param(config, 'phased_1kg_chromosomes'):
+                if chromosome == 'X':
+                    vcf_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_X_vcf_filename', chromosome=chromosome)
+                    bcf_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_X_bcf_filename', chromosome=chromosome)
+                else:
+                    vcf_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_vcf_filename', chromosome=chromosome)
+                    bcf_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_bcf_filename', chromosome=chromosome)
+                pypeliner.commandline.execute('bcftools', 'view', '-O', 'b', vcf_filename, '-o', bcf_filename)
+                pypeliner.commandline.execute('bcftools', 'index', bcf_filename)
+        auto_sentinal.run(convert_bcf)
+
+        def create_snp_positions():
+            snps = []
+            for chromosome in remixt.config.get_param(config, 'phased_1kg_chromosomes'):
+                if chromosome == 'X':
+                    bcf_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_X_bcf_filename', chromosome=chromosome)
+                else:
+                    bcf_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_bcf_filename', chromosome=chromosome)
+                for r in pysam.VariantFile(bcf_filename, 'r'):
+                    for alt in r.alts:
+                        chrom = r.chrom
+                        coord = r.pos
+                        ref = r.ref
+                        if ref not in ['A', 'C', 'T', 'G']:
                             continue
-                        row = line.split()
-                        rs_id = row[0]
-                        position = row[1]
-                        a0 = row[2]
-                        a1 = row[3]
-                        if len(a0) != 1 or len(a1) != 1:
+                        if alt not in ['A', 'C', 'T', 'G']:
                             continue
-                        snp_positions_file.write('\t'.join([chromosome, position, a0, a1]) + '\n')
-    auto_sentinal.run(create_snp_positions)
+                        # KLUDGE
+                        chrom = chrom.replace('chr', '')
+                        snps.append([chrom, coord, ref, alt])
+            snps = pd.DataFrame(snps, columns=['chrom', 'coord', 'ref', 'alt'])
+            snps.to_csv(remixt.config.get_filename(config, ref_data_dir, 'snp_positions'), index=False, header=False, sep='\t')
+        auto_sentinal.run(create_snp_positions)
+
+        def get_genetic_maps():
+            tar_filename = os.path.join(temp_directory, 'genetic_maps.b38.tar.gz')
+            remixt.utils.wget(remixt.config.get_param(config, 'genetic_maps_grch38_url'), tar_filename)
+            pypeliner.commandline.execute('tar', '-C', ref_data_dir, '-xzvf', tar_filename)
+            os.remove(tar_filename)
+        auto_sentinal.run(get_genetic_maps)
+
+    else:
+        raise ValueError('unsupported genomve version ' + remixt.config.get_param(config, 'ensembl_genome_version'))
 
     with open(ref_data_sentinal, 'w'):
         pass

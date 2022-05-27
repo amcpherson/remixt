@@ -1,4 +1,5 @@
 
 chromosomes: ['15']
 ensembl_assemblies: ['chromosome.15']
+phased_1kg_chromosomes: ['15']
 

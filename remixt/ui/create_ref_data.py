@@ -14,7 +14,7 @@ def run(**args):
 
     ref_data_sentinal = os.path.join(ref_data_dir, 'sentinal')
 
-    remixt.ref_data.create_ref_data(config, ref_data_dir, ref_data_sentinal)
+    remixt.ref_data.create_ref_data(config, ref_data_dir, ref_data_sentinal, bwa_index_genome=args['bwa_index_genome'])
 
 
 def add_arguments(argparser):
