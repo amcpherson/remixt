@@ -244,8 +244,10 @@ def calculate_haplotypes(phasing_samples, changepoint_threshold=0.95):
 
     Returns
     ------
-    pandas.Series
-        haplotype info indexed by chrom, coord, ref, alt
+    pandas.DataFrame
+        haplotype info with columns:
+            chromosome, position, ref, alt, fraction_changepoint, changepoint_confidence,
+            is_changepoint, not_confident, chrom_different, hap_label, allele1, allele2
     """
 
     haplotypes = None
@@ -315,11 +317,23 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
         with open(haps_filename, 'w') as haps_file:
             haps_file.write('chromosome\tposition\tallele\thap_label\tallele_id\n')
 
-    accepted_chromosomes = remixt.config.get_param(config, 'phased_1kg_chromosomes')
-    if str(chromosome) not in accepted_chromosomes:
+    # Translate to grch38 thousand genomes chr prefix
+    if remixt.config.get_param(config, 'chr_name_prefix') == '':
+        grch38_1kg_chromosome = 'chr' + chromosome
+    else:
+        grch38_1kg_chromosome = chromosome
+
+    # Skip unphased chromosomes
+    if str(grch38_1kg_chromosome) not in remixt.config.get_param(config, 'grch38_1kg_chromosomes'):
         write_null()
         return
-    
+
+    # If we are analyzing male data and this is chromosome X
+    # then there are no het snps and no haplotypes
+    if chromosome == remixt.config.get_param(config, 'grch38_1kg_phased_chromosome_x') and not remixt.config.get_param(config, 'is_female'):
+        write_null()
+        return
+
     # Temporary directory for shapeit files
     try:
         os.makedirs(temp_directory)
@@ -329,16 +343,24 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
     snp_positions_filename = remixt.config.get_filename(config, ref_data_dir, 'snp_positions')
 
     snp_positions = pd.read_csv(snp_positions_filename, sep='\t', names=['chromosome', 'position', 'ref', 'alt'], dtype={'chromosome': str})
+
     snp_genotypes = pd.read_csv(snp_genotype_filename, sep='\t')
+
+    # snp_genotypes file is calculated against remixt reference and
+    # snp_positions is translated to remixt reference from grch38 1kg
+    # use chromosome from remixt to merge
+    snp_genotypes['chromosome'] = chromosome
 
     snp_genotypes = snp_genotypes.merge(snp_positions)
 
     # Filter for heterozygous SNPs
     snp_genotypes = snp_genotypes[(snp_genotypes['AB'] == 1) & (snp_genotypes['AA'] == 0) & (snp_genotypes['BB'] == 0)]
 
+    # Overwrite chromosome with grch38 1kg chromosome name
+    snp_genotypes['chromosome'] = grch38_1kg_chromosome
+
     # Write out a VCF File
     #
-    snp_genotypes['chromosome'] = 'chr' + snp_genotypes['chromosome'].str.replace('chr', '')
     snp_genotypes['ID'] = snp_genotypes['chromosome'] + '_' + snp_genotypes['position'].astype(str) + '_' + snp_genotypes['ref'] + '_' + snp_genotypes['alt']
     snp_genotypes['QUAL'] = '.'
     snp_genotypes['FILTER'] = '.'
@@ -368,19 +390,19 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
         f.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
         snp_genotypes[cols].to_csv(f, sep='\t', index=False)
 
-    temp_bcf_filename = os.path.join(temp_directory, 'het_snps.vcf')
+    temp_bcf_filename = os.path.join(temp_directory, 'het_snps.bcf')
 
     pypeliner.commandline.execute('bgzip', '--force', temp_vcf_filename)
     pypeliner.commandline.execute('tabix', temp_vcf_filename + '.gz')
     pypeliner.commandline.execute('bcftools', 'view', '-O', 'b', temp_vcf_filename + '.gz', '-o', temp_bcf_filename)
     pypeliner.commandline.execute('bcftools', 'index', temp_bcf_filename)
 
-    if chromosome == 'X':
-        bcf_reference_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_X_bcf_filename')
+    if grch38_1kg_chromosome == remixt.config.get_param(config, 'grch38_1kg_phased_chromosome_x'):
+        bcf_reference_filename = remixt.config.get_filename(config, ref_data_dir, 'grch38_1kg_X_bcf_filename')
     else:
-        bcf_reference_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_bcf_filename', chromosome=chromosome)
+        bcf_reference_filename = remixt.config.get_filename(config, ref_data_dir, 'grch38_1kg_bcf_filename', chromosome=grch38_1kg_chromosome)
 
-    genetic_map_filename = remixt.config.get_filename(config, ref_data_dir, 'genetic_map_grch38_filename', chromosome=chromosome)
+    genetic_map_filename = remixt.config.get_filename(config, ref_data_dir, 'genetic_map_grch38_filename', chromosome=grch38_1kg_chromosome)
 
     # Run shapeit to sample from phased haplotype graph
     sample_template = os.path.join(temp_directory, 'sampled.{0}.bcf')
@@ -393,7 +415,7 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
             'shapeit4',
             '--input', temp_bcf_filename,
             '--map', genetic_map_filename,
-            '--region', f'chr{chromosome}',
+            '--region', grch38_1kg_chromosome,
             '--reference', bcf_reference_filename,
             '--output', sample_filename,
             '--seed', str(s))
@@ -407,9 +429,13 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
     haplotypes = pd.concat([
         haplotypes.rename(columns={'allele1': 'allele'})[['chromosome', 'position', 'allele', 'hap_label']].assign(allele_id=0),
         haplotypes.rename(columns={'allele2': 'allele'})[['chromosome', 'position', 'allele', 'hap_label']].assign(allele_id=1),
-    ]).reset_index()
+    ])
 
-    haplotypes['chromosome'] = haplotypes['chromosome'].str.replace('chr', '')
+    # Translate from grch38 thousand genomes chr prefix
+    if remixt.config.get_param(config, 'chr_name_prefix') == '':
+        if not haplotypes['chromosome'].str.startswith('chr').all():
+            raise ValueError('unexpected chromosome prefix')
+        haplotypes['chromosome'] = haplotypes['chromosome'].str.slice(start=3)
 
     haplotypes[['chromosome', 'position', 'allele', 'hap_label', 'allele_id']].to_csv(haps_filename, sep='\t', index=False)
 

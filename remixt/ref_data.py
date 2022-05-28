@@ -82,46 +82,53 @@ def create_ref_data(config, ref_data_dir, ref_data_sentinal, bwa_index_genome=Fa
 
     elif remixt.config.get_param(config, 'ensembl_genome_version') == 'GRCh38':
         def wget_thousand_genomes():
-            for chromosome in remixt.config.get_param(config, 'phased_1kg_chromosomes'):
-                if chromosome == 'X':
-                    vcf_url = remixt.config.get_param(config, 'phased_1kg_X_vcf_url')
-                    vcf_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_X_vcf_filename', chromosome=chromosome)
+            for chromosome in remixt.config.get_param(config, 'grch38_1kg_chromosomes'):
+                if chromosome == remixt.config.get_param(config, 'grch38_1kg_phased_chromosome_x'):
+                    vcf_url = remixt.config.get_param(config, 'grch38_1kg_X_vcf_url')
+                    vcf_filename = remixt.config.get_filename(config, ref_data_dir, 'grch38_1kg_X_vcf_filename')
                 else:
-                    vcf_url = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_vcf_url', chromosome=chromosome)
-                    vcf_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_vcf_filename', chromosome=chromosome)
+                    vcf_url = remixt.config.get_filename(config, ref_data_dir, 'grch38_1kg_vcf_url', chromosome=chromosome)
+                    vcf_filename = remixt.config.get_filename(config, ref_data_dir, 'grch38_1kg_vcf_filename', chromosome=chromosome)
                 remixt.utils.wget(vcf_url, vcf_filename)
         auto_sentinal.run(wget_thousand_genomes)
 
         def convert_bcf():
-            for chromosome in remixt.config.get_param(config, 'phased_1kg_chromosomes'):
-                if chromosome == 'X':
-                    vcf_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_X_vcf_filename', chromosome=chromosome)
-                    bcf_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_X_bcf_filename', chromosome=chromosome)
+            for chromosome in remixt.config.get_param(config, 'grch38_1kg_chromosomes'):
+                if chromosome == remixt.config.get_param(config, 'grch38_1kg_phased_chromosome_x'):
+                    vcf_filename = remixt.config.get_filename(config, ref_data_dir, 'grch38_1kg_X_vcf_filename')
+                    bcf_filename = remixt.config.get_filename(config, ref_data_dir, 'grch38_1kg_X_bcf_filename')
                 else:
-                    vcf_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_vcf_filename', chromosome=chromosome)
-                    bcf_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_bcf_filename', chromosome=chromosome)
+                    vcf_filename = remixt.config.get_filename(config, ref_data_dir, 'grch38_1kg_vcf_filename', chromosome=chromosome)
+                    bcf_filename = remixt.config.get_filename(config, ref_data_dir, 'grch38_1kg_bcf_filename', chromosome=chromosome)
                 pypeliner.commandline.execute('bcftools', 'view', '-O', 'b', vcf_filename, '-o', bcf_filename)
                 pypeliner.commandline.execute('bcftools', 'index', bcf_filename)
         auto_sentinal.run(convert_bcf)
 
         def create_snp_positions():
+            chr_name_prefix = remixt.config.get_param(config, 'chr_name_prefix')
             snps = []
-            for chromosome in remixt.config.get_param(config, 'phased_1kg_chromosomes'):
-                if chromosome == 'X':
-                    bcf_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_X_bcf_filename', chromosome=chromosome)
+            for chromosome in remixt.config.get_param(config, 'grch38_1kg_chromosomes'):
+                if chromosome == remixt.config.get_param(config, 'grch38_1kg_phased_chromosome_x'):
+                    bcf_filename = remixt.config.get_filename(config, ref_data_dir, 'grch38_1kg_X_bcf_filename')
                 else:
-                    bcf_filename = remixt.config.get_filename(config, ref_data_dir, 'phased_1kg_bcf_filename', chromosome=chromosome)
+                    bcf_filename = remixt.config.get_filename(config, ref_data_dir, 'grch38_1kg_bcf_filename', chromosome=chromosome)
                 for r in pysam.VariantFile(bcf_filename, 'r'):
                     for alt in r.alts:
-                        chrom = r.chrom
+                        # Translate chromosome names from grch38 1kg (chr prefix) to those in the remixt reference
+                        # as specified by the chr_name_prefix config param
+                        if chr_name_prefix == 'chr':
+                            chrom = r.chrom
+                        elif chr_name_prefix == '':
+                            assert r.chrom.startswith('chr')
+                            chrom = r.chrom[3:]
+                        else:
+                            raise ValueError(f'unrecognized chr_name_prefix {chr_name_prefix}')
                         coord = r.pos
                         ref = r.ref
                         if ref not in ['A', 'C', 'T', 'G']:
                             continue
                         if alt not in ['A', 'C', 'T', 'G']:
                             continue
-                        # KLUDGE
-                        chrom = chrom.replace('chr', '')
                         snps.append([chrom, coord, ref, alt])
             snps = pd.DataFrame(snps, columns=['chrom', 'coord', 'ref', 'alt'])
             snps.to_csv(remixt.config.get_filename(config, ref_data_dir, 'snp_positions'), index=False, header=False, sep='\t')
