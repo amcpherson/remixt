@@ -5,8 +5,11 @@ MAINTAINER Andrew McPherson <andrew.mcpherson@gmail.com>
 
 USER root
 RUN conda config --add channels https://conda.anaconda.org/dranew && conda config --add channels bioconda
-RUN conda install remixt==$app_version
-RUN conda install openssl=1.0
+RUN apt update
+RUN apt install build-essential -y
+RUN apt install libbz2-dev -y
+RUN pip install remixt==$app_version
+RUN pip install pysam
 RUN mkdir -p /root/.config/matplotlib
 RUN echo "backend : Agg" > /root/.config/matplotlib/matplotlibrc
 
