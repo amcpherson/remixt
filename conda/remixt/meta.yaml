@@ -2,43 +2,44 @@
 
 package:
   name: remixt
-  version: 0.5.13
+  version: 0.5.19
 #  version: {{ data.get('version') }}
 
 source:
-  git_url: git://github.com/amcpherson/remixt.git
-  git_rev: v0.5.13
+  git_url: https://github.com/amcpherson/remixt.git
+  git_rev: v0.5.19
 #  git_rev: v{{ data.get('version') }}
+#  path: ../../
 
 build:
   number: 0
 
 requirements:
   build:
-    - python
+    - python ==3.10.4
     - cython
-    - numpy
+    - numpy ==1.22.3
     - boost_source ==1.60.0
-    - zlib
-    - bzip2
+    - zlib ==1.2.12
+    - bzip2 ==1.0.8
 
   run:
-    - python
-    - numpy
+    - python ==3.10.4
+    - numpy ==1.22.3
     - scipy
-    - zlib
-    - bzip2
-    - pandas >=0.17.1
-    - pytables
-    - pypeliner >=0.4.1
-    - statsmodels
-    - scikit-learn
-    - pyyaml
-    - matplotlib
-    - seaborn
-    - bokeh >=0.11.1
-    - shapeit
-    - samtools
+    - zlib ==1.2.12
+    - bzip2 ==1.0.8
+    - pandas ==1.4.2
+    - pytables ==3.7.0
+    - pypeliner ==0.6.2
+    - statsmodels ==0.13.2
+    - scikit-learn ==1.0.1
+    - pyyaml ==6.0
+    - matplotlib ==3.5.1
+    - seaborn ==0.11.2
+    - bokeh ==2.4.2
+    - shapeit ==2.r904
+    - samtools ==1.6
 
 about:
   home: http://bitbucket.org/dranew/remixt
