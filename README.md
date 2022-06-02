@@ -2,6 +2,10 @@
 
 ReMixT is a tool for joint inference of clone specific segment and breakpoint copy number in whole genome sequencing data.  The input for the tool is a set of segments, a set of breakpoints predicted from the sequencing data, and normal and tumour bam files.  Where multiple tumour samples are available, they can be analyzed jointly for additional benefit.
 
+## How to cite
+
+If you find ReMixT useful, please consider citing our [genome biology article](https://doi.org/10.1186/s13059-017-1267-2).
+
 ## Installation
 
 Conda is a prerequisite, install [anaconda python](https://store.continuum.io/cshop/anaconda/) from the continuum website.
