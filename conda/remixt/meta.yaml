@@ -2,12 +2,12 @@
 
 package:
   name: remixt
-  version: 0.5.19
+  version: 0.5.20
 #  version: {{ data.get('version') }}
 
 source:
   git_url: https://github.com/amcpherson/remixt.git
-  git_rev: v0.5.19
+  git_rev: v0.5.20
 #  git_rev: v{{ data.get('version') }}
 #  path: ../../
 
