@@ -4,7 +4,7 @@ import sys
 import versioneer
 from setuptools import setup, find_packages, Extension
 
-NUMPY_VERSION = '1.22.3'
+NUMPY_VERSION = '1.21.6'
 
 class get_numpy_include(str):
     def __str__(self):
