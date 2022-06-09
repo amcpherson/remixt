@@ -63,12 +63,12 @@ phased_chromosome_x                         = 'X_nonPAR'
 
 # Thousand genomes GRCH38
 grch38_1kg_chromosomes                      = ['chr1', 'chr2', 'chr3', 'chr4', 'chr5', 'chr6', 'chr7', 'chr8', 'chr9', 'chr10', 'chr11', 'chr12', 'chr13', 'chr14', 'chr15', 'chr16', 'chr17', 'chr18', 'chr19', 'chr20', 'chr21', 'chr22', 'chrX']
-grch38_1kg_vcf_url_template                 = 'http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/20201028_3202_phased/CCDG_14151_B01_GRM_WGS_2020-08-05_{chromosome}.filtered.shapeit2-duohmm-phased.vcf.gz'
-grch38_1kg_X_vcf_url                        = 'http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/20201028_3202_phased/CCDG_14151_B01_GRM_WGS_2020-08-05_chrX.filtered.eagle2-phased.v2.vcf.gz'
-grch38_1kg_vcf_filename_template            = '{ref_data_dir}/CCDG_14151_B01_GRM_WGS_2020-08-05_{chromosome}.filtered.shapeit2-duohmm-phased.vcf.gz'
-grch38_1kg_X_vcf_filename_template          = '{ref_data_dir}/CCDG_14151_B01_GRM_WGS_2020-08-05_chrX.filtered.eagle2-phased.v2.vcf.gz'
-grch38_1kg_bcf_filename_template            = '{ref_data_dir}/CCDG_14151_B01_GRM_WGS_2020-08-05_{chromosome}.filtered.shapeit2-duohmm-phased.bcf'
-grch38_1kg_X_bcf_filename_template          = '{ref_data_dir}/CCDG_14151_B01_GRM_WGS_2020-08-05_chrX.filtered.eagle2-phased.v2.bcf'
+grch38_1kg_vcf_url_template                 = 'http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/20220422_3202_phased_SNV_INDEL_SV/1kGP_high_coverage_Illumina.{chromosome}.filtered.SNV_INDEL_SV_phased_panel.vcf.gz'
+grch38_1kg_X_vcf_url                        = 'http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000G_2504_high_coverage/working/20220422_3202_phased_SNV_INDEL_SV/1kGP_high_coverage_Illumina.chrX.filtered.SNV_INDEL_SV_phased_panel.vcf.gz'
+grch38_1kg_vcf_filename_template            = '{ref_data_dir}/1kGP_high_coverage_Illumina.{chromosome}.filtered.SNV_INDEL_SV_phased_panel.vcf.gz'
+grch38_1kg_X_vcf_filename_template          = '{ref_data_dir}/1kGP_high_coverage_Illumina.chrX.filtered.SNV_INDEL_SV_phased_panel.vcf.gz'
+grch38_1kg_bcf_filename_template            = '{ref_data_dir}/1kGP_high_coverage_Illumina.{chromosome}.filtered.SNV_INDEL_SV_phased_panel.bcf'
+grch38_1kg_X_bcf_filename_template          = '{ref_data_dir}/1kGP_high_coverage_Illumina.chrX.filtered.SNV_INDEL_SV_phased_panel.bcf'
 grch38_1kg_phased_chromosome_x              = 'chrX'
 genetic_maps_grch38_url                     = 'https://github.com/odelaneau/shapeit4/blob/master/maps/genetic_maps.b38.tar.gz?raw=true'
 genetic_map_grch38_filename_template        = '{ref_data_dir}/{chromosome}.b38.gmap.gz'
