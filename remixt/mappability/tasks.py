@@ -46,8 +46,8 @@ def create_bedgraph(alignment_filename, bedgraph_filename):
         for row in csv.reader(alignment_file, delimiter='\t'):
             if row[0][0] == '@':
                 continue
-            origin_chromosome = row[0].split(':')[0]
-            origin_position = int(row[0].split(':')[1])
+            origin_chromosome = row[0].rsplit(':', maxsplit=1)[0]
+            origin_position = int(row[0].rsplit(':', maxsplit=1)[1])
             mapping_chromosome = row[2]
             mapping_position = int(row[3]) - 1   # 0-based positions
             mapping_quality = int(row[4])
