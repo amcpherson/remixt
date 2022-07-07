@@ -16,7 +16,7 @@ def run(**args):
 
     config = {}
     if args['config'] is not None:
-        config = yaml.load(open(args['config']))
+        config = yaml.safe_load(open(args['config']))
 
     bam_filenames = dict(zip(args['tumour_sample_ids'], args['tumour_bam_files']))
     results_filenames = dict(zip(args['tumour_sample_ids'], args['results_files']))
