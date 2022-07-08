@@ -313,6 +313,18 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
         'allele_id': binary indicator of the haplotype allele
     """
 
+    def load_snp_positions():
+        snp_positions_dfs = []
+        chunks = pd.read_csv(
+            snp_positions_filename, sep='\t', names=['chromosome', 'position', 'ref', 'alt'],
+            dtype={'chromosome': str}, chunksize=1e6
+        )
+        for chunk in chunks:
+            chunk = chunk[chunk['chromosome'] == chromosome]
+            snp_positions_dfs.append(chunk)
+        df = pd.concat(snp_positions_dfs)
+        return df
+
     def write_null():
         with open(haps_filename, 'w') as haps_file:
             haps_file.write('chromosome\tposition\tallele\thap_label\tallele_id\n')
@@ -343,7 +355,7 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
 
     snp_positions_filename = remixt.config.get_filename(config, ref_data_dir, 'snp_positions')
 
-    snp_positions = pd.read_csv(snp_positions_filename, sep='\t', names=['chromosome', 'position', 'ref', 'alt'], dtype={'chromosome': str})
+    snp_positions = load_snp_positions()
 
     # Check chr prefix of snp positions
     if chr_name_prefix == 'chr':
