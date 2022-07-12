@@ -36,26 +36,11 @@ def create_bwa_mappability_workflow(config, ref_data_dir, **kwargs):
     )
 
     workflow.commandline(
-        name='bwa_aln_kmers',
+        name='bwa_mem_kmers',
         axes=('bykmer',),
         args=(
-            'bwa',
-            'aln',
+            'bwa', 'mem', '-M',
             mgd.InputFile(genome_fasta),
-            mgd.TempInputFile('kmers', 'bykmer'),
-            '>',
-            mgd.TempOutputFile('sai', 'bykmer'),
-        ),
-    )
-
-    workflow.commandline(
-        name='bwa_samse_kmers',
-        axes=('bykmer',),
-        args=(
-            'bwa',
-            'samse',
-            mgd.InputFile(genome_fasta),
-            mgd.TempInputFile('sai', 'bykmer'),
             mgd.TempInputFile('kmers', 'bykmer'),
             '>',
             mgd.TempOutputFile('alignments', 'bykmer'),
