@@ -39,7 +39,18 @@ def create_ref_data(config, ref_data_dir, ref_data_sentinal, bwa_index_genome=Fa
     auto_sentinal.run(wget_genome_fasta)
 
     def wget_gap_table():
-        remixt.utils.wget(remixt.config.get_filename(config, ref_data_dir, 'gap_url'), remixt.config.get_filename(config, ref_data_dir, 'gap_table'))
+        chr_name_prefix = remixt.config.get_param(config, 'chr_name_prefix')
+        gap_filename = remixt.config.get_filename(config, ref_data_dir, 'gap_table')
+        remixt.utils.wget(remixt.config.get_filename(config, ref_data_dir, 'gap_url'), gap_filename)
+        gaps = pd.read_csv(gap_filename, dtype=str, sep='\t', header=None)
+        assert gaps[1].str.startswith('chr').all()
+        if chr_name_prefix == 'chr':
+            pass
+        elif chr_name_prefix == '':
+            gaps[1] = gaps[1].apply(lambda a: a[3:])
+            gaps.to_csv(gap_filename, sep='\t', header=None, index=False)
+        else:
+            raise ValueError(f'unrecognized chr_name_prefix {chr_name_prefix}')
     auto_sentinal.run(wget_gap_table)
 
     if bwa_index_genome:

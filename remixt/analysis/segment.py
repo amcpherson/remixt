@@ -40,7 +40,6 @@ def create_segments(segment_filename, config, ref_data_dir, breakpoint_filename=
     gap_table = pd.read_csv(
         gap_table_filename, sep='\t', compression='gzip', header=None,
         names=gap_table_columns, converters={'chromosome': str})
-    gap_table['chromosome'] = gap_table['chromosome'].apply(lambda a: a[3:])
 
     changepoints = list()
 
