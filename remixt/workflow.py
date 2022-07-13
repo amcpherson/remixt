@@ -363,6 +363,8 @@ def create_remixt_seqdata_workflow(
     ref_data_dir,
     normal_id=None,
 ):
+    chromosomes = remixt.config.get_chromosomes(config, ref_data_dir)
+
     sample_ids = list(seqdata_filenames.keys())
     
     tumour_ids = list(seqdata_filenames.keys())
@@ -462,6 +464,9 @@ def create_remixt_seqdata_workflow(
             mgd.InputFile('experiment', 'tumour_id', template=experiment_template),
             mgd.OutputFile('plots', 'tumour_id', template=ploidy_plots_template),
         ),
+        kwargs={
+            'chromosomes': chromosomes,
+        }
     )
 
     workflow.subworkflow(

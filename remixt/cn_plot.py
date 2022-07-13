@@ -100,7 +100,7 @@ def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor', do_fill=Fal
 
 
 def plot_cnv_genome(ax, cnv, mincopies=-0.4, maxcopies=4, minlength=1000, major_col='major', minor_col='minor', 
-                    chromosome=None, start=None, end=None, tick_step=None, do_fill=False):
+                    chromosome=None, start=None, end=None, tick_step=None, do_fill=False, chromosomes=None):
     """ Plot major/minor copy number across the genome
 
     Args:
@@ -118,7 +118,10 @@ def plot_cnv_genome(ax, cnv, mincopies=-0.4, maxcopies=4, minlength=1000, major_
         end (int): end of region in chromosome, None for end of chromosome
         tick_step (float): genomic length between x steps
         do_fill (boolean): fill to 0 for copy number
+        chromosomes (list): list of chromosomes to plot in order
 
+    Returns:
+        pandas.DataFrame: table of chromosome length info
     """
 
     if chromosome is None and (start is not None or end is not None):
@@ -139,7 +142,8 @@ def plot_cnv_genome(ax, cnv, mincopies=-0.4, maxcopies=4, minlength=1000, major_
         cnv = cnv[cnv['start'] < end]
 
     # Create chromosome info table
-    chromosomes = remixt.utils.sort_chromosome_names(cnv['chromosome'].unique())
+    if chromosomes is None:
+        chromosomes = remixt.utils.sort_chromosome_names(cnv['chromosome'].unique())
     chromosome_length = cnv.groupby('chromosome')['end'].max()
     chromosome_info = pd.DataFrame({'length':chromosome_length}, index=chromosomes)
 
@@ -206,7 +210,7 @@ def plot_cnv_genome(ax, cnv, mincopies=-0.4, maxcopies=4, minlength=1000, major_
     return chromosome_info
 
 
-def plot_cnv_genome_density(fig, transform, cnv):
+def plot_cnv_genome_density(fig, transform, cnv, chromosomes=None):
     """ Plot major/minor copy number across the genome and as a density
 
     Args:
@@ -214,12 +218,17 @@ def plot_cnv_genome_density(fig, transform, cnv):
         transform (matplotlib.transform.Transform): transform for locating axes
         cnv (pandas.DataFrame): copy number table
 
+    KwArgs:
+        chromosomes (list): chromosomes to plot
+
+    Returns:
+        matplotlib.figure.Figure: figure to which the plots have been added
     """
 
     box = matplotlib.transforms.Bbox([[0.05, 0.05], [0.65, 0.95]])
     ax = fig.add_axes(transform.transform_bbox(box))
 
-    remixt.cn_plot.plot_cnv_genome(ax, cnv, mincopies=-1, maxcopies=6, major_col='major_raw', minor_col='minor_raw')
+    remixt.cn_plot.plot_cnv_genome(ax, cnv, mincopies=-1, maxcopies=6, major_col='major_raw', minor_col='minor_raw', chromosomes=chromosomes)
     ax.set_ylabel('Raw copy number')
     ylim = ax.get_ylim()
 
@@ -273,7 +282,7 @@ def create_chromosome_color_map(chromosomes):
     return chromosome_colors
 
 
-def plot_cnv_scatter(ax, cnv, major_col='major', minor_col='minor', highlight_col=None, chromosome_colors=None):
+def plot_cnv_scatter(ax, cnv, major_col='major', minor_col='minor', highlight_col=None, chromosome_colors=None, chromosomes=None):
     """ Scatter plot segments major by minor.
 
     Args:
@@ -285,13 +294,15 @@ def plot_cnv_scatter(ax, cnv, major_col='major', minor_col='minor', highlight_co
         minor_col (str): name of minor copies column
         highlight_col (str): name of boolean column for highlighting specific segments
         chromosome_colors (pandas.DataFrame): chromosome color table
+        chromosomes (list): chromosomes to plot, in order
 
     """
 
     cnv = cnv[['chromosome', 'start', 'end', 'length', major_col, minor_col]].replace(np.inf, np.nan).dropna()
 
     # Create color map for chromosomes
-    chromosomes = remixt.utils.sort_chromosome_names(cnv['chromosome'].unique())
+    if chromosomes is None:
+        chromosomes = remixt.utils.sort_chromosome_names(cnv['chromosome'].unique())
 
     # Create chromosome color map if not given
     if chromosome_colors is None:
@@ -345,7 +356,7 @@ def plot_cnv_scatter(ax, cnv, major_col='major', minor_col='minor', highlight_co
     lgnd.get_frame().set_edgecolor('w')
 
 
-def plot_cnv_scatter_density(fig, transform, data, major_col='major', minor_col='minor', annotate=(), info=''):
+def plot_cnv_scatter_density(fig, transform, data, major_col='major', minor_col='minor', annotate=(), info='', chromosomes=None):
     """ Plot CNV Scatter with major minor densities on axes.
 
     Args:
@@ -358,14 +369,16 @@ def plot_cnv_scatter_density(fig, transform, data, major_col='major', minor_col=
         minor_col (str): name of minor copies column
         annotate (iterable): copy values to annotate with dashed line
         info (str): information to add to empty axis
+        chromosomes (list): chromosomes to plot
 
     Returns:
+        matplotlib.figure.Figure: figure to which the plots have been added
     """
 
     box = matplotlib.transforms.Bbox([[0.05, 0.05], [0.65, 0.65]])
     ax = fig.add_axes(transform.transform_bbox(box))
 
-    remixt.cn_plot.plot_cnv_scatter(ax, data)
+    remixt.cn_plot.plot_cnv_scatter(ax, data, chromosomes=chromosomes)
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
 
@@ -699,13 +712,15 @@ def plot_mixture(mixture_plot_filename, mixture_filename):
     fig.savefig(mixture_plot_filename, format='pdf', bbox_inches='tight', dpi=300)
 
 
-def ploidy_analysis_plots(experiment_filename, plots_filename):
+def ploidy_analysis_plots(experiment_filename, plots_filename, chromosomes=None):
     """ Generate ploidy analysis plots
 
     Args:
         experiment_filename (str): experiment pickle filename
         plots_filename (str): ploidy analysis plots filename
 
+    KwArgs:
+        chromosomes (list): chromosomes to plot
     """
 
     with open(experiment_filename, 'rb') as experiment_file:
@@ -737,11 +752,11 @@ def ploidy_analysis_plots(experiment_filename, plots_filename):
 
         box = matplotlib.transforms.Bbox([[0., 0.25], [1., 1.]])
         transform = matplotlib.transforms.BboxTransformTo(box)
-        remixt.cn_plot.plot_cnv_scatter_density(fig, transform, read_depth, annotate=cn_modes, info=info)
+        remixt.cn_plot.plot_cnv_scatter_density(fig, transform, read_depth, annotate=cn_modes, info=info, chromosomes=chromosomes)
 
         box = matplotlib.transforms.Bbox([[0., 0.0], [1., 0.25]])
         transform = matplotlib.transforms.BboxTransformTo(box)
-        remixt.cn_plot.plot_cnv_genome_density(fig, transform, read_depth.query('high_quality'))
+        remixt.cn_plot.plot_cnv_genome_density(fig, transform, read_depth.query('high_quality'), chromosomes=chromosomes)
 
         pdf.savefig(bbox_inches='tight')
         plt.close()
