@@ -80,7 +80,6 @@ struct AlleleReader : BamTools::PileupVisitor, BamTools::DiscardAlignmentVisitor
 	
 	BamTools::BamReader mBamReader;
 	const std::string& mChromosome;
-	std::string mAlternateChromosome;
 
 	std::vector<FragmentData> mFragmentData;
 	std::vector<AlleleData> mAlleleData;

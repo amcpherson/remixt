@@ -24,6 +24,7 @@ def create_segments(segment_filename, config, ref_data_dir, breakpoint_filename=
     chromosomes = remixt.config.get_chromosomes(config, ref_data_dir)
     chromosome_lengths = remixt.config.get_chromosome_lengths(config, ref_data_dir)
     gap_table_filename = remixt.config.get_filename(config, ref_data_dir, 'gap_table')
+    chr_name_prefix = remixt.config.get_param(config, 'chr_name_prefix')
 
     gap_table_columns = [
         'bin',
@@ -40,6 +41,13 @@ def create_segments(segment_filename, config, ref_data_dir, breakpoint_filename=
     gap_table = pd.read_csv(
         gap_table_filename, sep='\t', compression='gzip', header=None,
         names=gap_table_columns, converters={'chromosome': str})
+
+    if chr_name_prefix == 'chr':
+        assert gap_table['chromosome'].str.startswith('chr').all()
+    elif chr_name_prefix == '':
+        assert not gap_table['chromosome'].str.startswith('chr').any()
+    else:
+        raise ValueError(f'unrecognized chr_name_prefix {chr_name_prefix}')
 
     changepoints = list()
 
@@ -61,6 +69,15 @@ def create_segments(segment_filename, config, ref_data_dir, breakpoint_filename=
             breakpoint_filename, sep='\t',
             converters={'chromosome_1': str, 'chromosome_2': str, 'position_1': int, 'position_2': int}
         )
+
+        if chr_name_prefix == 'chr':
+            assert breakpoints['chromosome_1'].str.startswith('chr').all()
+            assert breakpoints['chromosome_2'].str.startswith('chr').all()
+        elif chr_name_prefix == '':
+            assert not breakpoints['chromosome_1'].str.startswith('chr').any()
+            assert not breakpoints['chromosome_2'].str.startswith('chr').any()
+        else:
+            raise ValueError(f'unrecognized chr_name_prefix {chr_name_prefix}')
 
         for idx, row in breakpoints.iterrows():
             changepoints.append((row['chromosome_1'], row['position_1']))
