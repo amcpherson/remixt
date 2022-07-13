@@ -57,4 +57,3 @@ def get_sample_config(config, sample_id):
     sample_config.update(config.get('sample_specific', dict()).get(sample_id, dict()))
     return sample_config
 
-
