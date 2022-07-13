@@ -353,6 +353,9 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
 
     snp_genotypes = snp_genotypes.merge(snp_positions)
 
+    if snp_genotypes.empty:
+        raise ValueError('no snps to phase')
+
     # Filter for heterozygous SNPs
     snp_genotypes = snp_genotypes[(snp_genotypes['AB'] == 1) & (snp_genotypes['AA'] == 0) & (snp_genotypes['BB'] == 0)]
 
@@ -404,6 +407,16 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
 
     genetic_map_filename = remixt.config.get_filename(config, ref_data_dir, 'genetic_map_grch38_filename', chromosome=grch38_1kg_chromosome)
 
+    # Run shapeit to generate phasing graph
+    bingraph_filename = os.path.join(temp_directory, 'phasing.bingraph')
+    pypeliner.commandline.execute(
+        'shapeit4',
+        '--input', temp_bcf_filename,
+        '--map', genetic_map_filename,
+        '--region', grch38_1kg_chromosome,
+        '--reference', bcf_reference_filename,
+        '--bingraph', bingraph_filename)
+
     # Run shapeit to sample from phased haplotype graph
     sample_template = os.path.join(temp_directory, 'sampled.{0}.bcf')
     shapeit_num_samples = remixt.config.get_param(config, 'shapeit_num_samples')
@@ -412,12 +425,10 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
         sample_filename = sample_template.format(s)
         sample_filenames.append(sample_filename)
         pypeliner.commandline.execute(
-            'shapeit4',
-            '--input', temp_bcf_filename,
-            '--map', genetic_map_filename,
-            '--region', grch38_1kg_chromosome,
-            '--reference', bcf_reference_filename,
+            'bingraphsample',
+            '--input', bingraph_filename,
             '--output', sample_filename,
+            '--sample',
             '--seed', str(s))
         pypeliner.commandline.execute(
             'bcftools', 'index', '-f', sample_filename)
