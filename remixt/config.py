@@ -28,14 +28,15 @@ def get_chromosome_lengths(config, ref_data_dir):
     
     chromosomes = set(remixt.config.get_param(config, 'chromosomes'))
 
+    # Check chromosomes against chromosome lengths from .fai file
+    assert chromosomes.issubset(set(chromosome_lengths.keys()))
+
     # Validate chr name prefix
     chr_name_prefix = remixt.config.get_param(config, 'chr_name_prefix')
     if chr_name_prefix == 'chr':
         assert all(c.startswith('chr') for c in chromosomes)
-        assert all(c.startswith('chr') for c in chromosome_lengths.keys())
     elif chr_name_prefix == '':
         assert not any(c.startswith('chr') for c in chromosomes)
-        assert not any(c.startswith('chr') for c in chromosome_lengths.keys())
     else:
         raise ValueError(f'unrecognized chr_name_prefix {chr_name_prefix}')
 
