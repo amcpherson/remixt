@@ -318,7 +318,8 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
             haps_file.write('chromosome\tposition\tallele\thap_label\tallele_id\n')
 
     # Translate to grch38 thousand genomes chr prefix
-    if remixt.config.get_param(config, 'chr_name_prefix') == '':
+    chr_name_prefix = remixt.config.get_param(config, 'chr_name_prefix')
+    if chr_name_prefix == '':
         grch38_1kg_chromosome = 'chr' + chromosome
     else:
         grch38_1kg_chromosome = chromosome
@@ -343,6 +344,14 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
     snp_positions_filename = remixt.config.get_filename(config, ref_data_dir, 'snp_positions')
 
     snp_positions = pd.read_csv(snp_positions_filename, sep='\t', names=['chromosome', 'position', 'ref', 'alt'], dtype={'chromosome': str})
+
+    # Check chr prefix of snp positions
+    if chr_name_prefix == 'chr':
+        assert snp_positions['chromosome'].str.startswith('chr').all()
+    elif chr_name_prefix == '':
+        assert not snp_positions['chromosome'].str.startswith('chr').any()
+    else:
+        raise ValueError(f'unrecognized chr_name_prefix {chr_name_prefix}')
 
     snp_genotypes = pd.read_csv(snp_genotype_filename, sep='\t')
 
@@ -443,7 +452,7 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
     ])
 
     # Translate from grch38 thousand genomes chr prefix
-    if remixt.config.get_param(config, 'chr_name_prefix') == '':
+    if chr_name_prefix == '':
         if not haplotypes['chromosome'].str.startswith('chr').all():
             raise ValueError('unexpected chromosome prefix')
         haplotypes['chromosome'] = haplotypes['chromosome'].str.slice(start=3)

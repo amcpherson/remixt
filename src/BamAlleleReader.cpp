@@ -82,27 +82,12 @@ AlleleReader::AlleleReader(const string& bamFilename,
 		throw invalid_argument("Unable to find index for bam file " + bamFilename);
 	}
 
-	// Alternate chromosome, ucsc or ensembl
-	if (mChromosome.substr(0, 3) == "chr")
-	{
-		mAlternateChromosome = mChromosome.substr(3);
-	}
-	else
-	{
-		mAlternateChromosome = "chr" + mChromosome;
-	}
-
 	// Querty bam for either chromosome
 	mRefID = mBamReader.GetReferenceID(mChromosome);
 
 	if (mRefID < 0)
 	{
-		mRefID = mBamReader.GetReferenceID(mAlternateChromosome);
-
-		if (mRefID < 0)
-		{
-			throw out_of_range("Unable to find chromosome " + mChromosome + " or " + mAlternateChromosome);
-		}
+		throw out_of_range("Unable to find chromosome " + mChromosome);
 	}
 
 	// Set region in bam
@@ -141,7 +126,7 @@ void AlleleReader::ReadSNPs(const string& snpFilename)
 
 		lineStream >> chromosome >> position >> ref >> alt;
 
-		if (chromosome != mChromosome && chromosome != mAlternateChromosome)
+		if (chromosome != mChromosome)
 		{
 			continue;
 		}
