@@ -209,11 +209,11 @@ Use `wget` to retrieve a precomputed mappability file.
 
 Use `wget` to retrieve the example bam files and their indices for chromosome 15, and the breakpoints file with chromosome 15 breakpoints.
 
-    wget http://remixttestdata.s3.amazonaws.com/HCC1395_chr15.bam --directory-prefix $WORK_DIR/
-    wget http://remixttestdata.s3.amazonaws.com/HCC1395_chr15.bam.bai --directory-prefix $WORK_DIR/
-    wget http://remixttestdata.s3.amazonaws.com/HCC1395BL_chr15.bam --directory-prefix $WORK_DIR/
-    wget http://remixttestdata.s3.amazonaws.com/HCC1395BL_chr15.bam.bai --directory-prefix $WORK_DIR/
-    wget http://remixttestdata.s3.amazonaws.com/HCC1395_breakpoints.tsv --directory-prefix $WORK_DIR/
+    wget http://remixttestdata.s3.amazonaws.com/test_grch38_chrprefix/HCC1395_chr15_grch38.bam --directory-prefix $WORK_DIR/
+    wget http://remixttestdata.s3.amazonaws.com/test_grch38_chrprefix/HCC1395_chr15_grch38.bam.bai --directory-prefix $WORK_DIR/
+    wget http://remixttestdata.s3.amazonaws.com/test_grch38_chrprefix/HCC1395BL_chr15_grch38.bam --directory-prefix $WORK_DIR/
+    wget http://remixttestdata.s3.amazonaws.com/test_grch38_chrprefix/HCC1395BL_chr15_grch38.bam.bai --directory-prefix $WORK_DIR/
+    wget http://remixttestdata.s3.amazonaws.com/test_grch38_chrprefix/HCC1395_breakpoints.tsv --directory-prefix $WORK_DIR/
 
 Use the `remixt run` sub-command to run a remixt analysis.
 
