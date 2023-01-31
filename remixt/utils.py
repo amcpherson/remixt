@@ -23,6 +23,7 @@ class TempRandomSeed(object):
 
 def weighted_resample(data, weights, num_samples=10000):
     norm_weights = weights.astype(float) / float(weights.sum())
+    assert len(norm_weights) > 0
     with TempRandomSeed():
         counts = np.random.multinomial(num_samples, norm_weights)
     samples = np.repeat(data, counts)
