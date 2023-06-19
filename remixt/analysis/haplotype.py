@@ -44,6 +44,48 @@ def infer_snp_genotype(data, base_call_error=0.005, call_threshold=0.9):
     data['BB'] = (data['posterior_BB'] >= call_threshold) * 1
 
 
+
+def infer_snp_genotype_tumour(data, base_call_error=0.005, p_value_threshold=1e-16):
+    """ Infer snp genotype based on binomial PMF
+
+    Args:
+        data (pandas.DataFrame): input snp data
+
+    KwArgs:
+        base_call_error (float): per base sequencing error
+        p_value_threshold (float):
+
+    Input dataframe should have columns 'ref_count', 'alt_count'
+
+    The operation is in-place, and the input dataframe after the call will
+    have 'AA', 'AB', 'BB' columns, in addition to others.
+
+    """
+
+    data['total_count'] = data['alt_count'] + data['ref_count']
+
+    data = data[data['total_count'] > 50]
+
+    binom_test_ref = lambda row: scipy.stats.binom_test(
+        row['ref_count'], row['total_count'],
+        p=base_call_error, alternative='greater')
+
+    data['prob_no_A'] = data.apply(binom_test_ref, axis=1)
+
+    binom_test_alt = lambda row: scipy.stats.binom_test(
+        row['alt_count'], row['total_count'],
+        p=base_call_error, alternative='greater')
+
+    data['prob_no_B'] = data.apply(binom_test_alt, axis=1)
+
+    data['has_A'] = data['prob_no_A'] < p_value_threshold
+    data['has_B'] = data['prob_no_B'] < p_value_threshold
+
+    data['AA'] = (data['has_A'] & ~data['has_B']) * 1
+    data['BB'] = (data['has_B'] & ~data['has_A']) * 1
+    data['AB'] = (data['has_A'] & data['has_B']) * 1
+
+
 def read_snp_counts(seqdata_filename, chromosome, num_rows=1000000):
     """ Count reads for each SNP from sequence data
 
@@ -150,29 +192,8 @@ def infer_snp_genotype_from_tumour(snp_genotype_filename, seqdata_filenames, chr
         snp_counts_df = pd.concat([snp_counts_df, read_snp_counts(seqdata_filename, chromosome)], ignore_index=True)
         snp_counts_df = snp_counts_df.groupby('position').sum().reset_index()
 
-    snp_counts_df['total_count'] = snp_counts_df['alt_count'] + snp_counts_df['ref_count']
+    infer_snp_genotype_tumour(snp_counts_df, sequencing_base_call_error, homozygous_p_value_threshold)
 
-    snp_counts_df = snp_counts_df[snp_counts_df['total_count'] > 50]
-    
-    binom_test_ref = lambda row: scipy.stats.binom_test(
-        row['ref_count'], row['total_count'],
-        p=sequencing_base_call_error, alternative='greater')
-
-    snp_counts_df['prob_no_A'] = snp_counts_df.apply(binom_test_ref, axis=1)
-    
-    binom_test_alt = lambda row: scipy.stats.binom_test(
-        row['alt_count'], row['total_count'],
-        p=sequencing_base_call_error, alternative='greater')
-        
-    snp_counts_df['prob_no_B'] = snp_counts_df.apply(binom_test_alt, axis=1)
-
-    snp_counts_df['has_A'] = snp_counts_df['prob_no_A'] < homozygous_p_value_threshold
-    snp_counts_df['has_B'] = snp_counts_df['prob_no_B'] < homozygous_p_value_threshold
-
-    snp_counts_df['AA'] = (snp_counts_df['has_A'] & ~snp_counts_df['has_B']) * 1
-    snp_counts_df['BB'] = (snp_counts_df['has_B'] & ~snp_counts_df['has_A']) * 1
-    snp_counts_df['AB'] = (snp_counts_df['has_A'] & snp_counts_df['has_B']) * 1
-    
     snp_counts_df.to_csv(snp_genotype_filename, sep='\t', columns=['position', 'AA', 'AB', 'BB'], index=False)
 
 
