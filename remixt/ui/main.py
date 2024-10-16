@@ -20,5 +20,9 @@ def main():
     remixt.ui.visualize_solutions.add_arguments(subparsers.add_parser('visualize_solutions'))
 
     args = vars(argparser.parse_args())
-    func = args.pop('func')
-    func(**args)
+    func = args.pop('func', None)
+    if func:
+        func(**args)
+    else:
+        argparser.print_help()
+
