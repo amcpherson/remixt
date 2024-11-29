@@ -20,6 +20,10 @@ import remixt.analysis.readdepth
 def filled_density_weighted(ax, data, weights, c, a, xmin, xmax, cov, rotate=False):
     """ Weighted filled density plot.
     """
+    mask = np.isfinite(data)
+    data = data[mask]
+    weights = weights[mask]
+    assert len(data) > 0
     density = scipy.stats.gaussian_kde(data, bw_method=cov, weights=weights)
     xs = [xmin] + list(np.linspace(xmin, xmax, 2000)) + [xmax]
     ys = density(np.array(xs))
@@ -33,7 +37,7 @@ def filled_density_weighted(ax, data, weights, c, a, xmin, xmax, cov, rotate=Fal
         ax.fill(xs, ys, color=c, alpha=a)
 
 
-def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor', do_fill=False,):
+def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor', do_fill=False, scatter=False):
     """ Plot raw major/minor copy number as line plots
 
     Args:
@@ -42,6 +46,7 @@ def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor', do_fill=Fal
         major_col (str): name of major copies column
         minor_col (str): name of minor copies column
         do_fill (boolean): fill from 0
+        scatter (boolean): scatter instead of line plot
 
     Plot major and minor copy number as line plots.  The columns 'start' and 'end'
     are expected and should be adjusted for full genome plots.  Values from the
@@ -51,6 +56,11 @@ def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor', do_fill=Fal
 
     segment_color_major = plt.get_cmap('RdBu')(0.1)
     segment_color_minor = plt.get_cmap('RdBu')(0.9)
+
+    if scatter:
+        plt.scatter(cnv['start'], cnv[major_col], s=0.1, label=major_col, color=segment_color_major)
+        plt.scatter(cnv['start'], cnv[minor_col], s=0.1, label=minor_col, color=segment_color_minor)
+        return
 
     quad_color_major = colorConverter.to_rgba(segment_color_major, alpha=0.5)
     quad_color_minor = colorConverter.to_rgba(segment_color_minor, alpha=0.5)
@@ -100,7 +110,7 @@ def plot_cnv_segments(ax, cnv, major_col='major', minor_col='minor', do_fill=Fal
 
 
 def plot_cnv_genome(ax, cnv, mincopies=-0.4, maxcopies=4, minlength=1000, major_col='major', minor_col='minor', 
-                    chromosome=None, start=None, end=None, tick_step=None, do_fill=False, chromosomes=None):
+                    chromosome=None, start=None, end=None, tick_step=None, do_fill=False, scatter=False, chromosomes=None):
     """ Plot major/minor copy number across the genome
 
     Args:
@@ -118,6 +128,7 @@ def plot_cnv_genome(ax, cnv, mincopies=-0.4, maxcopies=4, minlength=1000, major_
         end (int): end of region in chromosome, None for end of chromosome
         tick_step (float): genomic length between x steps
         do_fill (boolean): fill to 0 for copy number
+        scatter (boolean): scatter instead of line plot
         chromosomes (list): list of chromosomes to plot in order
 
     Returns:
@@ -151,7 +162,7 @@ def plot_cnv_genome(ax, cnv, mincopies=-0.4, maxcopies=4, minlength=1000, major_
     chromosome_info['end'] = np.cumsum(chromosome_info['length'])
     chromosome_info['start'] = chromosome_info['end'] - chromosome_info['length']
     chromosome_info['mid'] = (chromosome_info['start'] + chromosome_info['end']) / 2.
-        
+
     if minlength is not None:
         cnv = cnv[cnv['length'] >= minlength]
 
@@ -162,7 +173,7 @@ def plot_cnv_genome(ax, cnv, mincopies=-0.4, maxcopies=4, minlength=1000, major_
     cnv['start'] = cnv['start'] + cnv['chromosome_start']
     cnv['end'] = cnv['end'] + cnv['chromosome_start']
 
-    plot_cnv_segments(ax, cnv, major_col=major_col, minor_col=minor_col, do_fill=do_fill)
+    plot_cnv_segments(ax, cnv, major_col=major_col, minor_col=minor_col, do_fill=do_fill, scatter=scatter)
 
     ax.set_yticks(range(int(mincopies), int(maxcopies - mincopies) + 1))
     ax.set_ylim((mincopies, maxcopies))
@@ -210,13 +221,14 @@ def plot_cnv_genome(ax, cnv, mincopies=-0.4, maxcopies=4, minlength=1000, major_
     return chromosome_info
 
 
-def plot_cnv_genome_density(fig, transform, cnv, chromosomes=None):
+def plot_cnv_genome_density(fig, transform, cnv, major_col='major_raw', minor_col='minor_raw', chromosomes=None, scatter=False):
     """ Plot major/minor copy number across the genome and as a density
 
     Args:
         fig (matplotlib.figure.Figure): figure to which plots are added
         transform (matplotlib.transform.Transform): transform for locating axes
         cnv (pandas.DataFrame): copy number table
+        scatter (boolean): scatter instead of line plot
 
     KwArgs:
         chromosomes (list): chromosomes to plot
@@ -228,7 +240,7 @@ def plot_cnv_genome_density(fig, transform, cnv, chromosomes=None):
     box = matplotlib.transforms.Bbox([[0.05, 0.05], [0.65, 0.95]])
     ax = fig.add_axes(transform.transform_bbox(box))
 
-    remixt.cn_plot.plot_cnv_genome(ax, cnv, mincopies=-1, maxcopies=6, major_col='major_raw', minor_col='minor_raw', chromosomes=chromosomes)
+    remixt.cn_plot.plot_cnv_genome(ax, cnv, mincopies=-1, maxcopies=6, major_col=major_col, minor_col=minor_col, chromosomes=chromosomes, scatter=scatter)
     ax.set_ylabel('Raw copy number')
     ylim = ax.get_ylim()
 
@@ -236,13 +248,13 @@ def plot_cnv_genome_density(fig, transform, cnv, chromosomes=None):
     ax = fig.add_axes(transform.transform_bbox(box))
 
     cov = 0.05
-    data = cnv[['minor_raw', 'major_raw', 'length']].replace(np.inf, np.nan).dropna()
+    data = cnv[[major_col, minor_col, 'length']].replace(np.inf, np.nan).dropna()
     filled_density_weighted(
-        ax, data['minor_raw'].values, data['length'].values,
-        'blue', 0.5, ylim[0], ylim[1], cov, rotate=True)
-    filled_density_weighted(
-        ax, data['major_raw'].values, data['length'].values,
+        ax, data[major_col].values, data['length'].values,
         'red', 0.5, ylim[0], ylim[1], cov, rotate=True)
+    filled_density_weighted(
+        ax, data[minor_col].values, data['length'].values,
+        'blue', 0.5, ylim[0], ylim[1], cov, rotate=True)
     ax.set_ylim(ylim)
     ax.set_xlabel('Density')
     ax.spines['top'].set_visible(False)
@@ -378,7 +390,7 @@ def plot_cnv_scatter_density(fig, transform, data, major_col='major', minor_col=
     box = matplotlib.transforms.Bbox([[0.05, 0.05], [0.65, 0.65]])
     ax = fig.add_axes(transform.transform_bbox(box))
 
-    remixt.cn_plot.plot_cnv_scatter(ax, data, chromosomes=chromosomes)
+    remixt.cn_plot.plot_cnv_scatter(ax, data, major_col=major_col, minor_col=minor_col, chromosomes=chromosomes)
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
 
@@ -389,6 +401,8 @@ def plot_cnv_scatter_density(fig, transform, data, major_col='major', minor_col=
     box = matplotlib.transforms.Bbox([[0.05, 0.7], [0.65, 0.95]])
     ax = fig.add_axes(transform.transform_bbox(box))
 
+    cov = 0.05
+
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.xaxis.tick_bottom()
@@ -396,7 +410,7 @@ def plot_cnv_scatter_density(fig, transform, data, major_col='major', minor_col=
     ax.xaxis.grid(True)
     filled_density_weighted(
         ax, data[major_col].values, data['length'].values,
-        '0.75', 0.5, xlim[0], xlim[1], 1e-7)
+        '0.75', 0.5, xlim[0], xlim[1], cov)
     ax.set_xlim(xlim)
 
     for a in annotate:
@@ -412,7 +426,7 @@ def plot_cnv_scatter_density(fig, transform, data, major_col='major', minor_col=
     ax.yaxis.grid(True)
     filled_density_weighted(
         ax, data[minor_col].values, data['length'].values,
-        '0.75', 0.5, ylim[0], ylim[1], 1e-7, rotate=True)
+        '0.75', 0.5, ylim[0], ylim[1], cov, rotate=True)
     ax.set_ylim(ylim)
 
     for a in annotate:
