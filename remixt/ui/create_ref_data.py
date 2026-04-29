@@ -10,7 +10,7 @@ def run(**args):
 
     config = {}
     if args['config'] is not None:
-        config = yaml.load(open(args['config']))
+        config = yaml.safe_load(open(args['config']))
 
     ref_data_sentinal = os.path.join(ref_data_dir, 'sentinal')
 

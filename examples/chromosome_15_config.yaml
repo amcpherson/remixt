@@ -1,5 +1,5 @@
 
-chromosomes: ['15']
+chromosomes: ['chr15']
 ensembl_assemblies: ['chromosome.15']
-phased_1kg_chromosomes: ['15']
-
+grch38_1kg_chromosomes: ['chr15']
+chr_name_prefix: 'chr'

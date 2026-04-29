@@ -7,8 +7,24 @@ import os
 
 
 empty_data = {
-    'fragments': remixt.bamreader.create_fragment_table(0),
-    'alleles': remixt.bamreader.create_allele_table(0),
+    'fragments': pd.DataFrame(
+        dtype=np.int32,
+        columns=[
+            'fragment_id',
+            'start',
+            'end',
+            'mapping_quality',
+            'is_duplicate',
+        ],
+    ),
+    'alleles': pd.DataFrame(
+        dtype=np.int32,
+        columns=[
+            'fragment_id',
+            'position',
+            'is_alt',
+        ],
+    ),
 }
 
 

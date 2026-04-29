@@ -25,6 +25,7 @@ def create_ref_data(config, ref_data_dir, ref_data_sentinal, bwa_index_genome=Fa
         pass
 
     def wget_genome_fasta():
+        chr_name_prefix = remixt.config.get_param(config, 'chr_name_prefix')
         with open(remixt.config.get_filename(config, ref_data_dir, 'genome_fasta'), 'w') as genome_file:
             for assembly in remixt.config.get_param(config, 'ensembl_assemblies'):
                 assembly_url = remixt.config.get_filename(config, ref_data_dir, 'ensembl_assembly_url', ensembl_assembly=assembly)
@@ -34,7 +35,10 @@ def create_ref_data(config, ref_data_dir, ref_data_sentinal, bwa_index_genome=Fa
                 with open(assembly_fasta, 'r') as assembly_file:
                     for line in assembly_file:
                         if line[0] == '>':
-                            line = line.split()[0] + '\n'
+                            chromsome_name = line[1:].split()[0]
+                            if chr_name_prefix == 'chr':
+                                chromsome_name = 'chr' + chromsome_name
+                            line = '>' + chromsome_name + '\n'
                         genome_file.write(line)
     auto_sentinal.run(wget_genome_fasta)
 

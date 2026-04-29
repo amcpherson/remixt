@@ -32,31 +32,6 @@ cdef extern from "BamAlleleReader.h":
         vector[FragmentData] mFragmentData
         vector[AlleleData] mAlleleData
 
-def create_fragment_table(nrows):
-    return pd.DataFrame(
-        data=0,
-        index=xrange(nrows),
-        dtype=np.int32,
-        columns=[
-            'fragment_id',
-            'start',
-            'end',
-            'mapping_quality',
-            'is_duplicate',
-        ],
-    )
-
-def create_allele_table(nrows):
-    return pd.DataFrame(
-        data=0,
-        index=xrange(nrows),
-        dtype=np.int32,
-        columns=[
-            'fragment_id',
-            'position',
-            'is_alt',
-        ],
-    )
 
 cdef class AlleleReader:
     cdef CAlleleReader *thisptr
@@ -67,29 +42,39 @@ cdef class AlleleReader:
     def ReadAlignments(self, max_alignments):
         return self.thisptr.ReadAlignments(max_alignments)
     def GetFragmentTable(self):
-        data = create_fragment_table(self.thisptr.mFragmentData.size())
-        cdef np.ndarray fragmentID = data['fragment_id'].values
-        cdef np.ndarray fragmentStart = data['start'].values
-        cdef np.ndarray fragmentEnd = data['end'].values
-        cdef np.ndarray mappingQuality = data['mapping_quality'].values
-        cdef np.ndarray isDuplicate = data['is_duplicate'].values
+        cdef int nrows = self.thisptr.mFragmentData.size()
+        cdef np.ndarray[np.int32_t, ndim=1] fragmentID = np.empty(nrows, dtype=np.int32)
+        cdef np.ndarray[np.int32_t, ndim=1] fragmentStart = np.empty(nrows, dtype=np.int32)
+        cdef np.ndarray[np.int32_t, ndim=1] fragmentEnd = np.empty(nrows, dtype=np.int32)
+        cdef np.ndarray[np.int32_t, ndim=1] mappingQuality = np.empty(nrows, dtype=np.int32)
+        cdef np.ndarray[np.int32_t, ndim=1] isDuplicate = np.empty(nrows, dtype=np.int32)
         cdef int idx
-        for idx in range(self.thisptr.mFragmentData.size()):
+        for idx in range(nrows):
             fragmentID[idx] = self.thisptr.mFragmentData[idx].fragmentID
             fragmentStart[idx] = self.thisptr.mFragmentData[idx].fragmentStart
             fragmentEnd[idx] = self.thisptr.mFragmentData[idx].fragmentEnd
             mappingQuality[idx] = self.thisptr.mFragmentData[idx].mappingQuality
             isDuplicate[idx] = self.thisptr.mFragmentData[idx].isDuplicate
-        return data
+        return pd.DataFrame({
+            'fragment_id': fragmentID,
+            'start': fragmentStart,
+            'end': fragmentEnd,
+            'mapping_quality': mappingQuality,
+            'is_duplicate': isDuplicate,
+        }, copy=False)
     def GetAlleleTable(self):
-        data = create_allele_table(self.thisptr.mAlleleData.size())
-        cdef np.ndarray fragmentID = data['fragment_id'].values
-        cdef np.ndarray position = data['position'].values
-        cdef np.ndarray isAlt = data['is_alt'].values
+        cdef int nrows = self.thisptr.mAlleleData.size()
+        cdef np.ndarray[np.int32_t, ndim=1] fragmentID = np.empty(nrows, dtype=np.int32)
+        cdef np.ndarray[np.int32_t, ndim=1] position = np.empty(nrows, dtype=np.int32)
+        cdef np.ndarray[np.int32_t, ndim=1] isAlt = np.empty(nrows, dtype=np.int32)
         cdef int idx
-        for idx in range(self.thisptr.mAlleleData.size()):
+        for idx in range(nrows):
             fragmentID[idx] = self.thisptr.mAlleleData[idx].fragmentID
             position[idx] = self.thisptr.mAlleleData[idx].position
             isAlt[idx] = self.thisptr.mAlleleData[idx].isAlt
-        return data
+        return pd.DataFrame({
+            'fragment_id': fragmentID,
+            'position': position,
+            'is_alt': isAlt,
+        }, copy=False)
 

@@ -537,6 +537,8 @@ class BreakpointModel(object):
         weights = self.get_param_sample_weight(name)
 
         def calculate_nll(value, model, name, bounds, sample):
+            assert value.shape == (1,)
+            value = float(value[0])
             if value < bounds[0] or value > bounds[1]:
                 return np.inf
             setattr(model, name, value)
@@ -555,13 +557,16 @@ class BreakpointModel(object):
             full_output=True,
         )
 
+        assert result[0].shape == (1,)
+        result_value = float(result[0][0])
+
         elbo_after = self.model.calculate_expected_log_likelihood(np.ones((self.model.num_segments,), dtype=int))
         if elbo_after < elbo_before:
             print ('[{}] {} rejected, elbo before: {}, after: {}'.format(_gettime(), name, elbo_before, elbo_after))
             setattr(self.model, name, value_before)
 
         else:
-            setattr(self.model, name, result[0])
+            setattr(self.model, name, result_value)
 
     def optimal_cn(self):
         cn = np.zeros((self.model.num_segments, self.model.num_clones, self.model.num_alleles), dtype=int)

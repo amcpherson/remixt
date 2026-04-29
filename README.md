@@ -221,9 +221,9 @@ Use the `remixt run` sub-command to run a remixt analysis.
         --config $REMIXT_DIR/examples/chromosome_15_config.yaml \
         --tmpdir $WORK_DIR/tmp_remixt \
         --tumour_sample_ids HCC1395 \
-        --tumour_bam_files $WORK_DIR/HCC1395_chr15.bam \
+        --tumour_bam_files $WORK_DIR/HCC1395_chr15_grch38.bam \
         --normal_sample_id HCC1395BL \
-        --normal_bam_file $WORK_DIR/HCC1395BL_chr15.bam \
+        --normal_bam_file $WORK_DIR/HCC1395BL_chr15_grch38.bam \
         --loglevel DEBUG \
         --submit local \
         --results_files $WORK_DIR/HCC1395.h5
