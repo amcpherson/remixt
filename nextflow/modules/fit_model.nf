@@ -17,19 +17,18 @@ process init_model {
 
     input:
     tuple val(tumour_id), path(experiment)
-    path config_yaml
 
     output:
     tuple val(tumour_id), path("${tumour_id}.init_results.h5"), path("${tumour_id}.init_params.json")
 
     script:
+    def args = task.ext.args ?: ''
     """
     init_model.py \
         --experiment ${experiment} \
-        --config ${config_yaml} \
-        --tumour_id ${tumour_id} \
         --output_results ${tumour_id}.init_results.h5 \
-        --output_params ${tumour_id}.init_params.json
+        --output_params ${tumour_id}.init_params.json \
+        ${args}
     """
 }
 
@@ -69,19 +68,18 @@ process fit_model {
 
     input:
     tuple val(tumour_id), val(init_id), path(experiment), path(init_params)
-    path config_yaml
 
     output:
     tuple val(tumour_id), val(init_id), path("${tumour_id}.fit.${init_id}.pickle")
 
     script:
+    def args = task.ext.args ?: ''
     """
     fit_model.py \
         --experiment ${experiment} \
         --init_params ${init_params} \
-        --config ${config_yaml} \
-        --tumour_id ${tumour_id} \
-        --output ${tumour_id}.fit.${init_id}.pickle
+        --output ${tumour_id}.fit.${init_id}.pickle \
+        ${args}
     """
 }
 
@@ -95,20 +93,19 @@ process collate_results {
 
     input:
     tuple val(tumour_id), path(experiment), path(init_results), val(fit_args)
-    path config_yaml
 
     output:
     tuple val(tumour_id), path("${tumour_id}.results.h5")
 
     script:
+    def args = task.ext.args ?: ''
     def args_str = fit_args.join(' ')
     """
     collate_results.py \
         --experiment ${experiment} \
         --init_results ${init_results} \
-        --config ${config_yaml} \
-        --tumour_id ${tumour_id} \
         --output ${tumour_id}.results.h5 \
+        ${args} \
         ${args_str}
     """
 }

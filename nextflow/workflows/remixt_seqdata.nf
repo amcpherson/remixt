@@ -11,7 +11,6 @@
  * Input:
  *   ch_seqdata       - [sample_id, seqdata.h5] tuples (all samples)
  *   breakpoints      - path to breakpoints file
- *   config_yaml      - path to config YAML
  *   ref_data_dir     - val: path to reference data directory
  *   ch_chromosomes   - channel of chromosome names
  *   normal_id        - val: normal sample id or 'none'
@@ -34,7 +33,6 @@ workflow remixt_seqdata {
     take:
     ch_seqdata         // channel: [sample_id, seqdata.h5]
     breakpoints        // path
-    config_yaml        // path
     ref_data_dir       // val
     ch_chromosomes     // channel: chromosome names
     normal_id          // val: string or 'none'
@@ -50,13 +48,12 @@ workflow remixt_seqdata {
     }
 
     // --- 1. Create segments ---
-    create_segments(config_yaml, ref_data_dir, breakpoints)
+    create_segments(ref_data_dir, breakpoints)
     segments = create_segments.out   // path: segments.tsv
 
     // --- 2. Infer haplotypes ---
     infer_haps(
         ch_seqdata,
-        config_yaml,
         ref_data_dir,
         ch_chromosomes,
         normal_id,
@@ -68,7 +65,6 @@ workflow remixt_seqdata {
         ch_tumour_seqdata,
         segments,
         haplotypes,
-        config_yaml,
     )
     // out.rawcounts: [tumour_id, counts.tsv]
 
@@ -76,7 +72,6 @@ workflow remixt_seqdata {
     calc_bias(
         ch_tumour_seqdata,
         prepare_counts.out.rawcounts,
-        config_yaml,
         ref_data_dir,
     )
     // out.segment_lengths: [tumour_id, segment_lengths.tsv]
@@ -100,7 +95,6 @@ workflow remixt_seqdata {
     // --- 7. Fit model ---
     fit_model(
         create_experiment.out,
-        config_yaml,
     )
     // out.results: [tumour_id, results.h5]
 

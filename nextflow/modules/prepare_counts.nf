@@ -13,18 +13,18 @@ process segment_readcount {
     input:
     tuple val(tumour_id), path(seqdata)
     path segments
-    path config_yaml
 
     output:
     tuple val(tumour_id), path("${tumour_id}.segment_counts.tsv")
 
     script:
+    def args = task.ext.args ?: ''
     """
     segment_readcount.py \
         --segments ${segments} \
         --seqdata ${seqdata} \
-        --config ${config_yaml} \
-        --output ${tumour_id}.segment_counts.tsv
+        --output ${tumour_id}.segment_counts.tsv \
+        ${args}
     """
 }
 
@@ -37,19 +37,19 @@ process haplotype_allele_readcount {
     tuple val(tumour_id), path(seqdata)
     path segments
     path haplotypes
-    path config_yaml
 
     output:
     tuple val(tumour_id), path("${tumour_id}.allele_counts.tsv")
 
     script:
+    def args = task.ext.args ?: ''
     """
     haplotype_allele_readcount.py \
         --segments ${segments} \
         --seqdata ${seqdata} \
         --haplotypes ${haplotypes} \
-        --config ${config_yaml} \
-        --output ${tumour_id}.allele_counts.tsv
+        --output ${tumour_id}.allele_counts.tsv \
+        ${args}
     """
 }
 

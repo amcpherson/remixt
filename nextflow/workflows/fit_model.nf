@@ -9,7 +9,6 @@
  *
  * Input:
  *   ch_experiments   - [tumour_id, experiment.pickle] tuples
- *   config_yaml      - path to config YAML
  *
  * Output:
  *   results          - [tumour_id, results.h5] tuples
@@ -25,12 +24,11 @@ workflow fit_model {
 
     take:
     ch_experiments    // channel: [tumour_id, experiment.pickle]
-    config_yaml       // path
 
     main:
 
     // 1. Initialize model: produces init_results + init_params JSON
-    init_model(ch_experiments, config_yaml)
+    init_model(ch_experiments)
     // out: [tumour_id, init_results.h5, init_params.json]
 
     // 2. Split init_params JSON into per-init files for dynamic parallelism
@@ -59,7 +57,7 @@ workflow fit_model {
         }
 
     // 3. Fit per initialization
-    fit(ch_fit_input, config_yaml)
+    fit(ch_fit_input)
     // out: [tumour_id, init_id, fit_results.pickle]
 
     // 4. Collate: group fit results per tumour, build "init_id:path" args
@@ -77,7 +75,7 @@ workflow fit_model {
         .join(ch_fit_args)
         // [tumour_id, experiment, init_results, [fit_args]]
 
-    collate_results(ch_collate_input, config_yaml)
+    collate_results(ch_collate_input)
     // out: [tumour_id, results.h5]
 
     emit:

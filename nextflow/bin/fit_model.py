@@ -3,22 +3,38 @@
 
 import json
 import click
-import yaml
-import remixt.config
 import remixt.analysis.pipeline
 
 
 @click.command()
 @click.option('--experiment', required=True, help='Input experiment pickle file')
 @click.option('--init_params', required=True, help='Input init params JSON file (single init)')
-@click.option('--config', required=True, help='YAML config file')
-@click.option('--tumour_id', default=None, help='Tumour sample id for sample-specific config')
 @click.option('--output', required=True, help='Output fit results pickle file')
-def main(experiment, init_params, config, tumour_id, output):
-    with open(config) as f:
-        cfg = yaml.safe_load(f) or {}
-
-    cfg = remixt.config.get_sample_config(cfg, tumour_id)
+@click.option('--normal_contamination/--no_normal_contamination', default=True, help='Model normal contamination')
+@click.option('--max_copy_number', type=int, default=12, help='Maximum copy number')
+@click.option('--likelihood_min_segment_length', type=int, default=10000, help='Min segment length for likelihood')
+@click.option('--likelihood_min_proportion_genotyped', type=float, default=0.01, help='Min proportion genotyped')
+@click.option('--num_em_iter', type=int, default=5, help='Number of EM iterations')
+@click.option('--num_update_iter', type=int, default=5, help='Number of update iterations per EM')
+@click.option('--disable_breakpoints/--no_disable_breakpoints', default=False, help='Disable breakpoints')
+@click.option('--is_female/--is_male', default=True, help='Sample is female')
+@click.option('--do_h_update/--no_h_update', default=True, help='Update h parameter')
+def main(experiment, init_params, output,
+         normal_contamination, max_copy_number,
+         likelihood_min_segment_length, likelihood_min_proportion_genotyped,
+         num_em_iter, num_update_iter, disable_breakpoints,
+         is_female, do_h_update):
+    cfg = {
+        'normal_contamination': normal_contamination,
+        'max_copy_number': max_copy_number,
+        'likelihood_min_segment_length': likelihood_min_segment_length,
+        'likelihood_min_proportion_genotyped': likelihood_min_proportion_genotyped,
+        'num_em_iter': num_em_iter,
+        'num_update_iter': num_update_iter,
+        'disable_breakpoints': disable_breakpoints,
+        'is_female': is_female,
+        'do_h_update': do_h_update,
+    }
 
     with open(init_params) as f:
         params = json.load(f)

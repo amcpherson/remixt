@@ -9,7 +9,6 @@ process create_segments {
     label 'mem_medium'
 
     input:
-    path config_yaml
     val ref_data_dir
     path breakpoints
 
@@ -17,12 +16,13 @@ process create_segments {
     path "segments.tsv"
 
     script:
+    def args = task.ext.args ?: ''
     """
     create_segments.py \
-        --config ${config_yaml} \
         --ref_data_dir ${ref_data_dir} \
         --breakpoints ${breakpoints} \
-        --output segments.tsv
+        --output segments.tsv \
+        ${args}
     """
 }
 

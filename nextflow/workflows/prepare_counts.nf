@@ -11,7 +11,6 @@
  *   ch_tumour_seqdata  - [tumour_id, seqdata.h5] tuples
  *   segments           - path to segments.tsv
  *   haplotypes         - path to haplotypes.tsv
- *   config_yaml        - path to config YAML
  *
  * Output:
  *   rawcounts          - [tumour_id, counts.tsv] tuples
@@ -29,16 +28,15 @@ workflow prepare_counts {
     ch_tumour_seqdata    // channel: [tumour_id, seqdata.h5]
     segments             // path
     haplotypes           // path
-    config_yaml          // path
 
     main:
 
     // 1. Count reads per segment, per tumour
-    segment_readcount(ch_tumour_seqdata, segments, config_yaml)
+    segment_readcount(ch_tumour_seqdata, segments)
     // out: [tumour_id, segment_counts.tsv]
 
     // 2. Count allele reads per segment per tumour
-    haplotype_allele_readcount(ch_tumour_seqdata, segments, haplotypes, config_yaml)
+    haplotype_allele_readcount(ch_tumour_seqdata, segments, haplotypes)
     // out: [tumour_id, allele_counts.tsv]
 
     // 3. Phase segments across all tumours (merge then split)

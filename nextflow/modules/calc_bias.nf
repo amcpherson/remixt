@@ -12,17 +12,17 @@ process calc_fragment_stats {
 
     input:
     tuple val(tumour_id), path(seqdata)
-    path config_yaml
 
     output:
     tuple val(tumour_id), path("${tumour_id}.fragstats.json")
 
     script:
+    def args = task.ext.args ?: ''
     """
     calc_fragment_stats.py \
         --seqdata ${seqdata} \
-        --config ${config_yaml} \
-        --output ${tumour_id}.fragstats.json
+        --output ${tumour_id}.fragstats.json \
+        ${args}
     """
 }
 
@@ -33,22 +33,21 @@ process sample_gc {
 
     input:
     tuple val(tumour_id), path(seqdata), path(fragstats)
-    path config_yaml
     val ref_data_dir
 
     output:
     tuple val(tumour_id), path("${tumour_id}.gcsamples.tsv")
 
     script:
-    // Extract fragment_mean from JSON inline
+    def args = task.ext.args ?: ''
     """
     FRAG_MEAN=\$(python3 -c "import json; print(json.load(open('${fragstats}'))['fragment_mean'])")
     sample_gc.py \
         --seqdata ${seqdata} \
         --fragment_mean \$FRAG_MEAN \
-        --config ${config_yaml} \
         --ref_data_dir ${ref_data_dir} \
-        --output ${tumour_id}.gcsamples.tsv
+        --output ${tumour_id}.gcsamples.tsv \
+        ${args}
     """
 }
 
@@ -98,21 +97,21 @@ process gc_map_bias {
 
     input:
     tuple val(tumour_id), val(chunk_idx), path(segment_chunk), path(fragstats), path(gc_dist)
-    path config_yaml
     val ref_data_dir
 
     output:
     tuple val(tumour_id), path("${tumour_id}.bias.${chunk_idx}.tsv")
 
     script:
+    def args = task.ext.args ?: ''
     """
     gc_map_bias.py \
         --segments ${segment_chunk} \
         --fragstats ${fragstats} \
         --gc_dist ${gc_dist} \
-        --config ${config_yaml} \
         --ref_data_dir ${ref_data_dir} \
-        --output ${tumour_id}.bias.${chunk_idx}.tsv
+        --output ${tumour_id}.bias.${chunk_idx}.tsv \
+        ${args}
     """
 }
 

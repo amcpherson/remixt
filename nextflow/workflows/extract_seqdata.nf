@@ -9,7 +9,6 @@
  *
  * Input channels:
  *   ch_bams          - [sample_id, bam_file] tuples
- *   config_yaml      - path to config YAML
  *   ref_data_dir     - path to reference data directory
  *   ch_chromosomes   - channel of chromosome name strings
  *
@@ -25,15 +24,13 @@ workflow extract_seqdata {
 
     take:
     ch_bams            // channel: [sample_id, bam_file]
-    config_yaml        // path
     ref_data_dir       // val
     ch_chromosomes     // channel: chromosome names
 
     main:
 
-    // Resolve the SNP positions file path from config+ref_data_dir.
+    // Resolve the SNP positions file path from ref_data_dir.
     // This is a single file used by all create_chromosome_seqdata calls.
-    // We compute it here; the process receives it as a val.
     snp_positions = "${ref_data_dir}/thousand_genomes_snps.tsv"
 
     // Prepare BAM inputs with index files.
@@ -47,17 +44,9 @@ workflow extract_seqdata {
     // [sample_id, bam, bai] x chromosome combinations.
     ch_inputs = ch_bams_with_index.combine(ch_chromosomes.collect().flatMap())
 
-    // ch_inputs: [sample_id, bam, bai, chromosome]
-    // Split into the two input declarations expected by the process.
-    ch_sample_bam = ch_inputs.map { sid, bam, bai, chrom ->
-        tuple(sid, bam, bai)
-    }
-    ch_chrom = ch_inputs.map { sid, bam, bai, chrom -> chrom }
-
     create_chromosome_seqdata(
         ch_inputs.map { sid, bam, bai, chrom -> tuple(sid, bam, bai) },
         ch_inputs.map { sid, bam, bai, chrom -> chrom },
-        config_yaml,
         snp_positions,
     )
 

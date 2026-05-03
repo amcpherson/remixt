@@ -9,7 +9,6 @@
  * Input:
  *   ch_tumour_seqdata  - [tumour_id, seqdata.h5] tuples
  *   ch_rawcounts       - [tumour_id, rawcounts.tsv] tuples (segment file per tumour)
- *   config_yaml        - path to config YAML
  *   ref_data_dir       - path to reference data directory
  *
  * Output:
@@ -30,13 +29,12 @@ workflow calc_bias {
     take:
     ch_tumour_seqdata    // channel: [tumour_id, seqdata.h5]
     ch_rawcounts         // channel: [tumour_id, rawcounts.tsv]
-    config_yaml          // path
     ref_data_dir         // val
 
     main:
 
     // 1. Calculate fragment stats per tumour
-    calc_fragment_stats(ch_tumour_seqdata, config_yaml)
+    calc_fragment_stats(ch_tumour_seqdata)
     // out: [tumour_id, fragstats.json]
 
     // 2. Sample GC - needs seqdata + fragstats
@@ -44,7 +42,7 @@ workflow calc_bias {
         .join(calc_fragment_stats.out)
         // [tumour_id, seqdata, fragstats.json]
 
-    sample_gc(ch_sample_gc_input, config_yaml, ref_data_dir)
+    sample_gc(ch_sample_gc_input, ref_data_dir)
     // out: [tumour_id, gcsamples.tsv]
 
     // 3. GC lowess
@@ -73,7 +71,7 @@ workflow calc_bias {
         .combine(ch_gc_dist, by: 0)
         // [tumour_id, chunk_idx, chunk_file, fragstats.json, gcloess.tsv]
 
-    gc_map_bias(ch_bias_input, config_yaml, ref_data_dir)
+    gc_map_bias(ch_bias_input, ref_data_dir)
     // out: [tumour_id, bias.chunk_idx.tsv]
 
     // 6. Merge biases per tumour

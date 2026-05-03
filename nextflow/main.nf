@@ -7,29 +7,6 @@ include { remixt_seqdata }   from './workflows/remixt_seqdata'
 
 
 /*
- * Resolve chromosome list from the reference data.
- */
-process get_chromosomes {
-    label 'mem_medium'
-
-    input:
-    path config_yaml
-    val ref_data_dir
-
-    output:
-    path 'chromosomes.txt'
-
-    script:
-    """
-    get_chromosomes.py \
-        --config ${config_yaml} \
-        --ref_data_dir ${ref_data_dir} \
-        --output chromosomes.txt
-    """
-}
-
-
-/*
  * ========================================================
  *  ENTRY POINT: remixt_bam
  *  Mirrors create_remixt_bam_workflow from pypeliner
@@ -39,15 +16,10 @@ workflow {
 
     // --- Validate params ---
     if (!params.ref_data_dir) { error "Please provide --ref_data_dir" }
-    if (!params.raw_data_dir) { error "Please provide --raw_data_dir" }
+    if (!params.out_dir) { error "Please provide --out_dir" }
 
-    ref_data_dir = params.ref_data_dir
-    breakpoints  = file(params.breakpoint_file)
-
-    // --- Config ---
-    config_yaml = params.config
-        ? Channel.fromPath(params.config).first()
-        : Channel.fromPath("${projectDir}/assets/empty_config.yaml").first()
+    ref_data_dir  = params.ref_data_dir
+    breakpoints   = file(params.breakpoint_file)
 
     // --- Build sample channels ---
     tumour_ids  = params.tumour_sample_ids.tokenize(',')
@@ -70,14 +42,13 @@ workflow {
     }
 
     // --- Get chromosomes ---
-    ch_chromosomes = get_chromosomes(config_yaml, ref_data_dir)
-        .splitText()
-        .map { it.trim() }
+    ch_chromosomes = Channel.fromList(
+        params.chromosomes.tokenize(',')
+    )
 
     // --- Extract seqdata per sample ---
     extract_seqdata(
         ch_all_bams,
-        config_yaml,
         ref_data_dir,
         ch_chromosomes,
     )
@@ -87,7 +58,6 @@ workflow {
     remixt_seqdata(
         extract_seqdata.out.seqdata,
         breakpoints,
-        config_yaml,
         ref_data_dir,
         ch_chromosomes,
         normal_id,

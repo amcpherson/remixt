@@ -9,7 +9,6 @@
  *
  * Input:
  *   ch_seqdata       - [sample_id, seqdata.h5] tuples
- *   config_yaml      - path to config YAML
  *   ref_data_dir     - path to reference data directory
  *   ch_chromosomes   - channel of chromosome names
  *   normal_id        - val: normal sample id or null
@@ -28,7 +27,6 @@ workflow infer_haps {
 
     take:
     ch_seqdata         // channel: [sample_id, seqdata.h5]
-    config_yaml        // path
     ref_data_dir       // val
     ch_chromosomes     // channel: chromosome names
     normal_id          // val: string or 'none'
@@ -49,7 +47,6 @@ workflow infer_haps {
         infer_snp_genotype_from_normal(
             ch_normal.first(),
             ch_chroms,
-            config_yaml,
         )
         ch_snp_genotype = infer_snp_genotype_from_normal.out  // [chromosome, snp_genotype.tsv]
 
@@ -64,7 +61,6 @@ workflow infer_haps {
         infer_snp_genotype_from_tumour(
             ch_tumour_args,
             ch_chroms,
-            config_yaml,
         )
         ch_snp_genotype = infer_snp_genotype_from_tumour.out  // [chromosome, snp_genotype.tsv]
     }
@@ -72,7 +68,6 @@ workflow infer_haps {
     // Phase haplotypes per chromosome
     infer_haps_proc(
         ch_snp_genotype,   // [chromosome, snp_genotype.tsv]
-        config_yaml,
         ref_data_dir,
     )
 
