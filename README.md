@@ -260,13 +260,27 @@ Often a call to qsub requires specific command line parameters to request the co
 
 ## Docker builds
 
-To build the remixt Docker image with version tagging:
+### Production build (from GitHub)
 
-    VERSION=$(python setup.py --version)
+To build and push a release image from the GitHub repository:
+
     docker build --platform linux/amd64 \
-        --build-arg REMIXT_VERSION=$VERSION \
-        -t remixt:$VERSION \
-        -t remixt:latest .
+        --build-arg INSTALL_FROM=github \
+        --build-arg REMIXT_VERSION=0.5.24 \
+        -t quay.io/andrew_mcpherson/remixt:v0.5.24 .
+    docker push quay.io/andrew_mcpherson/remixt:v0.5.24
+
+To also update the `latest` tag:
+
+    docker tag quay.io/andrew_mcpherson/remixt:v0.5.24 quay.io/andrew_mcpherson/remixt:latest
+    docker push quay.io/andrew_mcpherson/remixt:latest
+
+### Development build (from local source)
+
+To build from your local working copy:
+
+    docker build --platform linux/amd64 \
+        -t remixt:dev .
 
 The container includes remixt, shapeit4, bingraphsample, and all required tools (bcftools, tabix, bgzip).
 
@@ -287,12 +301,12 @@ The Nextflow pipeline can run entirely in containers using the `docker` profile:
 
 To use a specific version of the container:
 
-    nextflow run nextflow/main.nf -profile docker --remixt_container remixt:0.1.2
+    nextflow run nextflow/main.nf -profile docker --remixt_container quay.io/andrew_mcpherson/remixt:v0.5.24
 
 For Singularity (common on HPC clusters):
 
     nextflow run nextflow/main.nf -profile singularity \
-        --remixt_container docker://remixt:0.1.2 \
+        --remixt_container docker://quay.io/andrew_mcpherson/remixt:v0.5.24 \
         ...
 
 ## Pip build
