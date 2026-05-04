@@ -260,10 +260,40 @@ Often a call to qsub requires specific command line parameters to request the co
 
 ## Docker builds
 
-To build a docker image, for instance version v0.5.13, run the following docker command:
+To build the remixt Docker image with version tagging:
 
-    docker build --build-arg app_version=v0.5.13 -t amcpherson/remixt:v0.5.13 .
-    docker push amcpherson/remixt:v0.5.13
+    VERSION=$(python setup.py --version)
+    docker build --platform linux/amd64 \
+        --build-arg REMIXT_VERSION=$VERSION \
+        -t remixt:$VERSION \
+        -t remixt:latest .
+
+The container includes remixt, shapeit4, bingraphsample, and all required tools (bcftools, tabix, bgzip).
+
+## Running with Nextflow and Containers
+
+The Nextflow pipeline can run entirely in containers using the `docker` profile:
+
+    nextflow run nextflow/main.nf -profile docker \
+        --ref_data_dir $ref_data_dir \
+        --out_dir $out_dir \
+        --breakpoint_file $breakpoints \
+        --tumour_sample_ids HCC1395 \
+        --tumour_bam_files /path/to/tumour.bam \
+        --normal_sample_id HCC1395BL \
+        --normal_bam_file /path/to/normal.bam \
+        --chromosomes 15 \
+        --chr_name_prefix chr
+
+To use a specific version of the container:
+
+    nextflow run nextflow/main.nf -profile docker --remixt_container remixt:0.1.2
+
+For Singularity (common on HPC clusters):
+
+    nextflow run nextflow/main.nf -profile singularity \
+        --remixt_container docker://remixt:0.1.2 \
+        ...
 
 ## Pip build
 
