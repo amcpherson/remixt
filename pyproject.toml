@@ -1,8 +1,8 @@
 [build-system]
 requires = [
-    "setuptools>=18.0",
-    "numpy==2.4.4",
-    "cython",
+    "setuptools>=64",
+    "numpy>=2.0",
+    "cython>=3.0",
     "versioneer",
 ]
 build-backend = "setuptools.build_meta"
@@ -13,3 +13,13 @@ style = "pep440"
 versionfile_source = "remixt/_version.py"
 versionfile_build = "remixt/_version.py"
 tag_prefix = "v"
+
+[tool.cibuildwheel]
+# cp312+ blocked until pypeliner (sdist-only, old versioneer) builds on python 3.12
+build = "cp311-*"
+skip = "*-musllinux_*"
+test-command = "python -c \"import remixt.bamreader, remixt.bpmodel\""
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64"]
+before-all = "yum install -y bzip2-devel zlib-devel"

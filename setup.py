@@ -4,13 +4,9 @@ import sys
 import versioneer
 from setuptools import setup, find_packages, Extension
 
-NUMPY_VERSION = '2.4.4'
-
 class get_numpy_include(str):
     def __str__(self):
         import numpy
-        if numpy.__version__ != NUMPY_VERSION:
-            raise Exception(f'numpy compatibility error, {NUMPY_VERSION} != {numpy.__version__}')
         return numpy.get_include()
 
 external_dir = 'src/external'
@@ -38,7 +34,7 @@ if 'linux' in sys.platform:
     libraries.append('rt')
 elif sys.platform == 'darwin':
     extra_compile_args.extend(['-stdlib=libc++'])
-    extra_link_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.9'])
+    extra_link_args.extend(['-stdlib=libc++'])
 
 extensions = [
     Extension(
@@ -66,6 +62,8 @@ setup(
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
     description='ReMixT is a tool for joint inference of clone specific segment and breakpoint copy number',
+    long_description=open('README.md').read(),
+    long_description_content_type='text/markdown',
     author='Andrew McPherson',
     author_email='andrew.mcpherson@gmail.com',
     url='http://bitbucket.org/dranew/remixt',
@@ -74,7 +72,7 @@ setup(
     classifiers=[],
     ext_modules=extensions,
     install_requires=[
-        f'numpy=={NUMPY_VERSION}',
+        'numpy>=2.0',
         'scipy',
         'pandas',
         'tables',

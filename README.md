@@ -311,10 +311,10 @@ For Singularity (common on HPC clusters):
 
 ## Pip build
 
-To build with pip and distribute to pypi, use the following commands:
+To build the sdist and manylinux wheels (requires docker), then upload to pypi, from a clean tagged checkout:
 
-    python setup.py build_ext --force sdist
-    twine upload --repository pypi dist/*
+    ./build_pip.sh
+    .build-venv/bin/twine upload --repository pypi dist/*
 
 # License
 
