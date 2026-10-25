@@ -3,6 +3,7 @@
 
 import json
 import click
+from genome_version import genome_version_config
 import remixt.analysis.gcbias
 
 
@@ -18,11 +19,12 @@ import remixt.analysis.gcbias
 @click.option('--map_qual_threshold', type=int, default=1, help='Mapping quality threshold')
 @click.option('--mappability_length', type=int, default=100, help='Mappability read length')
 @click.option('--chromosomes', default=None, help='Comma-separated chromosome list')
+@click.option('--ensembl_genome_version', default='GRCh38', help='Genome version (GRCh38 or GRCh37)')
 @click.option('--chr_name_prefix', default='', help='Chromosome name prefix')
 def main(segments, fragstats, gc_dist, ref_data_dir, output,
          do_gc_correction, do_mappability_correction,
          gc_position_offset, map_qual_threshold, mappability_length,
-         chromosomes, chr_name_prefix):
+         chromosomes, chr_name_prefix, ensembl_genome_version):
     cfg = {
         'do_gc_correction': do_gc_correction,
         'do_mappability_correction': do_mappability_correction,
@@ -34,6 +36,7 @@ def main(segments, fragstats, gc_dist, ref_data_dir, output,
         cfg['chromosomes'] = chromosomes.split(',')
     if chr_name_prefix:
         cfg['chr_name_prefix'] = chr_name_prefix
+    cfg.update(genome_version_config(ensembl_genome_version))
 
     with open(fragstats) as f:
         stats = json.load(f)

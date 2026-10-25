@@ -37,6 +37,12 @@ RUN cd /opt/shapeit4/tools/bingraphsample \
     && cp bin/bingraphsample /usr/local/bin/bingraphsample \
     && rm -rf /opt/shapeit4
 
+# Install shapeit2, used for GRCh37 phasing
+RUN wget -q https://mathgen.stats.ox.ac.uk/genetics_software/shapeit/shapeit.v2.r904.glibcv2.17.linux.tar.gz \
+    && tar xzf shapeit.v2.r904.glibcv2.17.linux.tar.gz \
+    && cp shapeit.v2.904.*/bin/shapeit /usr/local/bin/shapeit \
+    && rm -rf shapeit.v2*
+
 # Install remixt (from local source or GitHub depending on INSTALL_FROM)
 RUN --mount=type=bind,target=/opt/remixt,rw \
     if [ "$INSTALL_FROM" = "local" ]; then \

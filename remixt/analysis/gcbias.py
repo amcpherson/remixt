@@ -94,7 +94,8 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config, re
         for chrom_reads in reads_iter:
 
             # Calculate read start in concatenated genome
-            chrom_reads['start'] += chrom_info.loc[chrom_id, 'chrom_start']
+            # Positions are stored as int32, which overflows in the concatenated genome
+            chrom_reads['start'] = chrom_reads['start'].astype(np.int64) + chrom_info.loc[chrom_id, 'chrom_start']
 
             # Add reads at each start
             sample_read_count += (
