@@ -5,24 +5,42 @@
  */
 
 
+/*
+ * Write the remixt config, built from params, that is passed to each remixt step.
+ */
+process write_config {
+
+    input:
+    val config
+
+    output:
+    path "remixt_config.json"
+
+    exec:
+    task.workDir.resolve('remixt_config.json').text = groovy.json.JsonOutput.prettyPrint(
+        groovy.json.JsonOutput.toJson(config)
+    )
+}
+
+
 process create_segments {
     label 'mem_medium'
 
     input:
     val ref_data_dir
     path breakpoints
+    path config
 
     output:
     path "segments.tsv"
 
     script:
-    def args = task.ext.args ?: ''
     """
     create_segments.py \
         --ref_data_dir ${ref_data_dir} \
         --breakpoints ${breakpoints} \
         --output segments.tsv \
-        ${args}
+        --config ${config}
     """
 }
 
@@ -54,17 +72,16 @@ process ploidy_analysis_plots {
 
     input:
     tuple val(tumour_id), path(experiment)
-    val chromosomes_csv
+    path config
 
     output:
     tuple val(tumour_id), path("${tumour_id}.ploidy_plots.pdf")
 
     script:
-    def chrom_arg = chromosomes_csv ? "--chromosomes ${chromosomes_csv}" : ""
     """
     ploidy_analysis_plots.py \
         --experiment ${experiment} \
         --output ${tumour_id}.ploidy_plots.pdf \
-        ${chrom_arg}
+        --config ${config}
     """
 }

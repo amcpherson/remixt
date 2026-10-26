@@ -11,6 +11,7 @@
  *   ch_bams          - [sample_id, bam_file] tuples
  *   ref_data_dir     - path to reference data directory
  *   ch_chromosomes   - channel of chromosome name strings
+ *   config           - remixt config JSON file
  *
  * Output channels:
  *   seqdata          - [sample_id, seqdata.h5] tuples
@@ -26,6 +27,7 @@ workflow extract_seqdata {
     ch_bams            // channel: [sample_id, bam_file]
     ref_data_dir       // val
     ch_chromosomes     // channel: chromosome names
+    config             // path: remixt config JSON
 
     main:
 
@@ -48,6 +50,7 @@ workflow extract_seqdata {
         ch_inputs.map { sid, bam, bai, chrom -> tuple(sid, bam, bai) },
         ch_inputs.map { sid, bam, bai, chrom -> chrom },
         snp_positions,
+        config,
     )
 
     // Group per-chromosome seqdata by sample_id for merging.

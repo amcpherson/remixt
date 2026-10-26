@@ -18,19 +18,19 @@ process create_chromosome_seqdata {
     tuple val(sample_id), path(bam), path(bai)
     val chromosome
     val snp_positions
+    path config
 
     output:
     tuple val(sample_id), val(chromosome), path("${sample_id}.${chromosome}.seqdata.h5")
 
     script:
-    def args = task.ext.args ?: ''
     """
     create_chromosome_seqdata.py \
         --bam ${bam} \
         --snp_positions ${snp_positions} \
         --chromosome ${chromosome} \
         --output ${sample_id}.${chromosome}.seqdata.h5 \
-        ${args}
+        --config ${config}
     """
 }
 

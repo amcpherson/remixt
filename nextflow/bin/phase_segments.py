@@ -6,7 +6,6 @@ Outputs phased allele count files named {tumour_id}.phased_allele_counts.tsv
 """
 
 import click
-import yaml
 import remixt.analysis.readcount
 
 

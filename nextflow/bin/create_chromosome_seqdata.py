@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 """Extract sequence data from a BAM file for a single chromosome."""
 
+import json
 import click
+import remixt.config
 import remixt.seqdataio
 
 
@@ -10,18 +12,18 @@ import remixt.seqdataio
 @click.option('--snp_positions', required=True, help='SNP positions file')
 @click.option('--chromosome', required=True, help='Chromosome to extract')
 @click.option('--output', required=True, help='Output seqdata HDF5 file')
-@click.option('--max_fragment_length', type=int, default=1000, help='Max fragment length')
-@click.option('--max_soft_clipped', type=int, default=8, help='Max soft clipped bases')
-@click.option('--check_proper_pair/--no_check_proper_pair', default=True, help='Check proper pair flag')
-def main(bam, snp_positions, chromosome, output, max_fragment_length, max_soft_clipped, check_proper_pair):
+@click.option('--config', type=click.File(), required=True, help='remixt config JSON file')
+def main(bam, snp_positions, chromosome, output, config):
+    cfg = json.load(config)
+
     remixt.seqdataio.create_chromosome_seqdata(
         output,
         bam,
         snp_positions,
         chromosome,
-        max_fragment_length,
-        max_soft_clipped,
-        check_proper_pair,
+        remixt.config.get_param(cfg, 'bam_max_fragment_length'),
+        remixt.config.get_param(cfg, 'bam_max_soft_clipped'),
+        remixt.config.get_param(cfg, 'bam_check_proper_pair'),
     )
 
 

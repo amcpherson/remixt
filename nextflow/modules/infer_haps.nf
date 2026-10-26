@@ -16,18 +16,18 @@ process infer_snp_genotype_from_normal {
     input:
     path normal_seqdata
     val chromosome
+    path config
 
     output:
     tuple val(chromosome), path("snp_genotype.${chromosome}.tsv")
 
     script:
-    def args = task.ext.args ?: ''
     """
     infer_snp_genotype_from_normal.py \
         --seqdata ${normal_seqdata} \
         --chromosome ${chromosome} \
         --output snp_genotype.${chromosome}.tsv \
-        ${args}
+        --config ${config}
     """
 }
 
@@ -43,18 +43,18 @@ process infer_snp_genotype_from_tumour {
     input:
     val tumour_seqdata_args   // list of "tumour_id:path" strings
     val chromosome
+    path config
 
     output:
     tuple val(chromosome), path("snp_genotype.${chromosome}.tsv")
 
     script:
-    def args = task.ext.args ?: ''
     def args_str = tumour_seqdata_args.join(' ')
     """
     infer_snp_genotype_from_tumour.py \
         --chromosome ${chromosome} \
         --output snp_genotype.${chromosome}.tsv \
-        ${args} \
+        --config ${config} \
         ${args_str}
     """
 }
@@ -70,12 +70,12 @@ process infer_haps {
     input:
     tuple val(chromosome), path(snp_genotype)
     val ref_data_dir
+    path config
 
     output:
     tuple val(chromosome), path("haps.${chromosome}.tsv")
 
     script:
-    def args = task.ext.args ?: ''
     """
     infer_haps.py \
         --snp_genotype ${snp_genotype} \
@@ -83,7 +83,7 @@ process infer_haps {
         --ref_data_dir ${ref_data_dir} \
         --output haps.${chromosome}.tsv \
         --temp_directory "\${PWD}/shapeit_temp" \
-        ${args}
+        --config ${config}
     """
 }
 

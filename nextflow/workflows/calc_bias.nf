@@ -10,6 +10,7 @@
  *   ch_tumour_seqdata  - [tumour_id, seqdata.h5] tuples
  *   ch_rawcounts       - [tumour_id, rawcounts.tsv] tuples (segment file per tumour)
  *   ref_data_dir       - path to reference data directory
+ *   config             - remixt config JSON file
  *
  * Output:
  *   segment_lengths    - [tumour_id, segment_lengths.tsv] tuples
@@ -30,11 +31,12 @@ workflow calc_bias {
     ch_tumour_seqdata    // channel: [tumour_id, seqdata.h5]
     ch_rawcounts         // channel: [tumour_id, rawcounts.tsv]
     ref_data_dir         // val
+    config               // path: remixt config JSON
 
     main:
 
     // 1. Calculate fragment stats per tumour
-    calc_fragment_stats(ch_tumour_seqdata)
+    calc_fragment_stats(ch_tumour_seqdata, config)
     // out: [tumour_id, fragstats.json]
 
     // 2. Sample GC - needs seqdata + fragstats
@@ -42,7 +44,7 @@ workflow calc_bias {
         .join(calc_fragment_stats.out)
         // [tumour_id, seqdata, fragstats.json]
 
-    sample_gc(ch_sample_gc_input, ref_data_dir)
+    sample_gc(ch_sample_gc_input, ref_data_dir, config)
     // out: [tumour_id, gcsamples.tsv]
 
     // 3. GC lowess
@@ -71,7 +73,7 @@ workflow calc_bias {
         .combine(ch_gc_dist, by: 0)
         // [tumour_id, chunk_idx, chunk_file, fragstats.json, gcloess.tsv]
 
-    gc_map_bias(ch_bias_input, ref_data_dir)
+    gc_map_bias(ch_bias_input, ref_data_dir, config)
     // out: [tumour_id, bias.chunk_idx.tsv]
 
     // 6. Merge biases per tumour

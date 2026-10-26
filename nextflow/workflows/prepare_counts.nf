@@ -11,6 +11,7 @@
  *   ch_tumour_seqdata  - [tumour_id, seqdata.h5] tuples
  *   segments           - path to segments.tsv
  *   haplotypes         - path to haplotypes.tsv
+ *   config             - remixt config JSON file
  *
  * Output:
  *   rawcounts          - [tumour_id, counts.tsv] tuples
@@ -28,15 +29,16 @@ workflow prepare_counts {
     ch_tumour_seqdata    // channel: [tumour_id, seqdata.h5]
     segments             // path
     haplotypes           // path
+    config               // path: remixt config JSON
 
     main:
 
     // 1. Count reads per segment, per tumour
-    segment_readcount(ch_tumour_seqdata, segments)
+    segment_readcount(ch_tumour_seqdata, segments, config)
     // out: [tumour_id, segment_counts.tsv]
 
     // 2. Count allele reads per segment per tumour
-    haplotype_allele_readcount(ch_tumour_seqdata, segments, haplotypes)
+    haplotype_allele_readcount(ch_tumour_seqdata, segments, haplotypes, config)
     // out: [tumour_id, allele_counts.tsv]
 
     // 3. Phase segments across all tumours (merge then split)

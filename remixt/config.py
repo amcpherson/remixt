@@ -4,6 +4,8 @@ import remixt.utils
 
 def get_full_config(config):
     full_config = dict(vars(remixt.defaults))
+    genome_version = config.get('ensembl_genome_version', remixt.defaults.ensembl_genome_version)
+    full_config.update(remixt.defaults.genome_versions.get(genome_version, {}))
     full_config.update(config)
     return full_config
 

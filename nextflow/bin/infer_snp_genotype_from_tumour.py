@@ -5,6 +5,7 @@ Accepts multiple tumour seqdata files as positional arguments in the form
   tumour_id:path tumour_id:path ...
 """
 
+import json
 import click
 import remixt.analysis.haplotype
 
@@ -12,15 +13,11 @@ import remixt.analysis.haplotype
 @click.command()
 @click.option('--chromosome', required=True, help='Chromosome')
 @click.option('--output', required=True, help='Output SNP genotype TSV file')
-@click.option('--sequencing_base_call_error', type=float, default=0.01, help='Base call error rate')
-@click.option('--homozygous_p_value_threshold', type=float, default=1e-16, help='Homozygous p-value threshold')
+@click.option('--config', type=click.File(), required=True, help='remixt config JSON file')
 @click.argument('tumour_seqdata_args', nargs=-1, required=True)
-def main(chromosome, output, sequencing_base_call_error, homozygous_p_value_threshold, tumour_seqdata_args):
+def main(chromosome, output, config, tumour_seqdata_args):
     """TUMOUR_SEQDATA_ARGS: tumour_id:path pairs"""
-    cfg = {
-        'sequencing_base_call_error': sequencing_base_call_error,
-        'homozygous_p_value_threshold': homozygous_p_value_threshold,
-    }
+    cfg = json.load(config)
 
     # Parse tumour_id:path pairs into a dict
     seqdata_filenames = {}

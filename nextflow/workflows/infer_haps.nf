@@ -12,6 +12,7 @@
  *   ref_data_dir     - path to reference data directory
  *   ch_chromosomes   - channel of chromosome names
  *   normal_id        - val: normal sample id or null
+ *   config           - remixt config JSON file
  *
  * Output:
  *   haplotypes       - path to merged haplotypes.tsv
@@ -30,6 +31,7 @@ workflow infer_haps {
     ref_data_dir       // val
     ch_chromosomes     // channel: chromosome names
     normal_id          // val: string or 'none'
+    config             // path: remixt config JSON
 
     main:
 
@@ -47,6 +49,7 @@ workflow infer_haps {
         infer_snp_genotype_from_normal(
             ch_normal.first(),
             ch_chroms,
+            config,
         )
         ch_snp_genotype = infer_snp_genotype_from_normal.out  // [chromosome, snp_genotype.tsv]
 
@@ -61,6 +64,7 @@ workflow infer_haps {
         infer_snp_genotype_from_tumour(
             ch_tumour_args,
             ch_chroms,
+            config,
         )
         ch_snp_genotype = infer_snp_genotype_from_tumour.out  // [chromosome, snp_genotype.tsv]
     }
@@ -69,6 +73,7 @@ workflow infer_haps {
     infer_haps_proc(
         ch_snp_genotype,   // [chromosome, snp_genotype.tsv]
         ref_data_dir,
+        config,
     )
 
     // Merge all chromosome haplotypes

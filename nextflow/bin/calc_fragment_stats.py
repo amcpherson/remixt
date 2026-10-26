@@ -12,13 +12,9 @@ import remixt.analysis.stats
 @click.command()
 @click.option('--seqdata', required=True, help='Input seqdata HDF5 file')
 @click.option('--output', required=True, help='Output JSON file with fragment stats')
-@click.option('--filter_duplicates/--no_filter_duplicates', default=False, help='Filter duplicate reads')
-@click.option('--map_qual_threshold', type=int, default=1, help='Mapping quality threshold')
-def main(seqdata, output, filter_duplicates, map_qual_threshold):
-    cfg = {
-        'filter_duplicates': filter_duplicates,
-        'map_qual_threshold': map_qual_threshold,
-    }
+@click.option('--config', type=click.File(), required=True, help='remixt config JSON file')
+def main(seqdata, output, config):
+    cfg = json.load(config)
 
     fragstats = remixt.analysis.stats.calculate_fragment_stats(seqdata, cfg)
 

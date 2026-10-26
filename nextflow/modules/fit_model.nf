@@ -17,18 +17,18 @@ process init_model {
 
     input:
     tuple val(tumour_id), path(experiment)
+    path config
 
     output:
     tuple val(tumour_id), path("${tumour_id}.init_results.h5"), path("${tumour_id}.init_params.json")
 
     script:
-    def args = task.ext.args ?: ''
     """
     init_model.py \
         --experiment ${experiment} \
         --output_results ${tumour_id}.init_results.h5 \
         --output_params ${tumour_id}.init_params.json \
-        ${args}
+        --config ${config}
     """
 }
 
@@ -68,18 +68,18 @@ process fit_model {
 
     input:
     tuple val(tumour_id), val(init_id), path(experiment), path(init_params)
+    path config
 
     output:
     tuple val(tumour_id), val(init_id), path("${tumour_id}.fit.${init_id}.pickle")
 
     script:
-    def args = task.ext.args ?: ''
     """
     fit_model.py \
         --experiment ${experiment} \
         --init_params ${init_params} \
         --output ${tumour_id}.fit.${init_id}.pickle \
-        ${args}
+        --config ${config}
     """
 }
 
@@ -93,19 +93,19 @@ process collate_results {
 
     input:
     tuple val(tumour_id), path(experiment), path(init_results), val(fit_args)
+    path config
 
     output:
     tuple val(tumour_id), path("${tumour_id}.results.h5")
 
     script:
-    def args = task.ext.args ?: ''
     def args_str = fit_args.join(' ')
     """
     collate_results.py \
         --experiment ${experiment} \
         --init_results ${init_results} \
         --output ${tumour_id}.results.h5 \
-        ${args} \
+        --config ${config} \
         ${args_str}
     """
 }

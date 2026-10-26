@@ -14,6 +14,7 @@
  *   ref_data_dir     - val: path to reference data directory
  *   ch_chromosomes   - channel of chromosome names
  *   normal_id        - val: normal sample id or 'none'
+ *   config           - remixt config JSON file
  *
  * Output:
  *   results          - [tumour_id, results.h5] tuples
@@ -36,6 +37,7 @@ workflow remixt_seqdata {
     ref_data_dir       // val
     ch_chromosomes     // channel: chromosome names
     normal_id          // val: string or 'none'
+    config             // path: remixt config JSON
 
     main:
 
@@ -48,7 +50,7 @@ workflow remixt_seqdata {
     }
 
     // --- 1. Create segments ---
-    create_segments(ref_data_dir, breakpoints)
+    create_segments(ref_data_dir, breakpoints, config)
     segments = create_segments.out   // path: segments.tsv
 
     // --- 2. Infer haplotypes ---
@@ -57,6 +59,7 @@ workflow remixt_seqdata {
         ref_data_dir,
         ch_chromosomes,
         normal_id,
+        config,
     )
     haplotypes = infer_haps.out.haplotypes   // path: haplotypes.tsv
 
@@ -65,6 +68,7 @@ workflow remixt_seqdata {
         ch_tumour_seqdata,
         segments,
         haplotypes,
+        config,
     )
     // out.rawcounts: [tumour_id, counts.tsv]
 
@@ -73,6 +77,7 @@ workflow remixt_seqdata {
         ch_tumour_seqdata,
         prepare_counts.out.rawcounts,
         ref_data_dir,
+        config,
     )
     // out.segment_lengths: [tumour_id, segment_lengths.tsv]
     // Note: in pypeliner this replaces the segment file with biased lengths.
@@ -86,15 +91,15 @@ workflow remixt_seqdata {
     // out: [tumour_id, experiment.pickle]
 
     // --- 6. Ploidy analysis plots ---
-    chromosomes_csv = ch_chromosomes.collect().map { it.join(',') }
     ploidy_analysis_plots(
         create_experiment.out,
-        chromosomes_csv,
+        config,
     )
 
     // --- 7. Fit model ---
     fit_model(
         create_experiment.out,
+        config,
     )
     // out.results: [tumour_id, results.h5]
 
