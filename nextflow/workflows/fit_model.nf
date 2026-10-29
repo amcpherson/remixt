@@ -59,18 +59,16 @@ workflow fit_model {
     fit(ch_fit_input)
     // out: [tumour_id, init_id, fit_results.pickle]
 
-    // 4. Collate: group fit results per tumour, build "init_id:path" args
-    ch_fit_args = fit.out
+    // 4. Collate: group fit results per tumour
+    ch_fit_results = fit.out
         .map { tumour_id, init_id, fit_pickle -> tuple(tumour_id, init_id as int, fit_pickle) }
         .groupTuple()
         .map { tumour_id, init_ids, fit_pickles ->
             // Sort by init_id for a stable task hash
-            def fit_args = [init_ids, fit_pickles].transpose()
-                .sort { pair -> pair[0] }
-                .collect { pair -> "${pair[0]}:${pair[1]}".toString() }
-            tuple(tumour_id, fit_args)
+            def pairs = [init_ids, fit_pickles].transpose().sort { pair -> pair[0] }
+            tuple(tumour_id, pairs.collect { pair -> pair[0] }, pairs.collect { pair -> pair[1] })
         }
-        // [tumour_id, [list of "init_id:path" strings]]
+        // [tumour_id, [init_ids], [fit_results.pickle]]
 
     // Join with experiment and init_results
     ch_init_results = init_model.out
@@ -78,8 +76,8 @@ workflow fit_model {
 
     ch_collate_input = ch_experiments
         .join(ch_init_results)
-        .join(ch_fit_args)
-        // [tumour_id, experiment, init_results, [fit_args]]
+        .join(ch_fit_results)
+        // [tumour_id, experiment, init_results, [init_ids], [fit_results.pickle]]
 
     collate_results(ch_collate_input)
     // out: [tumour_id, results.h5]

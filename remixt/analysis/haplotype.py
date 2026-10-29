@@ -167,15 +167,15 @@ def infer_snp_genotype_from_tumour(
 
     snp_counts_df = snp_counts_df[snp_counts_df['total_count'] > 50]
     
-    binom_test_ref = lambda row: scipy.stats.binom_test(
-        row['ref_count'], row['total_count'],
-        p=sequencing_base_call_error, alternative='greater')
+    binom_test_ref = lambda row: scipy.stats.binomtest(
+        int(row['ref_count']), int(row['total_count']),
+        p=sequencing_base_call_error, alternative='greater').pvalue
 
     snp_counts_df['prob_no_A'] = snp_counts_df.apply(binom_test_ref, axis=1)
     
-    binom_test_alt = lambda row: scipy.stats.binom_test(
-        row['alt_count'], row['total_count'],
-        p=sequencing_base_call_error, alternative='greater')
+    binom_test_alt = lambda row: scipy.stats.binomtest(
+        int(row['alt_count']), int(row['total_count']),
+        p=sequencing_base_call_error, alternative='greater').pvalue
         
     snp_counts_df['prob_no_B'] = snp_counts_df.apply(binom_test_alt, axis=1)
 

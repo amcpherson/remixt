@@ -4,7 +4,7 @@
  * Processes for haplotype inference.
  */
 
-include { remixt_args } from './utils'
+include { remixt_args; id_path_args } from './utils'
 
 
 /*
@@ -41,14 +41,14 @@ process infer_snp_genotype_from_tumour {
     tag "${chromosome}"
 
     input:
-    val tumour_seqdata_args   // list of "tumour_id:path" strings
+    tuple val(tumour_ids), path(tumour_seqdata)
     val chromosome
 
     output:
     tuple val(chromosome), path("snp_genotype.${chromosome}.tsv")
 
     script:
-    def args_str = tumour_seqdata_args.join(' ')
+    def args_str = id_path_args(tumour_ids, tumour_seqdata)
     """
     infer_snp_genotype_from_tumour.py \
         --chromosome ${chromosome} \

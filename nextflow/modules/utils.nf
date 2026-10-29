@@ -31,6 +31,17 @@ def remixt_param_names() {
 
 
 /*
+ * "id:path" command line args from a list of ids and a matching list of staged files.
+ */
+def id_path_args(ids, files) {
+    def file_list = files instanceof List ? files : [files]
+    [ids, file_list].transpose()
+        .collect { pair -> "${pair[0]}:${pair[1]}" }
+        .join(' ')
+}
+
+
+/*
  * Command line options for the remixt params of a script.
  */
 def remixt_args(String script) {

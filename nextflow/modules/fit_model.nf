@@ -4,7 +4,7 @@
  * Processes for model fitting.
  */
 
-include { remixt_args } from './utils'
+include { remixt_args; id_path_args } from './utils'
 
 
 /*
@@ -91,13 +91,13 @@ process collate_results {
     tag "${tumour_id}"
 
     input:
-    tuple val(tumour_id), path(experiment), path(init_results), val(fit_args)
+    tuple val(tumour_id), path(experiment), path(init_results), val(init_ids), path(fit_results)
 
     output:
     tuple val(tumour_id), path("${tumour_id}.results.h5")
 
     script:
-    def args_str = fit_args.join(' ')
+    def args_str = id_path_args(init_ids, fit_results)
     """
     collate_results.py \
         --experiment ${experiment} \

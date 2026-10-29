@@ -39,10 +39,10 @@ workflow prepare_counts {
     // out: [tumour_id, allele_counts.tsv]
 
     // 3. Phase segments across all tumours (merge then split)
-    // Collect all allele counts as "tumour_id:path" args
+    // Collect all allele counts, sorted by tumour id for a stable task hash
     ch_tumour_allele_args = haplotype_allele_readcount.out
-        .map { tumour_id, allele_counts -> "${tumour_id}:${allele_counts}" }
-        .collect()
+        .toSortedList { a, b -> a[0] <=> b[0] }
+        .map { pairs -> tuple(pairs.collect { pair -> pair[0] }, pairs.collect { pair -> pair[1] }) }
 
     phase_segments(ch_tumour_allele_args)
     // out: list of phased.{tumour_id}.tsv files

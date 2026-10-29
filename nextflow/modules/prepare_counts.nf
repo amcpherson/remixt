@@ -4,7 +4,7 @@
  * Processes for read count preparation.
  */
 
-include { remixt_args } from './utils'
+include { remixt_args; id_path_args } from './utils'
 
 
 process segment_readcount {
@@ -61,13 +61,13 @@ process phase_segments {
     label 'mem_medium'
 
     input:
-    val tumour_allele_args   // list of "tumour_id:path" strings
+    tuple val(tumour_ids), path(allele_counts)
 
     output:
     path "phased.*.tsv"
 
     script:
-    def args_str = tumour_allele_args.join(' ')
+    def args_str = id_path_args(tumour_ids, allele_counts)
     """
     phase_segments.py \
         --output_prefix phased \

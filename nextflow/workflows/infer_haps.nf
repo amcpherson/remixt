@@ -56,10 +56,10 @@ workflow infer_haps {
 
     } else {
         // --- Tumour-based genotyping ---
-        // Collect all tumour seqdata as "tumour_id:path" strings
+        // Collect all tumour seqdata, sorted by sample id for a stable task hash
         ch_tumour_args = ch_seqdata
-            .map { sample_id, seqdata -> "${sample_id}:${seqdata}" }
-            .collect()
+            .toSortedList { a, b -> a[0] <=> b[0] }
+            .map { pairs -> tuple(pairs.collect { pair -> pair[0] }, pairs.collect { pair -> pair[1] }) }
 
         // Run per chromosome
         infer_snp_genotype_from_tumour(
