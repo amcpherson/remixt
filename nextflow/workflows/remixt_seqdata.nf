@@ -3,7 +3,6 @@
 /*
  * Sub-workflow: remixt_seqdata
  *
- * Mirrors create_remixt_seqdata_workflow from pypeliner.
  * Orchestrates the full pipeline from seqdata files through to final results:
  *   create_segments -> infer_haps -> prepare_counts -> calc_bias
  *   -> create_experiment -> ploidy_plots -> fit_model
@@ -11,10 +10,11 @@
  * Input:
  *   ch_seqdata       - [sample_id, seqdata.h5] tuples (all samples)
  *   breakpoints      - path to breakpoints file
- *   ref_data_dir     - val: path to reference data directory
  *   ch_chromosomes   - channel of chromosome names
  *   normal_id        - val: normal sample id or 'none'
- *   config           - remixt config JSON file
+ *   ref              - map of reference files
+ *   ch_phasing       - [chromosome, map of phasing reference files] tuples
+ *   phasing_method   - val: shapeit4 (GRCh38) or shapeit2 (GRCh37)
  *
  * Output:
  *   results          - [tumour_id, results.h5] tuples
@@ -34,10 +34,11 @@ workflow remixt_seqdata {
     take:
     ch_seqdata         // channel: [sample_id, seqdata.h5]
     breakpoints        // path
-    ref_data_dir       // val
     ch_chromosomes     // channel: chromosome names
     normal_id          // val: string or 'none'
-    config             // path: remixt config JSON
+    ref                // map: reference files
+    ch_phasing         // channel: [chromosome, map of phasing reference files]
+    phasing_method     // val: shapeit4 or shapeit2
 
     main:
 
@@ -50,16 +51,17 @@ workflow remixt_seqdata {
     }
 
     // --- 1. Create segments ---
-    create_segments(ref_data_dir, breakpoints, config)
+    create_segments(ref.genome_fai, ref.gap_table, breakpoints)
     segments = create_segments.out   // path: segments.tsv
 
     // --- 2. Infer haplotypes ---
     infer_haps(
         ch_seqdata,
-        ref_data_dir,
         ch_chromosomes,
         normal_id,
-        config,
+        ref,
+        ch_phasing,
+        phasing_method,
     )
     haplotypes = infer_haps.out.haplotypes   // path: haplotypes.tsv
 
@@ -68,7 +70,6 @@ workflow remixt_seqdata {
         ch_tumour_seqdata,
         segments,
         haplotypes,
-        config,
     )
     // out.rawcounts: [tumour_id, counts.tsv]
 
@@ -76,12 +77,10 @@ workflow remixt_seqdata {
     calc_bias(
         ch_tumour_seqdata,
         prepare_counts.out.rawcounts,
-        ref_data_dir,
-        config,
+        ref,
     )
     // out.segment_lengths: [tumour_id, segment_lengths.tsv]
-    // Note: in pypeliner this replaces the segment file with biased lengths.
-    // Here we use segment_lengths as the final "counts" input for experiments.
+    // segment_lengths is the final "counts" input for experiments.
 
     // --- 5. Create experiment ---
     create_experiment(
@@ -93,13 +92,11 @@ workflow remixt_seqdata {
     // --- 6. Ploidy analysis plots ---
     ploidy_analysis_plots(
         create_experiment.out,
-        config,
     )
 
     // --- 7. Fit model ---
     fit_model(
         create_experiment.out,
-        config,
     )
     // out.results: [tumour_id, results.h5]
 

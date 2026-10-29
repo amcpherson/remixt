@@ -1,22 +1,25 @@
 #!/usr/bin/env python
 """Create genomic segments from reference data and breakpoints."""
 
-import json
 import click
 import remixt.analysis.segment
+import remixt.defaults
 
 
 @click.command()
-@click.option('--ref_data_dir', required=True, help='Reference data directory')
+@click.option('--genome_fai', required=True, help='Reference genome .fai file')
+@click.option('--gap_table', required=True, help='UCSC gap table')
 @click.option('--breakpoints', default=None, help='Input breakpoints TSV file')
 @click.option('--output', required=True, help='Output segments TSV file')
-@click.option('--config', type=click.File(), required=True, help='remixt config JSON file')
-def main(ref_data_dir, breakpoints, output, config):
-    cfg = json.load(config)
-
+@click.option('--chromosomes', default=','.join(remixt.defaults.chromosomes), show_default=True,
+              callback=lambda ctx, param, value: value.split(','), help='Comma separated chromosomes')
+@click.option('--chr_name_prefix', default=remixt.defaults.chr_name_prefix, show_default=True)
+@click.option('--segment_length', type=int, default=remixt.defaults.segment_length, show_default=True)
+def main(genome_fai, gap_table, breakpoints, output, **kwargs):
     remixt.analysis.segment.create_segments(
-        output, cfg, ref_data_dir,
+        output, genome_fai, gap_table,
         breakpoint_filename=breakpoints,
+        **kwargs,
     )
 
 

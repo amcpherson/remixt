@@ -127,6 +127,9 @@ max_copy_number                             = 12
 # parameter optimization
 tumour_mix_fractions                        = [0.45, 0.3, 0.2, 0.1]
 
+# Random seed for gc sampling, model initialization and model fitting
+random_seed                                 = 1234
+
 # Maximum and minimum ploidy of initial haploid depth parameters
 # Ploidy selection can be performed by setting min and max ploidy to a small range
 min_ploidy                                  = 1.5

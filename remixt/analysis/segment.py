@@ -1,30 +1,39 @@
 import pandas as pd
 import numpy as np
 
-import remixt.config
+import remixt.defaults
 import remixt.seqdataio
 import remixt.segalg
 import remixt.utils
 
 
-def create_segments(segment_filename, config, ref_data_dir, breakpoint_filename=None):
+def create_segments(
+    segment_filename,
+    genome_fai_filename,
+    gap_table_filename,
+    chromosomes=remixt.defaults.chromosomes,
+    chr_name_prefix=remixt.defaults.chr_name_prefix,
+    segment_length=remixt.defaults.segment_length,
+    breakpoint_filename=None,
+):
     """ Create segments file based on breakpoints and regular segmentation.
 
     Args:
         segment_filename (str): file to which segments will be written
-        config (dict): relavent shapeit parameters including thousand genomes paths
-        ref_data_dir (str): reference data directory
+        genome_fai_filename (str): reference genome .fai file
+        gap_table_filename (str): ucsc gap table
 
     KwArgs:
+        chromosomes (list of str): chromosomes to segment
+        chr_name_prefix (str): '' or 'chr', checked against chromosome names
+        segment_length (int): length of regular segments
         breakpoint_filename (str): file containing breakpoints
 
     """
 
-    segment_length = remixt.config.get_param(config, 'segment_length')
-    chromosomes = remixt.config.get_chromosomes(config, ref_data_dir)
-    chromosome_lengths = remixt.config.get_chromosome_lengths(config, ref_data_dir)
-    gap_table_filename = remixt.config.get_filename(config, ref_data_dir, 'gap_table')
-    chr_name_prefix = remixt.config.get_param(config, 'chr_name_prefix')
+    chromosome_lengths = remixt.utils.read_selected_chromosome_lengths(
+        genome_fai_filename, chromosomes, chr_name_prefix=chr_name_prefix)
+    chromosomes = list(chromosome_lengths.keys())
 
     gap_table_columns = [
         'bin',

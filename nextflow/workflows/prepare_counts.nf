@@ -3,7 +3,6 @@
 /*
  * Sub-workflow: prepare_counts
  *
- * Mirrors create_prepare_counts_workflow from pypeliner.
  * Computes segment and allele read counts, phases across tumours,
  * and produces combined count tables per tumour.
  *
@@ -11,7 +10,6 @@
  *   ch_tumour_seqdata  - [tumour_id, seqdata.h5] tuples
  *   segments           - path to segments.tsv
  *   haplotypes         - path to haplotypes.tsv
- *   config             - remixt config JSON file
  *
  * Output:
  *   rawcounts          - [tumour_id, counts.tsv] tuples
@@ -29,16 +27,15 @@ workflow prepare_counts {
     ch_tumour_seqdata    // channel: [tumour_id, seqdata.h5]
     segments             // path
     haplotypes           // path
-    config               // path: remixt config JSON
 
     main:
 
     // 1. Count reads per segment, per tumour
-    segment_readcount(ch_tumour_seqdata, segments, config)
+    segment_readcount(ch_tumour_seqdata, segments)
     // out: [tumour_id, segment_counts.tsv]
 
     // 2. Count allele reads per segment per tumour
-    haplotype_allele_readcount(ch_tumour_seqdata, segments, haplotypes, config)
+    haplotype_allele_readcount(ch_tumour_seqdata, segments, haplotypes)
     // out: [tumour_id, allele_counts.tsv]
 
     // 3. Phase segments across all tumours (merge then split)

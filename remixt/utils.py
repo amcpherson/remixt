@@ -7,7 +7,7 @@ import collections
 import bisect
 import numpy as np
 import pandas as pd
-import pypeliner.commandline
+import subprocess
 
 
 class TempRandomSeed(object):
@@ -77,6 +77,25 @@ def read_chromosome_lengths(genome_fai_filename):
             length = int(row[1])
             chromosome_lengths[chromosome] = length
     return chromosome_lengths
+
+
+def read_selected_chromosome_lengths(genome_fai_filename, chromosomes, chr_name_prefix=''):
+    """ Read lengths of a selection of chromosomes from a .fai file, in .fai order
+    """
+    chromosome_lengths = read_chromosome_lengths(genome_fai_filename)
+
+    # Check chromosomes against chromosome lengths from .fai file
+    assert set(chromosomes).issubset(set(chromosome_lengths.keys()))
+
+    # Validate chr name prefix
+    if chr_name_prefix == 'chr':
+        assert all(c.startswith('chr') for c in chromosomes)
+    elif chr_name_prefix == '':
+        assert not any(c.startswith('chr') for c in chromosomes)
+    else:
+        raise ValueError(f'unrecognized chr_name_prefix {chr_name_prefix}')
+
+    return {c: l for c, l in chromosome_lengths.items() if c in chromosomes}
 
 
 def merge_files(output_filename, *input_filenames):
@@ -186,16 +205,24 @@ class BreakpointDatabase(object):
         return sorted(matched_ids_bypos)[0][1]
 
 
+def execute(*args):
+    """ Execute a command line, raising subprocess.CalledProcessError on failure
+
+    Empty string arguments are dropped, allowing optional flags to be passed as ''.
+    """
+    subprocess.run([str(arg) for arg in args if arg != ''], check=True)
+
+
 def wget_gunzip(url, filename):
     temp_filename = filename + '.tmp'
-    pypeliner.commandline.execute('wget', url, '-c', '-O', temp_filename + '.gz')
-    pypeliner.commandline.execute('gunzip', temp_filename + '.gz')
+    execute('wget', url, '-c', '-O', temp_filename + '.gz')
+    execute('gunzip', temp_filename + '.gz')
     os.rename(temp_filename, filename)
 
 
 def wget(url, filename):
     temp_filename = filename + '.tmp'
-    pypeliner.commandline.execute('wget', url, '-c', '-O', temp_filename)
+    execute('wget', url, '-c', '-O', temp_filename)
     os.rename(temp_filename, filename)
 
 

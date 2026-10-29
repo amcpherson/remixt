@@ -2,8 +2,9 @@
 
 /*
  * Processes for read count preparation.
- * Mirrors create_prepare_counts_workflow from pypeliner.
  */
+
+include { remixt_args } from './utils'
 
 
 process segment_readcount {
@@ -13,7 +14,6 @@ process segment_readcount {
     input:
     tuple val(tumour_id), path(seqdata)
     path segments
-    path config
 
     output:
     tuple val(tumour_id), path("${tumour_id}.segment_counts.tsv")
@@ -24,7 +24,7 @@ process segment_readcount {
         --segments ${segments} \
         --seqdata ${seqdata} \
         --output ${tumour_id}.segment_counts.tsv \
-        --config ${config}
+        ${remixt_args('segment_readcount')}
     """
 }
 
@@ -37,7 +37,6 @@ process haplotype_allele_readcount {
     tuple val(tumour_id), path(seqdata)
     path segments
     path haplotypes
-    path config
 
     output:
     tuple val(tumour_id), path("${tumour_id}.allele_counts.tsv")
@@ -49,7 +48,7 @@ process haplotype_allele_readcount {
         --seqdata ${seqdata} \
         --haplotypes ${haplotypes} \
         --output ${tumour_id}.allele_counts.tsv \
-        --config ${config}
+        ${remixt_args('haplotype_allele_readcount')}
     """
 }
 

@@ -3,25 +3,36 @@ import pandas as pd
 import statsmodels.api as sm
 import scipy.stats
 
-import remixt.config
+import remixt.defaults
 import remixt.segalg
 import remixt.seqdataio
 import remixt.utils
 
 
-def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config, ref_data_dir):
+def sample_gc(
+    gc_samples_filename,
+    seqdata_filename,
+    fragment_length,
+    genome_fasta_filename,
+    genome_fai_filename,
+    mappability_filename,
+    chromosomes=remixt.defaults.chromosomes,
+    chr_name_prefix=remixt.defaults.chr_name_prefix,
+    sample_gc_num_positions=remixt.defaults.sample_gc_num_positions,
+    gc_position_offset=remixt.defaults.gc_position_offset,
+    filter_duplicates=remixt.defaults.filter_duplicates,
+    map_qual_threshold=remixt.defaults.map_qual_threshold,
+    random_seed=remixt.defaults.random_seed,
+):
 
-    chromosomes = remixt.config.get_chromosomes(config, ref_data_dir)
-    chromosome_lengths = remixt.config.get_chromosome_lengths(config, ref_data_dir)
-    num_samples = remixt.config.get_param(config, 'sample_gc_num_positions')
-    position_offset = remixt.config.get_param(config, 'gc_position_offset')
-    genome_fasta = remixt.config.get_filename(config, ref_data_dir, 'genome_fasta')
-    mappability_filename = remixt.config.get_filename(config, ref_data_dir, 'mappability')
-    filter_duplicates = remixt.config.get_param(config, 'filter_duplicates')
-    map_qual_threshold = remixt.config.get_param(config, 'map_qual_threshold')
+    np.random.seed(random_seed)
+
+    chromosome_lengths = remixt.utils.read_selected_chromosome_lengths(
+        genome_fai_filename, chromosomes, chr_name_prefix=chr_name_prefix)
+    chromosomes = list(chromosome_lengths.keys())
 
     fragment_length = int(fragment_length)
-    gc_window = fragment_length - 2 * position_offset
+    gc_window = fragment_length - 2 * gc_position_offset
 
     chrom_info = pd.DataFrame({'chrom_length':chromosome_lengths})
     chrom_info['chrom_end'] = chrom_info['chrom_length'].cumsum()
@@ -29,12 +40,12 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config, re
 
     # Sample random genomic positions from concatenated genome
     genome_length = chrom_info['chrom_length'].sum()
-    sample_pos = np.sort(np.random.randint(0, genome_length, num_samples))
+    sample_pos = np.sort(np.random.randint(0, genome_length, sample_gc_num_positions))
 
     # Calculate GC/mappability for each position
     sample_gc_count = np.zeros(sample_pos.shape)
     sample_mappability = np.ones(sample_pos.shape)
-    for chrom_id, sequence in remixt.utils.read_sequences(genome_fasta):
+    for chrom_id, sequence in remixt.utils.read_sequences(genome_fasta_filename):
 
         # Ignore extraneous chromosomes
         if chrom_id not in chromosomes:
@@ -65,7 +76,7 @@ def sample_gc(gc_samples_filename, seqdata_filename, fragment_length, config, re
         sample_mappability[chrom_sample_idx] *= mappability[sample_chrom_pos]
 
         # Calculate last position in window
-        chrom_window_end = sample_chrom_pos + fragment_length - position_offset - 1
+        chrom_window_end = sample_chrom_pos + fragment_length - gc_position_offset - 1
 
         # Add the gc count for filtered positions
         sample_gc_count[chrom_sample_idx] += gc_count[chrom_window_end]
@@ -216,28 +227,33 @@ class GCCurve(object):
         return self.cache[l]
 
 
-def gc_map_bias(segment_filename, fragment_mean, fragment_stddev, gc_dist_filename, bias_filename, config, ref_data_dir):
+def gc_map_bias(segment_filename, fragment_mean, fragment_stddev, gc_dist_filename, bias_filename, genome_fasta_filename, mappability_filename, **kwargs):
     """ Calculate per segment GC and mappability biases
+
+    KwArgs are passed to calculate_gc_map_bias.
     """
     segments = pd.read_csv(segment_filename, sep='\t', converters={'chromosome':str})
 
-    biases = calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_filename, config, ref_data_dir)
+    biases = calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_filename, genome_fasta_filename, mappability_filename, **kwargs)
 
     biases.to_csv(bias_filename, sep='\t', index=False)
 
 
-def calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_filename, config, ref_data_dir):
+def calculate_gc_map_bias(
+    segments,
+    fragment_mean,
+    fragment_stddev,
+    gc_dist_filename,
+    genome_fasta_filename,
+    mappability_filename,
+    do_gc_correction=remixt.defaults.do_gc_correction,
+    do_mappability_correction=remixt.defaults.do_mappability_correction,
+    gc_position_offset=remixt.defaults.gc_position_offset,
+    map_qual_threshold=remixt.defaults.map_qual_threshold,
+    mappability_length=remixt.defaults.mappability_length,
+):
     """ Calculate per segment GC and mappability biases
     """
-    do_gc = remixt.config.get_param(config, 'do_gc_correction')
-    do_map = remixt.config.get_param(config, 'do_mappability_correction')
-    
-    position_offset = remixt.config.get_param(config, 'gc_position_offset')
-    genome_fasta = remixt.config.get_filename(config, ref_data_dir, 'genome_fasta')
-    mappability_filename = remixt.config.get_filename(config, ref_data_dir, 'mappability')
-    map_qual_threshold = remixt.config.get_param(config, 'map_qual_threshold')
-    read_length = remixt.config.get_param(config, 'mappability_length')
-
     gc_dist = GCCurve()
     gc_dist.read(gc_dist_filename)
 
@@ -248,14 +264,14 @@ def calculate_gc_map_bias(segments, fragment_mean, fragment_stddev, gc_dist_file
     fragment_step = 10
 
     for chromosome, chrom_seg in segments.groupby('chromosome', sort=False):
-        gc_cumsum = read_gc_cumsum(genome_fasta, chromosome)
+        gc_cumsum = read_gc_cumsum(genome_fasta_filename, chromosome)
         chromosome_length = gc_cumsum.shape[0]
         mappability = read_mappability_indicator(mappability_filename, chromosome, chromosome_length, map_qual_threshold)
 
         for idx, (start, end) in chrom_seg[['start', 'end']].iterrows():
             segments.loc[idx, 'bias'] = calculate_segment_gc_map_bias(gc_cumsum[start:end], mappability[start:end],
-                gc_dist, fragment_dist, fragment_min, fragment_max, fragment_step, position_offset, read_length,
-                do_gc=do_gc, do_map=do_map)
+                gc_dist, fragment_dist, fragment_min, fragment_max, fragment_step, gc_position_offset, mappability_length,
+                do_gc=do_gc_correction, do_map=do_mappability_correction)
 
     return segments
 

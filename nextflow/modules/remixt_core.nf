@@ -4,32 +4,16 @@
  * Core processes: segments, experiment creation, ploidy plots.
  */
 
-
-/*
- * Write the remixt config, built from params, that is passed to each remixt step.
- */
-process write_config {
-
-    input:
-    val config
-
-    output:
-    path "remixt_config.json"
-
-    exec:
-    task.workDir.resolve('remixt_config.json').text = groovy.json.JsonOutput.prettyPrint(
-        groovy.json.JsonOutput.toJson(config)
-    )
-}
+include { remixt_args } from './utils'
 
 
 process create_segments {
     label 'mem_medium'
 
     input:
-    val ref_data_dir
+    path genome_fai
+    path gap_table
     path breakpoints
-    path config
 
     output:
     path "segments.tsv"
@@ -37,10 +21,11 @@ process create_segments {
     script:
     """
     create_segments.py \
-        --ref_data_dir ${ref_data_dir} \
+        --genome_fai ${genome_fai} \
+        --gap_table ${gap_table} \
         --breakpoints ${breakpoints} \
         --output segments.tsv \
-        --config ${config}
+        ${remixt_args('create_segments')}
     """
 }
 
@@ -72,7 +57,6 @@ process ploidy_analysis_plots {
 
     input:
     tuple val(tumour_id), path(experiment)
-    path config
 
     output:
     tuple val(tumour_id), path("${tumour_id}.ploidy_plots.pdf")
@@ -82,6 +66,6 @@ process ploidy_analysis_plots {
     ploidy_analysis_plots.py \
         --experiment ${experiment} \
         --output ${tumour_id}.ploidy_plots.pdf \
-        --config ${config}
+        ${remixt_args('ploidy_analysis_plots')}
     """
 }

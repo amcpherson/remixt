@@ -2,8 +2,9 @@
 
 /*
  * Processes for haplotype inference.
- * Mirrors create_infer_haps_workflow from pypeliner.
  */
+
+include { remixt_args } from './utils'
 
 
 /*
@@ -16,7 +17,6 @@ process infer_snp_genotype_from_normal {
     input:
     path normal_seqdata
     val chromosome
-    path config
 
     output:
     tuple val(chromosome), path("snp_genotype.${chromosome}.tsv")
@@ -27,7 +27,7 @@ process infer_snp_genotype_from_normal {
         --seqdata ${normal_seqdata} \
         --chromosome ${chromosome} \
         --output snp_genotype.${chromosome}.tsv \
-        --config ${config}
+        ${remixt_args('infer_snp_genotype_from_normal')}
     """
 }
 
@@ -43,7 +43,6 @@ process infer_snp_genotype_from_tumour {
     input:
     val tumour_seqdata_args   // list of "tumour_id:path" strings
     val chromosome
-    path config
 
     output:
     tuple val(chromosome), path("snp_genotype.${chromosome}.tsv")
@@ -54,36 +53,66 @@ process infer_snp_genotype_from_tumour {
     infer_snp_genotype_from_tumour.py \
         --chromosome ${chromosome} \
         --output snp_genotype.${chromosome}.tsv \
-        --config ${config} \
+        ${remixt_args('infer_snp_genotype_from_tumour')} \
         ${args_str}
     """
 }
 
 
 /*
- * Infer haplotype phasing for a single chromosome.
+ * Infer haplotype phasing for a single GRCh38 chromosome with SHAPEIT4.
  */
-process infer_haps {
+process infer_haps_shapeit4 {
     label 'mem_medium'
     tag "${chromosome}"
 
     input:
-    tuple val(chromosome), path(snp_genotype)
-    val ref_data_dir
-    path config
+    tuple val(chromosome), path(snp_genotype), path(bcf_reference), path(bcf_index), path(genetic_map)
+    path snp_positions
 
     output:
     tuple val(chromosome), path("haps.${chromosome}.tsv")
 
     script:
     """
-    infer_haps.py \
+    infer_haps_shapeit4.py \
         --snp_genotype ${snp_genotype} \
         --chromosome ${chromosome} \
-        --ref_data_dir ${ref_data_dir} \
+        --snp_positions ${snp_positions} \
+        --bcf_reference ${bcf_reference} \
+        --genetic_map ${genetic_map} \
         --output haps.${chromosome}.tsv \
         --temp_directory "\${PWD}/shapeit_temp" \
-        --config ${config}
+        ${remixt_args('infer_haps_shapeit4')}
+    """
+}
+
+
+/*
+ * Infer haplotype phasing for a single GRCh37 chromosome with SHAPEIT2.
+ */
+process infer_haps_shapeit2 {
+    label 'mem_medium'
+    tag "${chromosome}"
+
+    input:
+    tuple val(chromosome), path(snp_genotype), path(genetic_map), path(haplotypes), path(legend), path(sample)
+
+    output:
+    tuple val(chromosome), path("haps.${chromosome}.tsv")
+
+    script:
+    """
+    infer_haps_shapeit2.py \
+        --snp_genotype ${snp_genotype} \
+        --chromosome ${chromosome} \
+        --genetic_map ${genetic_map} \
+        --haplotypes ${haplotypes} \
+        --legend ${legend} \
+        --sample ${sample} \
+        --output haps.${chromosome}.tsv \
+        --temp_directory "\${PWD}/shapeit_temp" \
+        ${remixt_args('infer_haps_shapeit2')}
     """
 }
 

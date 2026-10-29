@@ -4,20 +4,19 @@
 Accepts fit result files as init_id:path pairs.
 """
 
-import json
 import click
 import remixt.analysis.pipeline
+import remixt.defaults
 
 
 @click.command()
 @click.option('--experiment', required=True, help='Input experiment pickle file')
 @click.option('--init_results', required=True, help='Input init results HDF5 file')
 @click.option('--output', required=True, help='Output collated HDF5 file')
-@click.option('--config', type=click.File(), required=True, help='remixt config JSON file')
+@click.option('--max_prop_diverge', type=float, default=remixt.defaults.max_prop_diverge, show_default=True)
 @click.argument('fit_results_args', nargs=-1, required=True)
-def main(experiment, init_results, output, config, fit_results_args):
+def main(experiment, init_results, output, fit_results_args, **kwargs):
     """FIT_RESULTS_ARGS: init_id:path pairs for fit result files"""
-    cfg = json.load(config)
 
     # Parse init_id:path pairs
     fit_results_filenames = {}
@@ -26,7 +25,7 @@ def main(experiment, init_results, output, config, fit_results_args):
         fit_results_filenames[int(init_id)] = path
 
     remixt.analysis.pipeline.collate(
-        output, experiment, init_results, fit_results_filenames, cfg,
+        output, experiment, init_results, fit_results_filenames, **kwargs,
     )
 
 

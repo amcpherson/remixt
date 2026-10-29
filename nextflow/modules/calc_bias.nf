@@ -2,8 +2,9 @@
 
 /*
  * Processes for GC/mappability bias calculation.
- * Mirrors create_calc_bias_workflow from pypeliner.
  */
+
+include { remixt_args } from './utils'
 
 
 process calc_fragment_stats {
@@ -12,7 +13,6 @@ process calc_fragment_stats {
 
     input:
     tuple val(tumour_id), path(seqdata)
-    path config
 
     output:
     tuple val(tumour_id), path("${tumour_id}.fragstats.json")
@@ -22,7 +22,7 @@ process calc_fragment_stats {
     calc_fragment_stats.py \
         --seqdata ${seqdata} \
         --output ${tumour_id}.fragstats.json \
-        --config ${config}
+        ${remixt_args('calc_fragment_stats')}
     """
 }
 
@@ -33,8 +33,9 @@ process sample_gc {
 
     input:
     tuple val(tumour_id), path(seqdata), path(fragstats)
-    val ref_data_dir
-    path config
+    path genome_fasta
+    path genome_fai
+    path mappability
 
     output:
     tuple val(tumour_id), path("${tumour_id}.gcsamples.tsv")
@@ -45,9 +46,11 @@ process sample_gc {
     sample_gc.py \
         --seqdata ${seqdata} \
         --fragment_mean \$FRAG_MEAN \
-        --ref_data_dir ${ref_data_dir} \
+        --genome_fasta ${genome_fasta} \
+        --genome_fai ${genome_fai} \
+        --mappability ${mappability} \
         --output ${tumour_id}.gcsamples.tsv \
-        --config ${config}
+        ${remixt_args('sample_gc')}
     """
 }
 
@@ -97,8 +100,8 @@ process gc_map_bias {
 
     input:
     tuple val(tumour_id), val(chunk_idx), path(segment_chunk), path(fragstats), path(gc_dist)
-    val ref_data_dir
-    path config
+    path genome_fasta
+    path mappability
 
     output:
     tuple val(tumour_id), path("${tumour_id}.bias.${chunk_idx}.tsv")
@@ -109,9 +112,10 @@ process gc_map_bias {
         --segments ${segment_chunk} \
         --fragstats ${fragstats} \
         --gc_dist ${gc_dist} \
-        --ref_data_dir ${ref_data_dir} \
+        --genome_fasta ${genome_fasta} \
+        --mappability ${mappability} \
         --output ${tumour_id}.bias.${chunk_idx}.tsv \
-        --config ${config}
+        ${remixt_args('gc_map_bias')}
     """
 }
 

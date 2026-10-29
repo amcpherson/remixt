@@ -3,7 +3,7 @@ import itertools
 import numpy as np
 import pandas as pd
 
-import remixt.config
+import remixt.defaults
 import remixt.cn_model
 import remixt.analysis.experiment
 import remixt.analysis.readdepth
@@ -12,17 +12,15 @@ import remixt.analysis.readdepth
 def init(
     init_results_filename,
     experiment_filename,
-    config,
+    min_ploidy=remixt.defaults.min_ploidy,
+    max_ploidy=remixt.defaults.max_ploidy,
+    h_normal=remixt.defaults.h_normal,
+    h_tumour=remixt.defaults.h_tumour,
+    tumour_mix_fractions=remixt.defaults.tumour_mix_fractions,
+    divergence_weights=remixt.defaults.divergence_weights,
+    max_copy_number=remixt.defaults.max_copy_number,
+    random_seed=remixt.defaults.random_seed,
 ):
-    min_ploidy = remixt.config.get_param(config, 'min_ploidy')
-    max_ploidy = remixt.config.get_param(config, 'max_ploidy')
-    h_normal = remixt.config.get_param(config, 'h_normal')
-    h_tumour = remixt.config.get_param(config, 'h_tumour')
-    tumour_mix_fractions = remixt.config.get_param(config, 'tumour_mix_fractions')
-    divergence_weights = remixt.config.get_param(config, 'divergence_weights')
-    max_copy_number = remixt.config.get_param(config, 'max_copy_number')
-    random_seed = config.get('random_seed', 1234)
-
     with open(experiment_filename, 'rb') as f:
         experiment = pickle.load(f)
 
@@ -113,18 +111,36 @@ def fit_task(
     results_filename,
     experiment_filename,
     init_params,
-    config,
+    **kwargs,
 ):
+    """ Fit the model for a single initialization, kwargs are passed to fit.
+    """
     with open(experiment_filename, 'rb') as f:
         experiment = pickle.load(f)
         
-    fit_results = fit(experiment, init_params, config)
+    fit_results = fit(experiment, init_params, **kwargs)
     
     with open(results_filename, 'wb') as f:
         pickle.dump(fit_results, f)
 
 
-def fit(experiment, init_params, config):
+def fit(
+    experiment,
+    init_params,
+    is_female=remixt.defaults.is_female,
+    normal_contamination=remixt.defaults.normal_contamination,
+    max_copy_number=remixt.defaults.max_copy_number,
+    likelihood_min_segment_length=remixt.defaults.likelihood_min_segment_length,
+    likelihood_min_proportion_genotyped=remixt.defaults.likelihood_min_proportion_genotyped,
+    num_em_iter=remixt.defaults.num_em_iter,
+    num_update_iter=remixt.defaults.num_update_iter,
+    disable_breakpoints=remixt.defaults.disable_breakpoints,
+    do_h_update=remixt.defaults.do_h_update,
+    random_seed=remixt.defaults.random_seed,
+    optimal_initialization=False,
+):
+    np.random.seed(random_seed)
+
     h_init = np.array([
         init_params['h_normal'],
         init_params['h_tumour'] * init_params['mix_frac'],
@@ -133,20 +149,10 @@ def fit(experiment, init_params, config):
     divergence_weight = init_params['divergence_weight']
     max_depth = init_params['max_depth']
 
-    normal_contamination = remixt.config.get_param(config, 'normal_contamination')
-    max_copy_number = remixt.config.get_param(config, 'max_copy_number')
-    min_segment_length = remixt.config.get_param(config, 'likelihood_min_segment_length')
-    min_proportion_genotyped = remixt.config.get_param(config, 'likelihood_min_proportion_genotyped')
-    num_em_iter = remixt.config.get_param(config, 'num_em_iter')
-    num_update_iter = remixt.config.get_param(config, 'num_update_iter')
-    disable_breakpoints = remixt.config.get_param(config, 'disable_breakpoints')
-    is_female = remixt.config.get_param(config, 'is_female')
-    do_h_update = remixt.config.get_param(config, 'do_h_update')
-
     # For convergence testing purposes, provide optimal initialization
     # based on simulated breakpoint copy number
     breakpoint_init = None
-    if config.get('optimal_initialization', False):
+    if optimal_initialization:
         breakpoint_init = experiment.genome_mixture.genome_collection.collapsed_breakpoint_copy_number()
         
         for bp in experiment.genome_mixture.detected_breakpoints.values():
@@ -176,8 +182,8 @@ def fit(experiment, init_params, config):
         max_copy_number=max_copy_number,
         normal_contamination=normal_contamination,
         divergence_weight=divergence_weight,
-        min_segment_length=min_segment_length,
-        min_proportion_genotyped=min_proportion_genotyped,
+        min_segment_length=likelihood_min_segment_length,
+        min_proportion_genotyped=likelihood_min_proportion_genotyped,
         max_depth=max_depth,
         normal_copies=normal_copies,
         disable_breakpoints=disable_breakpoints,
@@ -250,8 +256,7 @@ def store_fit_results(store, experiment, fit_results, key_prefix):
     store[key_prefix + '/brk_cn'] = brk_cn_table
 
 
-def store_optimal_solution(stats, store, config):
-    max_prop_diverge = remixt.config.get_param(config, 'max_prop_diverge')
+def store_optimal_solution(stats, store, max_prop_diverge=remixt.defaults.max_prop_diverge):
 
     if (stats['proportion_divergent'] < max_prop_diverge).any():
         stats = stats[stats['proportion_divergent'] < max_prop_diverge].copy()
@@ -264,7 +269,14 @@ def store_optimal_solution(stats, store, config):
     store['/brk_cn'] = store[key_prefix + '/brk_cn']
 
 
-def collate(collate_filename, experiment_filename, init_results_filename, fit_results_filenames, config):
+def collate(
+    collate_filename,
+    experiment_filename,
+    init_results_filename,
+    fit_results_filenames,
+    max_prop_diverge=remixt.defaults.max_prop_diverge,
+):
+    fit_results_filenames = dict(sorted(fit_results_filenames.items()))
 
     # Extract the statistics for selecting solutions
     stats_table = list()
@@ -290,4 +302,4 @@ def collate(collate_filename, experiment_filename, init_results_filename, fit_re
             results = pickle.load(open(results_filename, 'rb'))
             store_fit_results(collated, experiment, results, 'solutions/solution_{0}'.format(init_id))
 
-        store_optimal_solution(stats_table, collated, config)
+        store_optimal_solution(stats_table, collated, max_prop_diverge=max_prop_diverge)

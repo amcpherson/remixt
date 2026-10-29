@@ -59,15 +59,7 @@ Download the reference data and build the required indexes:
 
 ### Mappability file
 
-Additionally, ReMixT requires a mappability file to be generated.  We have provided a workflow for generating a mappability file based on `bwa` alignments, for other aligners, you may want to create your own mappability workflow, see `remixt/mappability/bwa/workflow.py` as an example.
-
-To create a mappability file for `bwa`, run:
-
-    remixt mappability_bwa $ref_data_dir
-
-Note that this workflow will take a considerable amount of time and it is recommended you run this part of ReMixT setup on a cluster or multicore machine.
-
-For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
+Additionally, ReMixT requires a mappability file in `$ref_data_dir`, see the test dataset section below for an example of retrieving a precomputed mappability file.
 
 ## Running ReMixT
 
@@ -102,7 +94,7 @@ The following table may assist in understanding the strand of a break-end.  Note
 
 ### ReMixT Command Line
 
-Running ReMixT involves invoking a single command, `remixt run`.  The result of ReMixT is an [hdf5](https://www.hdfgroup.org) file storing [pandas](http://pandas.pydata.org) tables.
+ReMixT is run using the Nextflow pipeline in the `nextflow` directory, see [Running with Nextflow and Containers](#running-with-nextflow-and-containers) for container options.  The result of ReMixT is an [hdf5](https://www.hdfgroup.org) file storing [pandas](http://pandas.pydata.org) tables.
 
 Suppose we have the following list of inputs:
 
@@ -113,20 +105,22 @@ Suppose we have the following list of inputs:
 
 Additionally, ReMixT will generate the following outputs:
 
-* Results as HDF5 file storing pandas tables with filename `$results_h5`
-* Temporary files and logs stored in directory `$remixt_tmp_dir` (directory created if it doesnt exist)
+* Results as HDF5 files storing pandas tables, one per tumour sample, in directory `$out_dir`
 
 Given the above inputs and outputs run ReMixT as follows:
 
-    remixt run $ref_data_dir $raw_data_dir $breakpoints \
+    nextflow run nextflow/main.nf -profile singularity \
+        --ref_data_dir $ref_data_dir \
+        --out_dir $out_dir \
+        --breakpoint_file $breakpoints \
         --normal_sample_id 123N \
         --normal_bam_file $normal_bam \
-        --tumour_sample_ids 123A 123B \
-        --tumour_bam_files $tumour_a_bam $tumour_b_bam \
-        --results_files $results_h5
-        --tmpdir $remixt_tmp_dir
+        --tumour_sample_ids 123A,123B \
+        --tumour_bam_files $tumour_a_bam,$tumour_b_bam
 
-Note that ReMixT creates multiple jobs and many parts of ReMixT are massively parallelizable, thus it is recommended you run ReMixT on a cluster or multicore machine.  For parallelism options see the section [Parallelism using pypeliner](#markdown-header-parallelism-using-pypeliner).
+Many parts of ReMixT are massively parallelizable, thus it is recommended you run ReMixT on a cluster, using a Nextflow executor config such as `nextflow/conf/juno_slurm.config`.
+
+ReMixT is deterministic, rerunning with the same inputs and parameters produces the same results.  Random sampling of GC positions, model initialization and model fitting are seeded using `--random_seed` (default 1234).
 
 ### Output File Formats
 
@@ -215,18 +209,18 @@ Use `wget` to retrieve the example bam files and their indices for chromosome 15
     wget http://remixttestdata.s3.amazonaws.com/test_grch38_chrprefix/HCC1395BL_chr15_grch38.bam.bai --directory-prefix $WORK_DIR/
     wget http://remixttestdata.s3.amazonaws.com/test_grch38_chrprefix/HCC1395_breakpoints.tsv --directory-prefix $WORK_DIR/
 
-Use the `remixt run` sub-command to run a remixt analysis.
+Use the Nextflow pipeline to run a remixt analysis.
 
-    remixt run $WORK_DIR/ref_data $WORK_DIR/raw_data $WORK_DIR/HCC1395_breakpoints.tsv \
-        --config $REMIXT_DIR/examples/chromosome_15_config.yaml \
-        --tmpdir $WORK_DIR/tmp_remixt \
+    nextflow run $REMIXT_DIR/nextflow/main.nf -profile singularity \
+        --ref_data_dir $WORK_DIR/ref_data \
+        --out_dir $WORK_DIR \
+        --breakpoint_file $WORK_DIR/HCC1395_breakpoints.tsv \
         --tumour_sample_ids HCC1395 \
         --tumour_bam_files $WORK_DIR/HCC1395_chr15_grch38.bam \
         --normal_sample_id HCC1395BL \
         --normal_bam_file $WORK_DIR/HCC1395BL_chr15_grch38.bam \
-        --loglevel DEBUG \
-        --submit local \
-        --results_files $WORK_DIR/HCC1395.h5
+        --chromosomes chr15 \
+        --chr_name_prefix chr
 
 Use the `remixt write_results` sub-command to write out tables of results and a yaml file containing inferred parameters and other meta data.
 
@@ -239,22 +233,6 @@ Finally, create a visualization of the solutions using the `remixt visualize_sol
 
     remixt visualize_solutions $WORK_DIR/HCC1395.h5 \
         $WORK_DIR/HCC1395.html
-
-## Parallelism Using Pypeliner
-
-ReMixT uses the pypeliner python library for parallelism.  Several of the scripts described above will complete more quickly on a multi-core machine or on a cluster.
-
-To run a script in multicore mode, using a maximum of 4 cpus, add the following command line option:
-
-    --maxjobs 4
-
-To run a script on a cluster with qsub/qstat, add the following command line option:
-
-    --submit asyncqsub
-
-Often a call to qsub requires specific command line parameters to request the correct queue, and importantly to request the correct amount of memory.  To allow correct calls to qsub, use the `--nativespec` command line option, and use the placeholder `{mem}` which will be replaced by the amount of memory (in gigabytes) required for each job launched with qsub.  For example, to use qsub, and request queue `all.q` and set the `mem_free` to the required memory, add the following command line options:
-
-    --submit asyncqsub --nativespec "-q all.q -l mem_free={mem}G"
 
 # Build
 

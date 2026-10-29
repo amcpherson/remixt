@@ -2,8 +2,9 @@
 
 /*
  * Processes for model fitting.
- * Mirrors create_fit_model_workflow from pypeliner.
  */
+
+include { remixt_args } from './utils'
 
 
 /*
@@ -17,7 +18,6 @@ process init_model {
 
     input:
     tuple val(tumour_id), path(experiment)
-    path config
 
     output:
     tuple val(tumour_id), path("${tumour_id}.init_results.h5"), path("${tumour_id}.init_params.json")
@@ -28,7 +28,7 @@ process init_model {
         --experiment ${experiment} \
         --output_results ${tumour_id}.init_results.h5 \
         --output_params ${tumour_id}.init_params.json \
-        --config ${config}
+        ${remixt_args('init_model')}
     """
 }
 
@@ -68,7 +68,6 @@ process fit_model {
 
     input:
     tuple val(tumour_id), val(init_id), path(experiment), path(init_params)
-    path config
 
     output:
     tuple val(tumour_id), val(init_id), path("${tumour_id}.fit.${init_id}.pickle")
@@ -79,7 +78,7 @@ process fit_model {
         --experiment ${experiment} \
         --init_params ${init_params} \
         --output ${tumour_id}.fit.${init_id}.pickle \
-        --config ${config}
+        ${remixt_args('fit_model')}
     """
 }
 
@@ -93,7 +92,6 @@ process collate_results {
 
     input:
     tuple val(tumour_id), path(experiment), path(init_results), val(fit_args)
-    path config
 
     output:
     tuple val(tumour_id), path("${tumour_id}.results.h5")
@@ -105,7 +103,7 @@ process collate_results {
         --experiment ${experiment} \
         --init_results ${init_results} \
         --output ${tumour_id}.results.h5 \
-        --config ${config} \
+        ${remixt_args('collate_results')} \
         ${args_str}
     """
 }

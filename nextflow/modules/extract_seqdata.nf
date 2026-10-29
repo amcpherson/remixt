@@ -2,8 +2,9 @@
 
 /*
  * Processes for extracting sequence data from BAM files.
- * Mirrors create_extract_seqdata_workflow from pypeliner.
  */
+
+include { remixt_args } from './utils'
 
 
 /*
@@ -17,8 +18,7 @@ process create_chromosome_seqdata {
     input:
     tuple val(sample_id), path(bam), path(bai)
     val chromosome
-    val snp_positions
-    path config
+    path snp_positions
 
     output:
     tuple val(sample_id), val(chromosome), path("${sample_id}.${chromosome}.seqdata.h5")
@@ -30,7 +30,7 @@ process create_chromosome_seqdata {
         --snp_positions ${snp_positions} \
         --chromosome ${chromosome} \
         --output ${sample_id}.${chromosome}.seqdata.h5 \
-        --config ${config}
+        ${remixt_args('create_chromosome_seqdata')}
     """
 }
 

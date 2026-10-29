@@ -1,16 +1,19 @@
 import pandas as pd
 
-import remixt.config
+import remixt.defaults
 import remixt.analysis.segment
 import remixt.analysis.haplotype
 
 
-def segment_readcount(segment_counts_filename, segment_filename, seqdata_filename, config):
+def segment_readcount(
+    segment_counts_filename,
+    segment_filename,
+    seqdata_filename,
+    filter_duplicates=remixt.defaults.filter_duplicates,
+    map_qual_threshold=remixt.defaults.map_qual_threshold,
+):
 
     segments = pd.read_csv(segment_filename, sep='\t', converters={'chromosome': str})
-
-    filter_duplicates = remixt.config.get_param(config, 'filter_duplicates')
-    map_qual_threshold = remixt.config.get_param(config, 'map_qual_threshold')
 
     segment_counts = remixt.analysis.segment.create_segment_counts(
         segments,
@@ -22,12 +25,16 @@ def segment_readcount(segment_counts_filename, segment_filename, seqdata_filenam
     segment_counts.to_csv(segment_counts_filename, sep='\t', index=False)
 
 
-def haplotype_allele_readcount(allele_counts_filename, segment_filename, seqdata_filename, haps_filename, config):
-    
-    segments = pd.read_csv(segment_filename, sep='\t', converters={'chromosome': str})
+def haplotype_allele_readcount(
+    allele_counts_filename,
+    segment_filename,
+    seqdata_filename,
+    haps_filename,
+    filter_duplicates=remixt.defaults.filter_duplicates,
+    map_qual_threshold=remixt.defaults.map_qual_threshold,
+):
 
-    filter_duplicates = remixt.config.get_param(config, 'filter_duplicates')
-    map_qual_threshold = remixt.config.get_param(config, 'map_qual_threshold')
+    segments = pd.read_csv(segment_filename, sep='\t', converters={'chromosome': str})
 
     allele_counts = remixt.analysis.haplotype.create_allele_counts(
         segments,

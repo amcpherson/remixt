@@ -78,7 +78,6 @@ setup(
         'scipy',
         'pandas',
         'tables',
-        'pypeliner',
         'statsmodels',
         'scikit-learn',
         'pyyaml',
