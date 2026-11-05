@@ -3,7 +3,6 @@
 *.pyc
 src/external/boost*
 .sconsign.dblite
-bin
 remixt/*.cpp
 remixt/*.c
 remixt/*.so
