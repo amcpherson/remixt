@@ -127,7 +127,7 @@ Given the above inputs and outputs run ReMixT as follows:
         --tumour_sample_ids 123A,123B \
         --tumour_bam_files $tumour_a_bam,$tumour_b_bam
 
-Many parts of ReMixT are massively parallelizable, thus it is recommended you run ReMixT on a cluster, using a Nextflow executor config such as `nextflow/conf/iris_slurm.config`.
+Many parts of ReMixT are massively parallelizable, thus it is recommended you run ReMixT on a cluster, for example with `-profile slurm,singularity`, adding site specific settings such as the queue and filesystem binds with `-c site.config`.
 
 ReMixT is deterministic, rerunning with the same inputs and parameters produces the same results.  Random sampling of GC positions, model initialization and model fitting are seeded using `--random_seed` (default 1234).
 
