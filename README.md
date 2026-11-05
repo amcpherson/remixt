@@ -254,13 +254,13 @@ To build and push a release image from the GitHub repository:
 
     docker build --platform linux/amd64 \
         --build-arg INSTALL_FROM=github \
-        --build-arg REMIXT_VERSION=0.5.24 \
-        -t quay.io/andrew_mcpherson/remixt:v0.5.24 .
-    docker push quay.io/andrew_mcpherson/remixt:v0.5.24
+        --build-arg REMIXT_VERSION=0.6.0 \
+        -t quay.io/andrew_mcpherson/remixt:v0.6.0 .
+    docker push quay.io/andrew_mcpherson/remixt:v0.6.0
 
 To also update the `latest` tag:
 
-    docker tag quay.io/andrew_mcpherson/remixt:v0.5.24 quay.io/andrew_mcpherson/remixt:latest
+    docker tag quay.io/andrew_mcpherson/remixt:v0.6.0 quay.io/andrew_mcpherson/remixt:latest
     docker push quay.io/andrew_mcpherson/remixt:latest
 
 ### Development build (from local source)
@@ -289,12 +289,12 @@ The Nextflow pipeline can run entirely in containers using the `docker` profile:
 
 To use a specific version of the container:
 
-    nextflow run nextflow/main.nf -profile docker --remixt_container quay.io/andrew_mcpherson/remixt:v0.5.24
+    nextflow run nextflow/main.nf -profile docker --remixt_container quay.io/andrew_mcpherson/remixt:v0.6.0
 
 For Singularity (common on HPC clusters):
 
     nextflow run nextflow/main.nf -profile singularity \
-        --remixt_container docker://quay.io/andrew_mcpherson/remixt:v0.5.24 \
+        --remixt_container docker://quay.io/andrew_mcpherson/remixt:v0.6.0 \
         ...
 
 ## Pip build
