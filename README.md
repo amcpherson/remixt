@@ -61,6 +61,15 @@ Download the reference data and build the required indexes:
 
 Additionally, ReMixT requires a mappability file in `$ref_data_dir`, see the test dataset section below for an example of retrieving a precomputed mappability file.
 
+Alternatively, calculate the mappability file by aligning every 100-mer of the genome back to the genome with bwa:
+
+    nextflow run nextflow/mappability.nf -profile singularity \
+        --ref_data_dir $ref_data_dir \
+        --ensembl_genome_version GRCh38 \
+        --out_dir $ref_data_dir
+
+The genome fasta and mappability filenames are listed in `nextflow/conf/genomes.config`.  An existing bwa index next to the genome fasta is used, otherwise one is built.  K-mers are aligned in parallel chunks of `--mappability_chunk_size` k-mers (default 10 million), so it is recommended you run this on a cluster.
+
 ## Running ReMixT
 
 ### Input Data
@@ -118,7 +127,7 @@ Given the above inputs and outputs run ReMixT as follows:
         --tumour_sample_ids 123A,123B \
         --tumour_bam_files $tumour_a_bam,$tumour_b_bam
 
-Many parts of ReMixT are massively parallelizable, thus it is recommended you run ReMixT on a cluster, using a Nextflow executor config such as `nextflow/conf/juno_slurm.config`.
+Many parts of ReMixT are massively parallelizable, thus it is recommended you run ReMixT on a cluster, using a Nextflow executor config such as `nextflow/conf/iris_slurm.config`.
 
 ReMixT is deterministic, rerunning with the same inputs and parameters produces the same results.  Random sampling of GC positions, model initialization and model fitting are seeded using `--random_seed` (default 1234).
 
@@ -127,6 +136,7 @@ ReMixT is deterministic, rerunning with the same inputs and parameters produces 
 The main output file is an HDF5 store containing pandas dataframes.  These can be extracted in python or viewed using the ReMixT viewer.  Important tables include:
 
 * `stats`: statistics for each restart
+* `failed_fits`: restarts for which model fitting failed to optimize, with the error message, these have no solution
 * `solutions/solution_{idx}/cn`: segment copy number table for solution `idx`
 * `solutions/solution_{idx}/brk_cn`: breakpoint copy number table for solution `idx`
 * `solutions/solution_{idx}/h`: haploid depths for solution `idx`

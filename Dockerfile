@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential git ca-certificates pkg-config \
         libhts-dev libboost-iostreams-dev libboost-program-options-dev \
         zlib1g-dev libbz2-dev liblzma-dev libcurl4-gnutls-dev libssl-dev \
-        bcftools tabix \
+        bcftools tabix bwa \
     && rm -rf /var/lib/apt/lists/*
 
 # Build shapeit4

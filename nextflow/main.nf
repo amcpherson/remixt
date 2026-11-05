@@ -15,7 +15,7 @@ def pipeline_param_names() {
         'ref_data_dir', 'out_dir', 'breakpoint_file', 'sample_sheet',
         'tumour_sample_ids', 'tumour_bam_files', 'results_files',
         'normal_sample_id', 'normal_bam_file', 'ensembl_genome_version',
-        'genomes', 'remixt_container',
+        'genomes', 'remixt_container', 'mappability_chunk_size',
     ]
 }
 

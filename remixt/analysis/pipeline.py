@@ -114,14 +114,39 @@ def fit_task(
     **kwargs,
 ):
     """ Fit the model for a single initialization, kwargs are passed to fit.
+
+    Some initializations fail to optimize.  For those, a failed fit result is
+    written instead of raising, see `failed_fit_results`.
     """
     with open(experiment_filename, 'rb') as f:
         experiment = pickle.load(f)
-        
-    fit_results = fit(experiment, init_params, **kwargs)
-    
+
+    try:
+        fit_results = fit(experiment, init_params, **kwargs)
+    except remixt.cn_model.OptimizationError as e:
+        print('fit failed: {}'.format(e))
+        fit_results = failed_fit_results(init_params, str(e))
+
     with open(results_filename, 'wb') as f:
         pickle.dump(fit_results, f)
+
+
+def failed_fit_results(init_params, error_message):
+    """ Fit results for an initialization that failed to fit.
+
+    Contains only stats, with the error message set, and no solution.
+    """
+    return {
+        'stats': {
+            'error_message': error_message,
+            'mode_idx': init_params['mode_idx'],
+            'divergence_weight': init_params['divergence_weight'],
+        },
+    }
+
+
+def is_failed_fit(fit_results):
+    return fit_results['stats']['error_message'] != ''
 
 
 def fit(
@@ -278,18 +303,29 @@ def collate(
 ):
     fit_results_filenames = dict(sorted(fit_results_filenames.items()))
 
-    # Extract the statistics for selecting solutions
+    # Extract the statistics for selecting solutions, failed fits
+    # are recorded separately and have no solution
     stats_table = list()
+    failed_table = list()
     for init_id, results_filename in fit_results_filenames.items():
         results = pickle.load(open(results_filename, 'rb'))
         stats = dict(results['stats'])
         stats['init_id'] = init_id
-        stats_table.append(stats)
+        if is_failed_fit(results):
+            failed_table.append(stats)
+        else:
+            stats_table.append(stats)
     stats_table = pd.DataFrame(stats_table)
+    failed_table = pd.DataFrame(failed_table, columns=['init_id', 'mode_idx', 'divergence_weight', 'error_message'])
+
+    if len(stats_table) == 0:
+        raise ValueError('all {} fits failed, first error:\n{}'.format(
+            len(failed_table), failed_table['error_message'].iloc[0]))
 
     # Write out selected solutions
     with pd.HDFStore(collate_filename, 'w') as collated:
         collated['stats'] = stats_table
+        collated['failed_fits'] = failed_table
 
         with pd.HDFStore(init_results_filename, 'r') as results:
             for key, value in results.items():
@@ -300,6 +336,8 @@ def collate(
 
         for init_id, results_filename in fit_results_filenames.items():
             results = pickle.load(open(results_filename, 'rb'))
+            if is_failed_fit(results):
+                continue
             store_fit_results(collated, experiment, results, 'solutions/solution_{0}'.format(init_id))
 
         store_optimal_solution(stats_table, collated, max_prop_diverge=max_prop_diverge)

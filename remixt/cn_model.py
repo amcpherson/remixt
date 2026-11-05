@@ -26,6 +26,11 @@ def _gettime():
     return datetime.datetime.now().time().isoformat()
 
 
+class OptimizationError(ValueError):
+    """ Model fitting failed to optimize a parameter.
+    """
+
+
 class BreakpointModel(object):
 
     def __init__(self, x, l, adjacencies, breakpoints, **kwargs):
@@ -509,16 +514,17 @@ class BreakpointModel(object):
 
         if not result.success:
 
-            # Check the gradiant if optimization failed
-            if result.message == 'ABNORMAL_TERMINATION_IN_LNSRCH':
+            # Check the gradiant if the line search terminated abnormally, scipy < 1.15
+            # reports 'ABNORMAL_TERMINATION_IN_LNSRCH', later versions 'ABNORMAL: '
+            if str(result.message).startswith('ABNORMAL'):
                 analytic_fprime = calculate_nll_partial_h(result.x, self.model, sample)
                 numerical_fprime = statsmodels.tools.numdiff.approx_fprime(result.x, calculate_nll, args=(self.model, sample))
 
                 if not np.allclose(analytic_fprime, numerical_fprime, atol=2.):
-                    raise ValueError('gradiant error, analytic: {}, numerical: {}\n'.format(analytic_fprime, numerical_fprime))
+                    raise OptimizationError('gradiant error, analytic: {}, numerical: {}\n'.format(analytic_fprime, numerical_fprime))
 
             else:
-                raise ValueError('optimization failed\n{}'.format(result)) 
+                raise OptimizationError('optimization failed\n{}'.format(result))
 
         self.model.h = result.x
         elbo_after = self.model.calculate_expected_log_likelihood(np.ones((self.model.num_segments,), dtype=int))
