@@ -4,6 +4,8 @@ import remixt.utils
 
 def get_full_config(config):
     full_config = dict(vars(remixt.defaults))
+    genome_version = config.get('ensembl_genome_version', remixt.defaults.ensembl_genome_version)
+    full_config.update(remixt.defaults.genome_versions.get(genome_version, {}))
     full_config.update(config)
     return full_config
 
@@ -23,30 +25,11 @@ def get_filename(config, ref_data_dir, name, **kwargs):
 
 
 def get_chromosome_lengths(config, ref_data_dir):
-    genome_fai = remixt.config.get_filename(config, ref_data_dir, 'genome_fai')
-    chromosome_lengths = remixt.utils.read_chromosome_lengths(genome_fai)
-    
-    chromosomes = set(remixt.config.get_param(config, 'chromosomes'))
-
-    # Check chromosomes against chromosome lengths from .fai file
-    assert chromosomes.issubset(set(chromosome_lengths.keys()))
-
-    # Validate chr name prefix
-    chr_name_prefix = remixt.config.get_param(config, 'chr_name_prefix')
-    if chr_name_prefix == 'chr':
-        assert all(c.startswith('chr') for c in chromosomes)
-    elif chr_name_prefix == '':
-        assert not any(c.startswith('chr') for c in chromosomes)
-    else:
-        raise ValueError(f'unrecognized chr_name_prefix {chr_name_prefix}')
-
-    filtered_chromosome_lengths = {}
-    
-    for chrom in chromosome_lengths.keys():
-        if chrom in chromosomes:
-            filtered_chromosome_lengths[chrom] = chromosome_lengths[chrom]
-    
-    return filtered_chromosome_lengths
+    return remixt.utils.read_selected_chromosome_lengths(
+        get_filename(config, ref_data_dir, 'genome_fai'),
+        get_param(config, 'chromosomes'),
+        chr_name_prefix=get_param(config, 'chr_name_prefix'),
+    )
 
 
 def get_chromosomes(config, ref_data_dir):

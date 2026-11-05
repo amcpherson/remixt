@@ -73,17 +73,11 @@ setup(
     keywords=['scientific', 'sequence analysis', 'cancer'],
     classifiers=[],
     ext_modules=extensions,
-    setup_requires=[
-        f'numpy=={NUMPY_VERSION}',
-        'setuptools>=18.0',
-        'cython',
-    ],
     install_requires=[
         f'numpy=={NUMPY_VERSION}',
         'scipy',
         'pandas',
         'tables',
-        'pypeliner',
         'statsmodels',
         'scikit-learn',
         'pyyaml',

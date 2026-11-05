@@ -5,10 +5,11 @@ import numpy as np
 import scipy
 import scipy.stats
 import pysam
-import pypeliner
+import subprocess
 
 import remixt.seqdataio
-import remixt.config
+import remixt.utils
+import remixt.defaults
 
 
 def infer_snp_genotype(data, base_call_error=0.005, call_threshold=0.9):
@@ -95,14 +96,23 @@ def read_snp_counts(seqdata_filename, chromosome, num_rows=1000000):
     return snp_counts
 
 
-def infer_snp_genotype_from_normal(snp_genotype_filename, seqdata_filename, chromosome, config):
+def infer_snp_genotype_from_normal(
+    snp_genotype_filename,
+    seqdata_filename,
+    chromosome,
+    sequencing_base_call_error=remixt.defaults.sequencing_base_call_error,
+    het_snp_call_threshold=remixt.defaults.het_snp_call_threshold,
+):
     """ Infer SNP genotype from normal sample.
     
     Args:
         snp_genotype_filename (str): output snp genotype file
         seqdata_filename (str): input sequence data file
         chromosome (str): id of chromosome for which haplotype blocks will be inferred
-        config (dict): relavent shapeit parameters including thousand genomes paths
+
+    KwArgs:
+        sequencing_base_call_error (float): per base sequencing error
+        het_snp_call_threshold (float): posterior threshold for calling a genotype
 
     The output snp genotype file will contain the following columns:
 
@@ -113,9 +123,6 @@ def infer_snp_genotype_from_normal(snp_genotype_filename, seqdata_filename, chro
 
     """
 
-    sequencing_base_call_error = remixt.config.get_param(config, 'sequencing_base_call_error')
-    het_snp_call_threshold = remixt.config.get_param(config, 'het_snp_call_threshold')
-    
     # Call snps based on reference and alternate read counts from normal
     snp_counts_df = read_snp_counts(seqdata_filename, chromosome)
     infer_snp_genotype(snp_counts_df, sequencing_base_call_error, het_snp_call_threshold)
@@ -123,14 +130,23 @@ def infer_snp_genotype_from_normal(snp_genotype_filename, seqdata_filename, chro
     snp_counts_df.to_csv(snp_genotype_filename, sep='\t', columns=['position', 'AA', 'AB', 'BB'], index=False)
 
 
-def infer_snp_genotype_from_tumour(snp_genotype_filename, seqdata_filenames, chromosome, config):
+def infer_snp_genotype_from_tumour(
+    snp_genotype_filename,
+    seqdata_filenames,
+    chromosome,
+    sequencing_base_call_error=remixt.defaults.sequencing_base_call_error,
+    homozygous_p_value_threshold=remixt.defaults.homozygous_p_value_threshold,
+):
     """ Infer SNP genotype from tumour samples.
     
     Args:
         snp_genotype_filename (str): output snp genotype file
         seqdata_filenames (str): input tumour sequence data files
         chromosome (str): id of chromosome for which haplotype blocks will be inferred
-        config (dict): relavent shapeit parameters including thousand genomes paths
+
+    KwArgs:
+        sequencing_base_call_error (float): per base sequencing error
+        homozygous_p_value_threshold (float): p-value threshold for calling homozygous
 
     The output snp genotype file will contain the following columns:
 
@@ -141,9 +157,6 @@ def infer_snp_genotype_from_tumour(snp_genotype_filename, seqdata_filenames, chr
 
     """
 
-    sequencing_base_call_error = remixt.config.get_param(config, 'sequencing_base_call_error')
-    homozygous_p_value_threshold = remixt.config.get_param(config, 'homozygous_p_value_threshold')
-    
     # Calculate total reference alternate read counts in all tumours
     snp_counts_df = pd.DataFrame(columns=['position', 'ref_count', 'alt_count']).astype(int)
     for tumour_id, seqdata_filename in seqdata_filenames.items():
@@ -154,15 +167,15 @@ def infer_snp_genotype_from_tumour(snp_genotype_filename, seqdata_filenames, chr
 
     snp_counts_df = snp_counts_df[snp_counts_df['total_count'] > 50]
     
-    binom_test_ref = lambda row: scipy.stats.binom_test(
-        row['ref_count'], row['total_count'],
-        p=sequencing_base_call_error, alternative='greater')
+    binom_test_ref = lambda row: scipy.stats.binomtest(
+        int(row['ref_count']), int(row['total_count']),
+        p=sequencing_base_call_error, alternative='greater').pvalue
 
     snp_counts_df['prob_no_A'] = snp_counts_df.apply(binom_test_ref, axis=1)
     
-    binom_test_alt = lambda row: scipy.stats.binom_test(
-        row['alt_count'], row['total_count'],
-        p=sequencing_base_call_error, alternative='greater')
+    binom_test_alt = lambda row: scipy.stats.binomtest(
+        int(row['alt_count']), int(row['total_count']),
+        p=sequencing_base_call_error, alternative='greater').pvalue
         
     snp_counts_df['prob_no_B'] = snp_counts_df.apply(binom_test_alt, axis=1)
 
@@ -292,7 +305,19 @@ def calculate_haplotypes(phasing_samples, changepoint_threshold=0.95):
     return haplotypes
 
 
-def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome, temp_directory, config, ref_data_dir):
+def infer_haps_grch38_shapeit4(
+    haps_filename,
+    snp_genotype_filename,
+    chromosome,
+    temp_directory,
+    snp_positions_filename,
+    bcf_reference_filename,
+    genetic_map_filename,
+    chr_name_prefix=remixt.defaults.chr_name_prefix,
+    is_female=remixt.defaults.is_female,
+    shapeit_num_samples=remixt.defaults.shapeit_num_samples,
+    shapeit_confidence_threshold=remixt.defaults.shapeit_confidence_threshold,
+):
     """ Infer haplotype blocks for a chromosome using shapeit4 for grch38
 
     Args:
@@ -300,8 +325,15 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
         snp_genotype_filename (str): input snp genotype file
         chromosome (str): id of chromosome for which haplotype blocks will be inferred
         temp_directory (str): directory in which shapeit temp files will be stored
-        config (dict): relavent shapeit parameters including thousand genomes paths
-        ref_data_dir (str): reference dataset directory
+        snp_positions_filename (str): thousand genomes snp positions
+        bcf_reference_filename (str): thousand genomes phased panel bcf for the chromosome
+        genetic_map_filename (str): genetic map for the chromosome
+
+    KwArgs:
+        chr_name_prefix (str): '' or 'chr'
+        is_female (bool): two copies of chromosome X
+        shapeit_num_samples (int): number of phasing samples
+        shapeit_confidence_threshold (float): threshold on confident changepoints
 
     The output haps file will contain haplotype blocks for each heterozygous SNP position. The
     file will be TSV format with the following columns:
@@ -330,20 +362,19 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
             haps_file.write('chromosome\tposition\tallele\thap_label\tallele_id\n')
 
     # Translate to grch38 thousand genomes chr prefix
-    chr_name_prefix = remixt.config.get_param(config, 'chr_name_prefix')
     if chr_name_prefix == '':
         grch38_1kg_chromosome = 'chr' + chromosome
     else:
         grch38_1kg_chromosome = chromosome
 
     # Skip unphased chromosomes
-    if str(grch38_1kg_chromosome) not in remixt.config.get_param(config, 'grch38_1kg_chromosomes'):
+    if str(grch38_1kg_chromosome) not in remixt.defaults.grch38_1kg_chromosomes:
         write_null()
         return
 
     # If we are analyzing male data and this is chromosome X
     # then there are no het snps and no haplotypes
-    if chromosome == remixt.config.get_param(config, 'grch38_1kg_phased_chromosome_x') and not remixt.config.get_param(config, 'is_female'):
+    if grch38_1kg_chromosome == remixt.defaults.grch38_1kg_phased_chromosome_x and not is_female:
         write_null()
         return
 
@@ -352,8 +383,6 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
         os.makedirs(temp_directory)
     except OSError:
         pass
-
-    snp_positions_filename = remixt.config.get_filename(config, ref_data_dir, 'snp_positions')
 
     snp_positions = load_snp_positions()
 
@@ -416,21 +445,14 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
 
     temp_bcf_filename = os.path.join(temp_directory, 'het_snps.bcf')
 
-    pypeliner.commandline.execute('bgzip', '--force', temp_vcf_filename)
-    pypeliner.commandline.execute('tabix', temp_vcf_filename + '.gz')
-    pypeliner.commandline.execute('bcftools', 'view', '-O', 'b', temp_vcf_filename + '.gz', '-o', temp_bcf_filename)
-    pypeliner.commandline.execute('bcftools', 'index', temp_bcf_filename)
-
-    if grch38_1kg_chromosome == remixt.config.get_param(config, 'grch38_1kg_phased_chromosome_x'):
-        bcf_reference_filename = remixt.config.get_filename(config, ref_data_dir, 'grch38_1kg_X_bcf_filename')
-    else:
-        bcf_reference_filename = remixt.config.get_filename(config, ref_data_dir, 'grch38_1kg_bcf_filename', chromosome=grch38_1kg_chromosome)
-
-    genetic_map_filename = remixt.config.get_filename(config, ref_data_dir, 'genetic_map_grch38_filename', chromosome=grch38_1kg_chromosome)
+    remixt.utils.execute('bgzip', '--force', temp_vcf_filename)
+    remixt.utils.execute('tabix', temp_vcf_filename + '.gz')
+    remixt.utils.execute('bcftools', 'view', '-O', 'b', temp_vcf_filename + '.gz', '-o', temp_bcf_filename)
+    remixt.utils.execute('bcftools', 'index', temp_bcf_filename)
 
     # Run shapeit to generate phasing graph
     bingraph_filename = os.path.join(temp_directory, 'phasing.bingraph')
-    pypeliner.commandline.execute(
+    remixt.utils.execute(
         'shapeit4',
         '--input', temp_bcf_filename,
         '--map', genetic_map_filename,
@@ -440,21 +462,18 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
 
     # Run shapeit to sample from phased haplotype graph
     sample_template = os.path.join(temp_directory, 'sampled.{0}.bcf')
-    shapeit_num_samples = remixt.config.get_param(config, 'shapeit_num_samples')
     sample_filenames = []
     for s in range(shapeit_num_samples):
         sample_filename = sample_template.format(s)
         sample_filenames.append(sample_filename)
-        pypeliner.commandline.execute(
+        remixt.utils.execute(
             'bingraphsample',
             '--input', bingraph_filename,
             '--output', sample_filename,
             '--sample',
             '--seed', str(s))
-        pypeliner.commandline.execute(
+        remixt.utils.execute(
             'bcftools', 'index', '-f', sample_filename)
-
-    shapeit_confidence_threshold = remixt.config.get_param(config, 'shapeit_confidence_threshold')
 
     haplotypes = calculate_haplotypes(read_phasing_samples(sample_filenames), changepoint_threshold=shapeit_confidence_threshold)
 
@@ -472,7 +491,19 @@ def infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome,
     haplotypes[['chromosome', 'position', 'allele', 'hap_label', 'allele_id']].to_csv(haps_filename, sep='\t', index=False)
 
 
-def infer_haps_grch37_shapeit2(haps_filename, snp_genotype_filename, chromosome, temp_directory, config, ref_data_dir):
+def infer_haps_grch37_shapeit2(
+    haps_filename,
+    snp_genotype_filename,
+    chromosome,
+    temp_directory,
+    genetic_map_filename,
+    hap_filename,
+    legend_filename,
+    sample_filename,
+    is_female=remixt.defaults.is_female,
+    shapeit_num_samples=remixt.defaults.shapeit_num_samples,
+    shapeit_confidence_threshold=remixt.defaults.shapeit_confidence_threshold,
+):
     """ Infer haplotype blocks for a chromosome using shapeit2 for grch37
 
     Args:
@@ -480,8 +511,17 @@ def infer_haps_grch37_shapeit2(haps_filename, snp_genotype_filename, chromosome,
         snp_genotype_filename (str): input snp genotype file
         chromosome (str): id of chromosome for which haplotype blocks will be inferred
         temp_directory (str): directory in which shapeit temp files will be stored
-        config (dict): relavent shapeit parameters including thousand genomes paths
-        ref_data_dir (str): reference dataset directory
+        genetic_map_filename (str): impute2 genetic map for the chromosome
+        hap_filename (str): impute2 haplotypes for the chromosome
+        legend_filename (str): impute2 legend for the chromosome
+        sample_filename (str): impute2 sample file
+
+    For chromosome X, the impute2 files are those of the non-PAR region.
+
+    KwArgs:
+        is_female (bool): two copies of chromosome X
+        shapeit_num_samples (int): number of phasing samples
+        shapeit_confidence_threshold (float): threshold on confident changepoints
 
     The output haps file will contain haplotype blocks for each heterozygous SNP position. The
     file will be TSV format with the following columns:
@@ -511,17 +551,9 @@ def infer_haps_grch37_shapeit2(haps_filename, snp_genotype_filename, chromosome,
 
     # If we are analyzing male data and this is chromosome X
     # then there are no het snps and no haplotypes
-    if chromosome == 'X' and not remixt.config.get_param(config, 'is_female'):
+    if chromosome == 'X' and not is_female:
         write_null()
         return
-
-    # Impute 2 files for thousand genomes data by chromosome
-    phased_chromosome = chromosome
-    if chromosome == 'X':
-        phased_chromosome = remixt.config.get_param(config, 'phased_chromosome_x')
-    genetic_map_filename = remixt.config.get_filename(config, ref_data_dir, 'genetic_map', chromosome=phased_chromosome)
-    hap_filename = remixt.config.get_filename(config, ref_data_dir, 'haplotypes', chromosome=phased_chromosome)
-    legend_filename = remixt.config.get_filename(config, ref_data_dir, 'legend', chromosome=phased_chromosome)
 
     snp_genotype_df = pd.read_csv(snp_genotype_filename, sep='\t')
 
@@ -559,15 +591,13 @@ def infer_haps_grch37_shapeit2(haps_filename, snp_genotype_filename, chromosome,
     chr_x_flag = ''
     if chromosome == 'X':
         chr_x_flag = '--chrX'
-    sample_filename = remixt.config.get_filename(config, ref_data_dir, 'sample')
-    pypeliner.commandline.execute('shapeit', '-M', genetic_map_filename, '-R', hap_filename, legend_filename, sample_filename,
+    remixt.utils.execute('shapeit', '-M', genetic_map_filename, '-R', hap_filename, legend_filename, sample_filename,
                                   '-G', temp_gen_filename, temp_sample_filename, '--output-graph', hgraph_filename, chr_x_flag,
                                   '--no-mcmc', '-L', hgraph_logs_prefix, '--seed', '12345')
 
     # Run shapeit to sample from phased haplotype graph
     sample_template = os.path.join(temp_directory, 'sampled.{0}')
     averaged_changepoints = None
-    shapeit_num_samples = remixt.config.get_param(config, 'shapeit_num_samples')
     for s in range(shapeit_num_samples):
         sample_prefix = sample_template.format(s)
         sample_log_filename = sample_prefix + '.log'
@@ -577,12 +607,12 @@ def infer_haps_grch37_shapeit2(haps_filename, snp_genotype_filename, chromosome,
         success = False
         for _ in range(3):
             try:
-                pypeliner.commandline.execute(
+                remixt.utils.execute(
                     'shapeit', '-convert', '--input-graph', hgraph_filename, '--output-sample',
                     sample_prefix, '--seed', str(s), '-L', sample_log_filename)
                 success = True
                 break
-            except pypeliner.commandline.CommandLineException:
+            except subprocess.CalledProcessError:
                 print(f'failed sampling with seed {s}, retrying')
                 continue
         if not success:
@@ -611,7 +641,6 @@ def infer_haps_grch37_shapeit2(haps_filename, snp_genotype_filename, chromosome,
     # Create a list of labels for haplotypes between recurrent changepoints
     current_hap_label = 0
     hap_label = list()
-    shapeit_confidence_threshold = remixt.config.get_param(config, 'shapeit_confidence_threshold')
     for x in changepoint_confidence:
         if x < float(shapeit_confidence_threshold):
             current_hap_label += 1
@@ -638,16 +667,6 @@ def infer_haps_grch37_shapeit2(haps_filename, snp_genotype_filename, chromosome,
     haps = haps[['chromosome', 'position', 'allele', 'hap_label', 'allele_id']]
 
     haps.to_csv(haps_filename, sep='\t', index=False)
-
-
-def infer_haps(haps_filename, snp_genotype_filename, chromosome, temp_directory, config, ref_data_dir):
-    ensembl_genome_version = remixt.config.get_param(config, 'ensembl_genome_version')
-    if ensembl_genome_version == 'GRCh38':
-        infer_haps_grch38_shapeit4(haps_filename, snp_genotype_filename, chromosome, temp_directory, config, ref_data_dir)
-    elif ensembl_genome_version == 'GRCh37':
-        infer_haps_grch37_shapeit2(haps_filename, snp_genotype_filename, chromosome, temp_directory, config, ref_data_dir)
-    else:
-        raise ValueError(f'unsupported genome version {ensembl_genome_version}')
 
 
 def count_allele_reads(seqdata_filename, haps, chromosome, segments, filter_duplicates=False, map_qual_threshold=1):

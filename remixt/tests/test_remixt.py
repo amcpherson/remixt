@@ -307,14 +307,12 @@ class remixt_unittest(unittest.TestCase):
         init_params['divergence_weight'] = 1e-7
         init_params['mode_idx'] = 0
         
-        config = {}
-        
         # import pstats, cProfile
-        # cProfile.runctx("fit_results = remixt.analysis.pipeline.fit(experiment, init_params, config)", globals(), locals(), "Profile.prof")
+        # cProfile.runctx("fit_results = remixt.analysis.pipeline.fit(experiment, init_params)", globals(), locals(), "Profile.prof")
         # s = pstats.Stats("Profile.prof")
         # s.strip_dirs().sort_stats("cumtime").print_stats()
         # raise
-        fit_results = remixt.analysis.pipeline.fit(experiment, init_params, config)
+        fit_results = remixt.analysis.pipeline.fit(experiment, init_params)
         
         # with open('test_model.gz', 'w') as f:
         #     pickle.dump(fit_results, f)

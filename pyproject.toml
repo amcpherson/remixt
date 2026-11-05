@@ -1,0 +1,15 @@
+[build-system]
+requires = [
+    "setuptools>=18.0",
+    "numpy==2.4.4",
+    "cython",
+    "versioneer",
+]
+build-backend = "setuptools.build_meta"
+
+[tool.versioneer]
+VCS = "git"
+style = "pep440"
+versionfile_source = "remixt/_version.py"
+versionfile_build = "remixt/_version.py"
+tag_prefix = "v"

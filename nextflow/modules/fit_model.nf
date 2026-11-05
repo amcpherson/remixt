@@ -1,0 +1,109 @@
+#!/usr/bin/env nextflow
+
+/*
+ * Processes for model fitting.
+ */
+
+include { remixt_args; id_path_args } from './utils'
+
+
+/*
+ * Initialize model fitting: produces init_results + init_params JSON.
+ * The init_params JSON is a dict of init_id -> param dict, which will
+ * be split into individual files for parallel fitting.
+ */
+process init_model {
+    label 'mem_medium'
+    tag "${tumour_id}"
+
+    input:
+    tuple val(tumour_id), path(experiment)
+
+    output:
+    tuple val(tumour_id), path("${tumour_id}.init_results.h5"), path("${tumour_id}.init_params.json")
+
+    script:
+    """
+    init_model.py \
+        --experiment ${experiment} \
+        --output_results ${tumour_id}.init_results.h5 \
+        --output_params ${tumour_id}.init_params.json \
+        ${remixt_args('init_model')}
+    """
+}
+
+
+/*
+ * Split the init_params JSON into individual per-init files.
+ * This is a pure Nextflow process to enable dynamic parallelism.
+ */
+process split_init_params {
+    tag "${tumour_id}"
+
+    input:
+    tuple val(tumour_id), path(init_params_json)
+
+    output:
+    tuple val(tumour_id), path("init_param.*.json")
+
+    script:
+    """
+    #!/usr/bin/env python3
+    import json
+    with open('${init_params_json}') as f:
+        params = json.load(f)
+    for init_id, p in params.items():
+        with open(f'init_param.{init_id}.json', 'w') as f:
+            json.dump(p, f)
+    """
+}
+
+
+/*
+ * Fit model for a single initialization.
+ */
+process fit_model {
+    label 'mem_very_high'
+    tag "${tumour_id}_${init_id}"
+
+    input:
+    tuple val(tumour_id), val(init_id), path(experiment), path(init_params)
+
+    output:
+    tuple val(tumour_id), val(init_id), path("${tumour_id}.fit.${init_id}.pickle")
+
+    script:
+    """
+    fit_model.py \
+        --experiment ${experiment} \
+        --init_params ${init_params} \
+        --output ${tumour_id}.fit.${init_id}.pickle \
+        ${remixt_args('fit_model')}
+    """
+}
+
+
+/*
+ * Collate results from all initializations.
+ */
+process collate_results {
+    label 'mem_medium'
+    tag "${tumour_id}"
+
+    input:
+    tuple val(tumour_id), path(experiment), path(init_results), val(init_ids), path(fit_results)
+
+    output:
+    tuple val(tumour_id), path("${tumour_id}.results.h5")
+
+    script:
+    def args_str = id_path_args(init_ids, fit_results)
+    """
+    collate_results.py \
+        --experiment ${experiment} \
+        --init_results ${init_results} \
+        --output ${tumour_id}.results.h5 \
+        ${remixt_args('collate_results')} \
+        ${args_str}
+    """
+}

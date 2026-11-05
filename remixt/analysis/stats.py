@@ -2,7 +2,7 @@ import collections
 import numpy as np
 
 import remixt.seqdataio
-import remixt.config
+import remixt.defaults
 
 
 FragmentStats = collections.namedtuple('FragmentStats', [
@@ -11,10 +11,11 @@ FragmentStats = collections.namedtuple('FragmentStats', [
 ])
 
 
-def calculate_fragment_stats(seqdata_filename, config):
-
-    filter_duplicates = remixt.config.get_param(config, 'filter_duplicates')
-    map_qual_threshold = remixt.config.get_param(config, 'map_qual_threshold')
+def calculate_fragment_stats(
+    seqdata_filename,
+    filter_duplicates=remixt.defaults.filter_duplicates,
+    map_qual_threshold=remixt.defaults.map_qual_threshold,
+):
 
     sum_x = 0.
     sum_x2 = 0.

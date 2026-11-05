@@ -3,8 +3,6 @@ import gzip
 import pysam
 import pandas as pd
 
-import pypeliner.commandline
-
 import remixt.config
 import remixt.utils
 
@@ -59,18 +57,18 @@ def create_ref_data(config, ref_data_dir, ref_data_sentinal, bwa_index_genome=Fa
 
     if bwa_index_genome:
         def bwa_index():
-            pypeliner.commandline.execute('bwa', 'index', remixt.config.get_filename(config, ref_data_dir, 'genome_fasta'))
+            remixt.utils.execute('bwa', 'index', remixt.config.get_filename(config, ref_data_dir, 'genome_fasta'))
         auto_sentinal.run(bwa_index)
 
     def samtools_faidx():
-        pypeliner.commandline.execute('samtools', 'faidx', remixt.config.get_filename(config, ref_data_dir, 'genome_fasta'))
+        remixt.utils.execute('samtools', 'faidx', remixt.config.get_filename(config, ref_data_dir, 'genome_fasta'))
     auto_sentinal.run(samtools_faidx)
 
     if remixt.config.get_param(config, 'ensembl_genome_version') == 'GRCh37':
         def wget_thousand_genomes():
             tar_filename = os.path.join(temp_directory, 'thousand_genomes_download.tar.gz')
             remixt.utils.wget(remixt.config.get_param(config, 'thousand_genomes_impute_url'), tar_filename)
-            pypeliner.commandline.execute('tar', '-C', ref_data_dir, '-xzvf', tar_filename)
+            remixt.utils.execute('tar', '-C', ref_data_dir, '-xzvf', tar_filename)
             os.remove(tar_filename)
         auto_sentinal.run(wget_thousand_genomes)
 
@@ -115,8 +113,8 @@ def create_ref_data(config, ref_data_dir, ref_data_sentinal, bwa_index_genome=Fa
                 else:
                     vcf_filename = remixt.config.get_filename(config, ref_data_dir, 'grch38_1kg_vcf_filename', chromosome=chromosome)
                     bcf_filename = remixt.config.get_filename(config, ref_data_dir, 'grch38_1kg_bcf_filename', chromosome=chromosome)
-                pypeliner.commandline.execute('bcftools', 'view', '-O', 'b', vcf_filename, '-o', bcf_filename)
-                pypeliner.commandline.execute('bcftools', 'index', bcf_filename)
+                remixt.utils.execute('bcftools', 'view', '-O', 'b', vcf_filename, '-o', bcf_filename)
+                remixt.utils.execute('bcftools', 'index', bcf_filename)
         auto_sentinal.run(convert_bcf)
 
         def create_snp_positions():
@@ -152,7 +150,7 @@ def create_ref_data(config, ref_data_dir, ref_data_sentinal, bwa_index_genome=Fa
         def get_genetic_maps():
             tar_filename = os.path.join(temp_directory, 'genetic_maps.b38.tar.gz')
             remixt.utils.wget(remixt.config.get_param(config, 'genetic_maps_grch38_url'), tar_filename)
-            pypeliner.commandline.execute('tar', '-C', ref_data_dir, '-xzvf', tar_filename)
+            remixt.utils.execute('tar', '-C', ref_data_dir, '-xzvf', tar_filename)
             os.remove(tar_filename)
         auto_sentinal.run(get_genetic_maps)
 

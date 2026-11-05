@@ -1,0 +1,5 @@
+**/*.bam
+**/*.bai
+**/work
+**/.nextflow*
+build

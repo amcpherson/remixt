@@ -25,7 +25,6 @@ prompt-toolkit==3.0.7
 ptyprocess==0.6.0
 Pygments==2.7.1
 pyparsing==2.4.7
--e git+https://github.com/shahcompbio/pypeliner.git@9aad3f1ab7115d5b827e390866f48fea1ed5aa17#egg=pypeliner
 python-dateutil==2.8.1
 pytz==2020.1
 PyYAML==5.3.1

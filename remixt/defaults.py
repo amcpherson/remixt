@@ -12,6 +12,13 @@ ensembl_version                             = '93'
 # Associated genome version used by the ensembl version
 ensembl_genome_version                      = 'GRCh38'
 
+# Ensembl and ucsc versions for each genome version, used when only
+# ensembl_genome_version is set in the config
+genome_versions                             = {
+    'GRCh38': {'ensembl_version': '93', 'ucsc_genome_version': 'hg38'},
+    'GRCh37': {'ensembl_version': '75', 'ucsc_genome_version': 'hg19'},
+}
+
 # Ensemble assemblies to include in the reference genome
 ensembl_assemblies                          = ['chromosome.1', 'chromosome.2', 'chromosome.3', 'chromosome.4', 'chromosome.5', 'chromosome.6', 'chromosome.7', 'chromosome.8', 'chromosome.9', 'chromosome.10', 'chromosome.11', 'chromosome.12', 'chromosome.13', 'chromosome.14', 'chromosome.15', 'chromosome.16', 'chromosome.17', 'chromosome.18', 'chromosome.19', 'chromosome.20', 'chromosome.21', 'chromosome.22', 'chromosome.X', 'chromosome.Y', 'chromosome.MT', 'nonchromosomal']
 
@@ -119,6 +126,9 @@ max_copy_number                             = 12
 # Tumour mixture fractions for initialization of haploid depth
 # parameter optimization
 tumour_mix_fractions                        = [0.45, 0.3, 0.2, 0.1]
+
+# Random seed for gc sampling, model initialization and model fitting
+random_seed                                 = 1234
 
 # Maximum and minimum ploidy of initial haploid depth parameters
 # Ploidy selection can be performed by setting min and max ploidy to a small range
