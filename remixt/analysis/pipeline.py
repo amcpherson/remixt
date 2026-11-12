@@ -163,6 +163,12 @@ def fit(
     do_h_update=remixt.defaults.do_h_update,
     random_seed=remixt.defaults.random_seed,
     optimal_initialization=False,
+    transition_saturation=None,
+    amp_windows=False,
+    amp_window_start_iter=2,
+    amp_window_recenter='depth',
+    amp_window_seed_short=False,
+    negbin_r_1_min=1.,
 ):
     np.random.seed(random_seed)
 
@@ -214,6 +220,12 @@ def fit(
         disable_breakpoints=disable_breakpoints,
         breakpoint_init=breakpoint_init,
         do_h_update=do_h_update,
+        transition_saturation=transition_saturation,
+        amp_windows=amp_windows,
+        amp_window_start_iter=amp_window_start_iter,
+        amp_window_recenter=amp_window_recenter,
+        amp_window_seed_short=amp_window_seed_short,
+        negbin_r_1_min=negbin_r_1_min,
     )
     
     model.num_em_iter = num_em_iter
@@ -236,6 +248,7 @@ def fit(
     fit_results['p_outlier_allele'] = model.p_outlier_allele
     fit_results['total_likelihood_mask'] = model.total_likelihood_mask
     fit_results['allele_likelihood_mask'] = model.allele_likelihood_mask
+    fit_results['is_windowed'] = model.is_windowed
 
     # Save estimation statistics
     fit_results['stats'] = dict()
