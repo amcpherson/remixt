@@ -53,8 +53,8 @@ def test_build_panel_recovers_factor():
     bins['gc'] = rng.uniform(.35, .6, n)
     bins['map_frac'] = np.where(np.arange(n) % 10 == 0, .5, 1.)
     true_factor = np.where(bins['map_frac'] < 1, np.log(.7), 0.)
-    # Bins 100-109 are hypervariable
-    hyper = (np.arange(n) >= 100) & (np.arange(n) < 110)
+    # Bins 105-111 are hypervariable, straddling two 10 kb panel bins
+    hyper = (np.arange(n) >= 105) & (np.arange(n) < 112)
     counts = []
     for i in range(6):
         gc_effect = -2. * (i + 1) / 6 * (bins['gc'].values - .45)
@@ -62,9 +62,16 @@ def test_build_panel_recovers_factor():
         counts.append(rng.poisson(2000 * np.exp(gc_effect + true_factor + noise)))
     counts = np.array(counts)
     panel, mask = bb.build_panel(bins, counts, [True] * 6, panel_bin_size=1000, mask_excess_cv=.3)
-    assert set(mask['start'] // 1000) <= set(range(100, 110))
-    assert len(mask) >= 8
+    assert set(mask["start"] // 1000) <= set(range(105, 112))
+    assert len(mask) >= 6
     ok = panel['masked_frac'] == 0
     resid = panel['factor'][ok] - true_factor[ok]
     assert np.abs(np.median(resid)) < .01
     assert np.abs(resid).max() < .1
+
+    # At a coarser panel resolution, partly masked bins keep a factor per unmasked base
+    panel, mask = bb.build_panel(bins, counts, [True] * 6, panel_bin_size=10000,
+                                 mask_bin_size=1000, mask_excess_cv=.3)
+    partial = (panel['masked_frac'] > 0) & (panel['masked_frac'] < 1)
+    assert partial.any()
+    assert np.abs(panel.loc[partial, 'factor']).max() < .05
