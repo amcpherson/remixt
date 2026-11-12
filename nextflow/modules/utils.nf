@@ -27,6 +27,10 @@ def remixt_param_names() {
                                          'num_em_iter', 'num_update_iter', 'disable_breakpoints', 'do_h_update', 'random_seed'],
         collate_results:                ['max_prop_diverge'],
         mappability_kmers:              ['mappability_length'],
+        annotate_bins:                  ['chromosomes', 'chr_name_prefix', 'map_qual_threshold'],
+        count_bins:                     ['filter_duplicates', 'map_qual_threshold'],
+        build_depth_panel:              ['panel_bin_size', 'panel_mask_bin_size', 'panel_mask_excess_cv'],
+        bin_segment_lengths:            ['filter_duplicates', 'map_qual_threshold'],
     ]
 }
 

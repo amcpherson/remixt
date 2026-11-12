@@ -3,7 +3,9 @@
 /*
  * Sub-workflow: calc_bias
  *
- * Calculates GC and mappability bias correction per tumour sample.
+ * Calculates GC and mappability bias correction per tumour sample, with the
+ * position level model (params.bias_method = 'remixt') or the bin level model
+ * (params.bias_method = 'bins', see remixt/analysis/binbias.py).
  *
  * Input:
  *   ch_tumour_seqdata  - [tumour_id, seqdata.h5] tuples
@@ -21,6 +23,8 @@ include { split_segments }      from '../modules/calc_bias'
 include { gc_map_bias }         from '../modules/calc_bias'
 include { merge_biases }        from '../modules/calc_bias'
 include { biased_length }       from '../modules/calc_bias'
+include { annotate_bins }       from '../modules/binbias'
+include { bin_segment_lengths } from '../modules/binbias'
 
 
 workflow calc_bias {
@@ -36,9 +40,76 @@ workflow calc_bias {
     calc_fragment_stats(ch_tumour_seqdata)
     // out: [tumour_id, fragstats.json]
 
+    if (params.bias_method == 'bins') {
+        bin_lengths(ch_tumour_seqdata, ch_rawcounts, calc_fragment_stats.out, ref)
+        segment_lengths = bin_lengths.out.segment_lengths
+    } else if (params.bias_method == 'remixt') {
+        remixt_lengths(ch_tumour_seqdata, ch_rawcounts, calc_fragment_stats.out, ref)
+        segment_lengths = remixt_lengths.out.segment_lengths
+    } else {
+        error "Unknown bias_method ${params.bias_method}, expected remixt or bins"
+    }
+
+    emit:
+    segment_lengths = segment_lengths   // [tumour_id, segment_lengths.tsv]
+}
+
+
+/*
+ * Bin level depth model, with the depth panel of normals in params.depth_panel if
+ * given, and otherwise a smooth function of GC and mappable fraction in bins of
+ * params.bias_bin_size.
+ */
+workflow bin_lengths {
+
+    take:
+    ch_tumour_seqdata    // channel: [tumour_id, seqdata.h5]
+    ch_rawcounts         // channel: [tumour_id, rawcounts.tsv]
+    ch_fragstats         // channel: [tumour_id, fragstats.json]
+    ref                  // map: reference files
+
+    main:
+
+    no_file = file("${projectDir}/assets/NO_FILE")
+
+    if (params.depth_panel) {
+        method = 'panel'
+        bins_or_panel = file(params.depth_panel, checkIfExists: true)
+        mask = params.depth_panel_mask ? file(params.depth_panel_mask, checkIfExists: true) : no_file
+    } else {
+        method = 'curve'
+        bins_or_panel = annotate_bins(ref.genome_fasta, ref.genome_fai, ref.mappability, params.bias_bin_size)
+        mask = no_file
+    }
+
+    ch_input = ch_tumour_seqdata
+        .join(ch_rawcounts)
+        .join(ch_fragstats)
+        // [tumour_id, seqdata, rawcounts, fragstats]
+
+    bin_segment_lengths(ch_input, bins_or_panel, mask, method)
+
+    emit:
+    segment_lengths = bin_segment_lengths.out.segment_lengths   // [tumour_id, segment_lengths.tsv]
+}
+
+
+/*
+ * Position level GC and mappability model.
+ */
+workflow remixt_lengths {
+
+    take:
+    ch_tumour_seqdata    // channel: [tumour_id, seqdata.h5]
+    ch_rawcounts         // channel: [tumour_id, rawcounts.tsv]
+    ch_fragstats         // channel: [tumour_id, fragstats.json]
+    ref                  // map: reference files
+
+    main:
+
     // 2. Sample GC - needs seqdata + fragstats
     ch_sample_gc_input = ch_tumour_seqdata
-        .join(calc_fragment_stats.out)
+        .join(ch_fragstats)
         // [tumour_id, seqdata, fragstats.json]
 
     sample_gc(ch_sample_gc_input, ref.genome_fasta, ref.genome_fai, ref.mappability)
@@ -62,7 +133,6 @@ workflow calc_bias {
         // [tumour_id, chunk_idx, chunk_file]
 
     // Join fragstats and gc_dist per tumour_id
-    ch_fragstats = calc_fragment_stats.out   // [tumour_id, fragstats.json]
     ch_gc_dist = gc_lowess.out.map { tid, loess, table -> tuple(tid, loess) }  // [tumour_id, gcloess.tsv]
 
     ch_bias_input = ch_chunks
