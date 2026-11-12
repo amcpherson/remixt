@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Merge multiple TSV tables into a single file.
 
-Reused for merge_haps, merge_biases, and any other table merge step.
+Reused for merge_haps and any other table merge step.
 """
 
 import click

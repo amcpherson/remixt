@@ -115,7 +115,7 @@ def merge_mappability(runs_filenames, mappability_filename):
         mappability_filename (str): output HDF5, one table per chromosome
 
     Tables are named chromosome_{chromosome}, with columns start, end and quality,
-    as read by `remixt.analysis.gcbias.read_mappability_indicator`.
+    as read by `remixt.analysis.binbias.read_mappability_indicator`.
     """
     with pd.HDFStore(mappability_filename, 'w') as store:
         for runs_filename in runs_filenames:
