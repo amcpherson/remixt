@@ -17,7 +17,7 @@ def pipeline_param_names() {
         'normal_sample_id', 'normal_bam_file', 'ensembl_genome_version',
         'genomes', 'remixt_container', 'mappability_chunk_size',
         'tumour_seqdata_files', 'normal_seqdata_file', 'haplotypes_file',
-        'bias_method', 'bias_bin_size', 'depth_panel', 'depth_panel_mask',
+        'bias_bin_size', 'depth_panel', 'depth_panel_mask',
         'panel_sample_ids', 'panel_bam_files', 'panel_seqdata_files', 'panel_female_ids',
     ]
 }

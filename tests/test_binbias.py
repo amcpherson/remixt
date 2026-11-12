@@ -41,14 +41,9 @@ def test_annotate_bins(tmp_path):
         store.put('chromosome_1', pd.DataFrame({'start': [0, 12], 'end': [5, 20], 'quality': [60, 0]}),
                   format='table', data_columns=True)
     bins = bb.make_bins({'1': 20}, 10)
-    annotated, hist = bb.annotate_bins(bins, str(fasta), str(mappability), map_qual_threshold=1,
-                                       fragment_length=4, gc_position_offset=0, gc_hist_resolution=5)
+    annotated = bb.annotate_bins(bins, str(fasta), str(mappability), map_qual_threshold=1)
     np.testing.assert_allclose(annotated['gc'], [4 / 8, 1.])
     np.testing.assert_allclose(annotated['map_frac'], [.5, 0.])
-    # Windows of 4 centred at 2..18; with N at 8, 9 windows starting at 5..9 are invalid
-    assert annotated['frag_n'].tolist() == [5, 7]
-    assert hist.sum() == 12
-    assert hist[1, 4] == 7
 
 
 def test_build_panel_recovers_factor():
