@@ -109,20 +109,9 @@ homozygous_p_value_threshold                = 1e-16
 shapeit_num_samples                         = 100
 shapeit_confidence_threshold                = 0.95
 
-# Enable correction
-do_gc_correction                            = True
-do_mappability_correction                   = True
-
-# GC bias correction
-sample_gc_num_positions                     = 10000000
-gc_position_offset                          = 4
-
-# Depth bias model: 'remixt' for the position level GC and mappability model,
-# 'bins' for the bin level model of remixt.analysis.binbias, which uses a depth
-# panel of normals if one is given and a mappability curve otherwise
-bias_method                                 = 'remixt'
-
-# Bin size of the bin level model without a depth panel
+# Depth bias model, see remixt.analysis.binbias: per bin GC correction with a
+# depth panel of normals if one is given, and otherwise a smooth function of GC
+# and mappable fraction in bins of this size
 bias_bin_size                               = 10000
 
 # Depth panel of normals: resolution of the depth factor, resolution of the

@@ -1,7 +1,7 @@
 #!/usr/bin/env nextflow
 
 /*
- * Build a depth panel of normals for the bin level depth model (bias_method = 'bins').
+ * Build a depth panel of normals for the depth bias model, see remixt/analysis/binbias.py.
  *
  * Each normal's fragment midpoints are counted in bins of panel_mask_bin_size and GC
  * corrected. The panel holds, per bin of panel_bin_size, the median over normals of the

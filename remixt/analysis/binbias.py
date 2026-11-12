@@ -1,7 +1,6 @@
 """ Bin level GC and mappability correction of read depth.
 
-An alternative to the position level model in gcbias.py. Read depth is modelled per genomic bin,
-from the count of fragment midpoints in the bin:
+Read depth is modelled per genomic bin, from the count of fragment midpoints in the bin:
 
     log E[x_b] = s + f(gc_b) + m_b
 
@@ -15,15 +14,13 @@ mappability term m_b is either
     together with f.
 
 Segment lengths are the sum of bin expectations over the part of each segment where a
-contained fragment can have its midpoint, scaled to the total segment length as in
-gcbias.calculate_biased_length.
+contained fragment can have its midpoint, scaled to the total segment length.
 """
 
 import numpy as np
 import pandas as pd
 import patsy
 
-import remixt.analysis.gcbias
 import remixt.segalg
 import remixt.seqdataio
 import remixt.utils
@@ -56,44 +53,48 @@ def make_bins(chromosome_lengths, bin_size):
     return pd.concat(bins, ignore_index=True)
 
 
-def annotate_bins(
-        bins,
-        genome_fasta_filename,
-        mappability_filename,
-        map_qual_threshold=1,
-        fragment_length=None,
-        gc_position_offset=4,
-        gc_hist_resolution=None,
-):
+def read_mappability_indicator(mappability_filename, chromosome, max_chromosome_length, map_qual_threshold):
+    """ Indicator per position of the k-mer starting there aligning back with at least map_qual_threshold.
+
+    Args:
+        mappability_filename (str): mappability HDF5 file, see remixt.mappability
+        chromosome (str): chromosome
+        max_chromosome_length (int): length of the returned indicator
+        map_qual_threshold (int): mapping quality threshold
+
+    Returns:
+        numpy.array: uint8 indicator per position
+    """
+    with pd.HDFStore(mappability_filename, 'r') as store:
+        mappability_table = store.select('chromosome_' + chromosome, 'quality >= map_qual_threshold')
+
+    mappability = np.zeros(max_chromosome_length, dtype=np.uint8)
+
+    for start, end in mappability_table[['start', 'end']].values:
+        end = min(end, max_chromosome_length)
+        mappability[start:end] = 1
+
+    return mappability
+
+
+def annotate_bins(bins, genome_fasta_filename, mappability_filename, map_qual_threshold=1):
     """ GC and mappable fraction of each bin.
 
     Args:
         bins (pandas.DataFrame): columns chromosome, start, end, sorted by start within chromosome
+        genome_fasta_filename (str): reference genome fasta
+        mappability_filename (str): mappability HDF5 file
 
     KwArgs:
         map_qual_threshold (int): k-mers aligning with at least this quality are mappable
-        fragment_length (int): if given, also calculate fragment window GC, see below
-        gc_position_offset (int): trim this many bases from each end of fragment windows
-        gc_hist_resolution (int): if given, also return a histogram of fragment window GC
 
     Returns:
-        pandas.DataFrame: bins with additional columns gc (GC of non N bases, nan if all N),
-            map_frac (fraction of positions whose k-mer is mappable), and if fragment_length is
-            given, frag_gc (mean GC of the fragment windows centred in the bin, windows with N
-            excluded) and frag_n (number of such windows)
-        numpy.array: if gc_hist_resolution is given, bins x gc_hist_resolution counts of fragment
-            windows centred in each bin, by GC (window GC fraction times resolution - 1, rounded)
+        pandas.DataFrame: bins with additional columns gc (GC of non N bases, nan if all N) and
+            map_frac (fraction of positions whose k-mer is mappable)
     """
     bins = bins.copy()
     bins['gc'] = np.nan
     bins['map_frac'] = np.nan
-    if fragment_length is not None:
-        bins['frag_gc'] = np.nan
-        bins['frag_n'] = 0
-        window = int(fragment_length) - 2 * gc_position_offset
-    hist = None
-    if gc_hist_resolution is not None:
-        hist = np.zeros((len(bins), gc_hist_resolution), dtype=np.int32)
 
     chromosomes = set(bins['chromosome'])
     for chromosome, sequence in remixt.utils.read_sequences(genome_fasta_filename):
@@ -105,54 +106,20 @@ def annotate_bins(
         end = np.minimum(bins['end'].values[idx], len(sequence))
 
         seq = np.frombuffer(sequence.upper().encode(), dtype='S1')
-        is_gc = (seq == b'G') | (seq == b'C')
-        is_base = seq != b'N'
+        gc_cumsum = np.concatenate([[0], np.cumsum((seq == b'G') | (seq == b'C'), dtype=np.int64)])
+        base_cumsum = np.concatenate([[0], np.cumsum(seq != b'N', dtype=np.int64)])
         del seq
-        gc_cumsum = np.concatenate([[0], np.cumsum(is_gc, dtype=np.int64)])
-        base_cumsum = np.concatenate([[0], np.cumsum(is_base, dtype=np.int64)])
-        del is_gc, is_base
 
         num_bases = base_cumsum[end] - base_cumsum[start]
         bins.loc[bins.index[idx], 'gc'] = np.where(
             num_bases > 0, (gc_cumsum[end] - gc_cumsum[start]) / np.maximum(num_bases, 1), np.nan)
+        del gc_cumsum, base_cumsum
 
-        mappable = remixt.analysis.gcbias.read_mappability_indicator(
-            mappability_filename, chromosome, len(sequence), map_qual_threshold)
+        mappable = read_mappability_indicator(mappability_filename, chromosome, len(sequence), map_qual_threshold)
         map_cumsum = np.concatenate([[0], np.cumsum(mappable, dtype=np.int64)])
         del mappable
         bins.loc[bins.index[idx], 'map_frac'] = (map_cumsum[end] - map_cumsum[start]) / (end - start)
-        del map_cumsum
 
-        if fragment_length is not None:
-            # Window of fragment centred on position p is [p - window // 2, p - window // 2 + window)
-            n = len(sequence)
-            centre = np.arange(window // 2, n - window + window // 2 + 1)
-            wstart = centre - window // 2
-            wgc = gc_cumsum[wstart + window] - gc_cumsum[wstart]
-            valid = (base_cumsum[wstart + window] - base_cumsum[wstart]) == window
-            frac = np.where(valid, wgc / window, 0.)
-            frac_cumsum = np.zeros(n + 1)
-            frac_cumsum[centre + 1] = frac
-            frac_cumsum = np.cumsum(frac_cumsum)
-            valid_cumsum = np.zeros(n + 1, dtype=np.int64)
-            valid_cumsum[centre + 1] = valid
-            valid_cumsum = np.cumsum(valid_cumsum)
-            frag_n = valid_cumsum[end] - valid_cumsum[start]
-            bins.loc[bins.index[idx], 'frag_n'] = frag_n
-            bins.loc[bins.index[idx], 'frag_gc'] = np.where(
-                frag_n > 0, (frac_cumsum[end] - frac_cumsum[start]) / np.maximum(frag_n, 1), np.nan)
-            if hist is not None:
-                bin_of_centre = np.searchsorted(start, centre[valid], side='right') - 1
-                gc_bin = np.rint(frac[valid] * (gc_hist_resolution - 1)).astype(np.int64)
-                counts = np.bincount(bin_of_centre * gc_hist_resolution + gc_bin,
-                                     minlength=len(idx) * gc_hist_resolution)
-                hist[idx] = counts[:len(idx) * gc_hist_resolution].reshape(len(idx), gc_hist_resolution)
-            del centre, wstart, wgc, valid, frac, frac_cumsum, valid_cumsum
-
-        del gc_cumsum, base_cumsum
-
-    if gc_hist_resolution is not None:
-        return bins, hist
     return bins
 
 
@@ -623,5 +590,13 @@ def bin_segment_lengths(
         segments['readcount'] -= masked_contained_counts(
             seqdata_filename, segments, mask, filter_duplicates, map_qual_threshold)
 
-    segments = remixt.analysis.gcbias.calculate_biased_length(segments)
+    segments = calculate_biased_length(segments)
     return segments, bins
+
+
+def calculate_biased_length(segments):
+    """ Scale segment biases (expected counts) to lengths summing to the total segment length. """
+    segments = segments.copy()
+    segments['bias'] = segments['bias'] / segments['bias'].sum()
+    segments['length'] = segments['bias'] * float((segments['end'] - segments['start']).sum())
+    return segments
