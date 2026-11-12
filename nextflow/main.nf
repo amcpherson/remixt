@@ -16,6 +16,9 @@ def pipeline_param_names() {
         'tumour_sample_ids', 'tumour_bam_files', 'results_files',
         'normal_sample_id', 'normal_bam_file', 'ensembl_genome_version',
         'genomes', 'remixt_container', 'mappability_chunk_size',
+        'tumour_seqdata_files', 'normal_seqdata_file', 'haplotypes_file',
+        'bias_method', 'bias_bin_size', 'depth_panel', 'depth_panel_mask',
+        'panel_sample_ids', 'panel_bam_files', 'panel_seqdata_files', 'panel_female_ids',
     ]
 }
 
@@ -59,26 +62,6 @@ workflow {
         snp_positions: ref_file(genome.snp_positions),
     ]
 
-    // --- Build sample channels ---
-    tumour_ids  = params.tumour_sample_ids.tokenize(',')
-    tumour_bams = params.tumour_bam_files.tokenize(',')
-
-    // Channel of [sample_id, bam_file] for tumours
-    ch_tumour_bams = Channel.fromList(
-        [tumour_ids, tumour_bams].transpose()
-    ).map { sid, bam -> tuple(sid, file(bam)) }
-
-    // If normal is provided, add to full sample set
-    normal_id = params.normal_sample_id ?: 'none'
-    if (normal_id != 'none') {
-        ch_normal_bam = Channel.of(
-            tuple(params.normal_sample_id, file(params.normal_bam_file))
-        )
-        ch_all_bams = ch_tumour_bams.mix(ch_normal_bam)
-    } else {
-        ch_all_bams = ch_tumour_bams
-    }
-
     // --- Get chromosomes ---
     chromosomes = params.chromosomes.toString().tokenize(',')
     ch_chromosomes = Channel.fromList(chromosomes)
@@ -93,17 +76,50 @@ workflow {
         tuple(chrom, files)
     }
 
-    // --- Extract seqdata per sample ---
-    extract_seqdata(
-        ch_all_bams,
-        ch_chromosomes,
-        ref.snp_positions,
-    )
-    // out.seqdata: [sample_id, seqdata.h5]
+    normal_id = params.normal_sample_id ?: 'none'
+    tumour_ids = params.tumour_sample_ids.tokenize(',')
+
+    if (params.tumour_seqdata_files) {
+        // --- Existing seqdata per sample ---
+        tumour_seqdata = params.tumour_seqdata_files.tokenize(',')
+        ch_seqdata = Channel.fromList([tumour_ids, tumour_seqdata].transpose())
+            .map { sid, f -> tuple(sid, file(f, checkIfExists: true)) }
+        if (normal_id != 'none') {
+            ch_seqdata = ch_seqdata.mix(Channel.of(
+                tuple(normal_id, file(params.normal_seqdata_file, checkIfExists: true))))
+        }
+    } else {
+        // --- Build sample channels ---
+        tumour_bams = params.tumour_bam_files.tokenize(',')
+
+        // Channel of [sample_id, bam_file] for tumours
+        ch_tumour_bams = Channel.fromList(
+            [tumour_ids, tumour_bams].transpose()
+        ).map { sid, bam -> tuple(sid, file(bam)) }
+
+        // If normal is provided, add to full sample set
+        if (normal_id != 'none') {
+            ch_normal_bam = Channel.of(
+                tuple(params.normal_sample_id, file(params.normal_bam_file))
+            )
+            ch_all_bams = ch_tumour_bams.mix(ch_normal_bam)
+        } else {
+            ch_all_bams = ch_tumour_bams
+        }
+
+        // --- Extract seqdata per sample ---
+        extract_seqdata(
+            ch_all_bams,
+            ch_chromosomes,
+            ref.snp_positions,
+        )
+        ch_seqdata = extract_seqdata.out.seqdata
+        // [sample_id, seqdata.h5]
+    }
 
     // --- Run full remixt pipeline on seqdata ---
     remixt_seqdata(
-        extract_seqdata.out.seqdata,
+        ch_seqdata,
         breakpoints,
         ch_chromosomes,
         normal_id,

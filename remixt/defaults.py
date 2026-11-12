@@ -117,6 +117,21 @@ do_mappability_correction                   = True
 sample_gc_num_positions                     = 10000000
 gc_position_offset                          = 4
 
+# Depth bias model: 'remixt' for the position level GC and mappability model,
+# 'bins' for the bin level model of remixt.analysis.binbias, which uses a depth
+# panel of normals if one is given and a mappability curve otherwise
+bias_method                                 = 'remixt'
+
+# Bin size of the bin level model without a depth panel
+bias_bin_size                               = 10000
+
+# Depth panel of normals: resolution of the depth factor, resolution of the
+# mask of hypervariable bins, and the excess coefficient of variation across
+# normals, beyond Poisson, above which a bin is masked
+panel_bin_size                              = 10000
+panel_mask_bin_size                         = 1000
+panel_mask_excess_cv                        = 0.3
+
 # Method to use for fitting segment/breakpoint copy number model
 fit_method                                  = 'hmm_graph'
 

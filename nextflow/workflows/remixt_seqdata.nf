@@ -54,16 +54,20 @@ workflow remixt_seqdata {
     create_segments(ref.genome_fai, ref.gap_table, breakpoints)
     segments = create_segments.out   // path: segments.tsv
 
-    // --- 2. Infer haplotypes ---
-    infer_haps(
-        ch_seqdata,
-        ch_chromosomes,
-        normal_id,
-        ref,
-        ch_phasing,
-        phasing_method,
-    )
-    haplotypes = infer_haps.out.haplotypes   // path: haplotypes.tsv
+    // --- 2. Infer haplotypes, or use params.haplotypes_file ---
+    if (params.haplotypes_file) {
+        haplotypes = file(params.haplotypes_file, checkIfExists: true)
+    } else {
+        infer_haps(
+            ch_seqdata,
+            ch_chromosomes,
+            normal_id,
+            ref,
+            ch_phasing,
+            phasing_method,
+        )
+        haplotypes = infer_haps.out.haplotypes   // path: haplotypes.tsv
+    }
 
     // --- 3. Prepare read counts ---
     prepare_counts(
