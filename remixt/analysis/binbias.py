@@ -371,9 +371,13 @@ def build_panel(
     unmasked_len = np.bincount(panel_index, weights=panel_annot['base_len'], minlength=len(panel))
     panel['masked_frac'] = 1. - unmasked_len / (panel['end'] - panel['start']).values
     counts = np.vstack([np.bincount(panel_index, weights=r, minlength=len(panel)) for r in unmasked_counts])
+    # Counts cover only the unmasked part of each bin, so the factor is per unmasked base, as
+    # fit_sample_bins applies it together with the log unmasked fraction
+    with np.errstate(divide='ignore'):
+        log_unmasked = np.log(1. - panel['masked_frac'].values)
     resid = np.full(counts.shape, np.nan)
     for i in range(num_normals):
-        resid[i], _ = gc_residuals(panel, counts[i], gc_df=gc_df)
+        resid[i], _ = gc_residuals(panel, counts[i], gc_df=gc_df, offset=log_unmasked)
     usable = (panel['map_frac'].values > 0) & (panel['masked_frac'].values < 1)
     resid[:, ~usable] = np.nan
     panel['factor'] = np.nanmedian(resid, axis=0) if num_normals > 0 else np.nan
