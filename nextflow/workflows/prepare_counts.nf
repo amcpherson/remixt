@@ -19,6 +19,7 @@ include { segment_readcount }         from '../modules/prepare_counts'
 include { haplotype_allele_readcount } from '../modules/prepare_counts'
 include { phase_segments }             from '../modules/prepare_counts'
 include { prepare_readcount_table }    from '../modules/prepare_counts'
+include { depth_panel_mask_file }      from '../modules/utils'
 
 
 workflow prepare_counts {
@@ -30,8 +31,8 @@ workflow prepare_counts {
 
     main:
 
-    // 1. Count reads per segment, per tumour
-    segment_readcount(ch_tumour_seqdata, segments)
+    // 1. Count reads per segment, per tumour, without fragments in the depth panel mask
+    segment_readcount(ch_tumour_seqdata, segments, depth_panel_mask_file())
     // out: [tumour_id, segment_counts.tsv]
 
     // 2. Count allele reads per segment per tumour
