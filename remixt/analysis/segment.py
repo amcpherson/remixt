@@ -5,6 +5,7 @@ import remixt.defaults
 import remixt.seqdataio
 import remixt.segalg
 import remixt.utils
+import remixt.analysis.binbias
 
 
 def create_segments(
@@ -130,7 +131,7 @@ def create_segments(
     segments.to_csv(segment_filename, sep='\t', index=False, columns=['chromosome', 'start', 'end'])
 
 
-def count_segment_reads(seqdata_filename, chromosome, segments, filter_duplicates=False, map_qual_threshold=1):
+def count_segment_reads(seqdata_filename, chromosome, segments, filter_duplicates=False, map_qual_threshold=1, mask=None):
     """ Count reads falling entirely within segments on a specific chromosome
 
     Args:
@@ -141,6 +142,7 @@ def count_segment_reads(seqdata_filename, chromosome, segments, filter_duplicate
     KwArgs:
         filter_duplicates (bool): filter reads marked as duplicate
         map_qual_threshold (int): filter reads with less than this mapping quality
+        mask (pandas.DataFrame): masked regions, fragments with a masked midpoint are not counted
 
     Returns:
         pandas.DataFrame: output segment data
@@ -152,15 +154,15 @@ def count_segment_reads(seqdata_filename, chromosome, segments, filter_duplicate
 
     """
 
-    # Read fragment data with filtering
-    reads = remixt.seqdataio.read_fragment_data(
+    # Read fragment data with filtering, sorted by start, without masked fragments
+    reads = remixt.analysis.binbias.read_fragment_midpoints(
         seqdata_filename, chromosome,
         filter_duplicates=filter_duplicates,
         map_qual_threshold=map_qual_threshold,
+        mask=mask,
     )
 
     # Sort in preparation for search
-    reads.sort_values('start', inplace=True)
     segments.sort_values('start', inplace=True)
     
     # Count segment reads
@@ -175,7 +177,7 @@ def count_segment_reads(seqdata_filename, chromosome, segments, filter_duplicate
     return segments
 
 
-def create_segment_counts(segments, seqdata_filename, filter_duplicates=False, map_qual_threshold=1):
+def create_segment_counts(segments, seqdata_filename, filter_duplicates=False, map_qual_threshold=1, mask=None):
     """ Create a table of read counts for segments
 
     Args:
@@ -185,6 +187,7 @@ def create_segment_counts(segments, seqdata_filename, filter_duplicates=False, m
     KwArgs:
         filter_duplicates (bool): filter reads marked as duplicate
         map_qual_threshold (int): filter reads with less than this mapping quality
+        mask (pandas.DataFrame): masked regions, fragments with a masked midpoint are not counted
 
     Returns:
         pandas.DataFrame: output segment data
@@ -205,7 +208,8 @@ def create_segment_counts(segments, seqdata_filename, filter_duplicates=False, m
         counts.append(count_segment_reads(
             seqdata_filename, chrom, segs.copy(),
             filter_duplicates=filter_duplicates,
-            map_qual_threshold=map_qual_threshold))
+            map_qual_threshold=map_qual_threshold,
+            mask=mask))
     counts = pd.concat(counts)
 
     # Sort on index to return dataframe in original order

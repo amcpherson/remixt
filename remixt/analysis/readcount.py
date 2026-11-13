@@ -3,6 +3,7 @@ import pandas as pd
 import remixt.defaults
 import remixt.analysis.segment
 import remixt.analysis.haplotype
+import remixt.analysis.binbias
 
 
 def segment_readcount(
@@ -11,15 +12,22 @@ def segment_readcount(
     seqdata_filename,
     filter_duplicates=remixt.defaults.filter_duplicates,
     map_qual_threshold=remixt.defaults.map_qual_threshold,
+    mask_filename=None,
 ):
+    """ Count fragments contained in each segment, excluding fragments whose midpoint is in
+    the depth panel mask if mask_filename is given.
+    """
 
     segments = pd.read_csv(segment_filename, sep='\t', converters={'chromosome': str})
+
+    mask = remixt.analysis.binbias.read_mask(mask_filename) if mask_filename is not None else None
 
     segment_counts = remixt.analysis.segment.create_segment_counts(
         segments,
         seqdata_filename,
         filter_duplicates=filter_duplicates,
         map_qual_threshold=map_qual_threshold,
+        mask=mask,
     )
 
     segment_counts.to_csv(segment_counts_filename, sep='\t', index=False)

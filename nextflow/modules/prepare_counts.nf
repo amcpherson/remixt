@@ -14,16 +14,19 @@ process segment_readcount {
     input:
     tuple val(tumour_id), path(seqdata)
     path segments
+    path mask
 
     output:
     tuple val(tumour_id), path("${tumour_id}.segment_counts.tsv")
 
     script:
+    def mask_arg = mask.name != 'NO_FILE' ? "--mask ${mask}" : ''
     """
     segment_readcount.py \
         --segments ${segments} \
         --seqdata ${seqdata} \
         --output ${tumour_id}.segment_counts.tsv \
+        ${mask_arg} \
         ${remixt_args('segment_readcount')}
     """
 }

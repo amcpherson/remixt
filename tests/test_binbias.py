@@ -75,3 +75,44 @@ def test_build_panel_recovers_factor():
     partial = (panel['masked_frac'] > 0) & (panel['masked_frac'] < 1)
     assert partial.any()
     assert np.abs(panel.loc[partial, 'factor']).max() < .05
+
+def test_in_mask():
+    mask = pd.DataFrame({'chromosome': ['1', '1', '2'], 'start': [30, 10, 0], 'end': [40, 20, 100]})
+    positions = np.array([5, 10, 19, 20, 29, 30, 39, 40])
+    np.testing.assert_array_equal(bb.in_mask(positions, mask, '1'),
+                                  [False, True, True, False, False, True, True, False])
+    assert not bb.in_mask(positions, mask, '3').any()
+
+
+def _fake_fragments(monkeypatch, fragments):
+    """ Serve fragments, a dict of chromosome to (start, end) arrays, in place of a seqdata file. """
+    import remixt.seqdataio
+
+    def read_fragment_data(seqdata_filename, chromosome, **kwargs):
+        start, end = fragments[chromosome]
+        return pd.DataFrame({'fragment_id': np.arange(len(start)), 'start': start, 'end': end})
+
+    monkeypatch.setattr(remixt.seqdataio, 'read_fragment_data', read_fragment_data)
+    monkeypatch.setattr(remixt.seqdataio, 'read_chromosomes', lambda f: list(fragments))
+
+
+def test_mask_applied_alike_to_segment_and_bin_counts(monkeypatch):
+    import remixt.analysis.segment
+
+    # Fragments of length 10 starting at 1, 3, ..., 181, so none start on a segment boundary
+    start = np.arange(1, 182, 2)
+    _fake_fragments(monkeypatch, {'1': (start, start + 10)})
+    mask = pd.DataFrame({'chromosome': ['1'], 'start': [50], 'end': [70]})
+    segments = pd.DataFrame({'chromosome': ['1', '1'], 'start': [0, 100], 'end': [100, 200]})
+    bins = bb.make_bins({'1': 200}, 100)
+
+    unmasked = remixt.analysis.segment.create_segment_counts(segments.copy(), 'unused')['readcount'].values
+    masked = remixt.analysis.segment.create_segment_counts(segments.copy(), 'unused', mask=mask)['readcount'].values
+    # Segment [0, 100) contains the 45 fragments starting 1-89, of which the 10 starting 45-63
+    # have midpoints in [50, 70)
+    np.testing.assert_array_equal(unmasked, [45, 41])
+    np.testing.assert_array_equal(masked, [35, 41])
+
+    binned = bb.count_bins('unused', bins, mask=mask)
+    # Midpoints 6-98 (47 fragments) in bin [0, 100), less the same 10, and 100-186 (44) in [100, 200)
+    np.testing.assert_array_equal(binned, [37, 44])

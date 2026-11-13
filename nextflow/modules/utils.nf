@@ -32,6 +32,17 @@ def remixt_param_names() {
 
 
 /*
+ * The depth panel mask, applied alike to segment read counts and segment lengths, or the
+ * NO_FILE placeholder when there is no depth panel or no mask.
+ */
+def depth_panel_mask_file() {
+    (params.depth_panel && params.depth_panel_mask)
+        ? file(params.depth_panel_mask, checkIfExists: true)
+        : file("${projectDir}/assets/NO_FILE")
+}
+
+
+/*
  * "id:path" command line args from a list of ids and a matching list of staged files.
  */
 def id_path_args(ids, files) {

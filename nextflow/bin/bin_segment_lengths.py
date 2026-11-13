@@ -2,7 +2,8 @@
 """Bias corrected segment lengths with the bin level depth model.
 
 With --panel and --mask, depth is GC corrected per bin with the panel's depth factor and
-masked regions are removed from counts and lengths. Otherwise --bins gives annotated bins
+masked regions are removed from bin counts and segment lengths. The segment counts in --counts
+must have been made with the same mask (segment_readcount.py --mask). Otherwise --bins gives annotated bins
 and depth is fitted as a smooth function of GC and mappable fraction.
 """
 

@@ -21,6 +21,7 @@
 include { calc_fragment_stats } from '../modules/calc_bias'
 include { annotate_bins }       from '../modules/binbias'
 include { bin_segment_lengths } from '../modules/binbias'
+include { depth_panel_mask_file } from '../modules/utils'
 
 
 workflow calc_bias {
@@ -36,17 +37,16 @@ workflow calc_bias {
     calc_fragment_stats(ch_tumour_seqdata)
     // out: [tumour_id, fragstats.json]
 
-    // 2. Depth panel, or annotated bins for the GC and mappability curve
-    no_file = file("${projectDir}/assets/NO_FILE")
+    // 2. Depth panel, or annotated bins for the GC and mappability curve. The mask is the
+    //    same one applied to the segment read counts in prepare_counts.
+    mask = depth_panel_mask_file()
 
     if (params.depth_panel) {
         method = 'panel'
         bins_or_panel = file(params.depth_panel, checkIfExists: true)
-        mask = params.depth_panel_mask ? file(params.depth_panel_mask, checkIfExists: true) : no_file
     } else {
         method = 'curve'
         bins_or_panel = annotate_bins(ref.genome_fasta, ref.genome_fai, ref.mappability, params.bias_bin_size)
-        mask = no_file
     }
 
     // 3. Segment lengths from per bin expected depth

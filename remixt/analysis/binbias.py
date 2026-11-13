@@ -21,7 +21,6 @@ import numpy as np
 import pandas as pd
 import patsy
 
-import remixt.segalg
 import remixt.seqdataio
 import remixt.utils
 
@@ -123,8 +122,34 @@ def annotate_bins(bins, genome_fasta_filename, mappability_filename, map_qual_th
     return bins
 
 
-def read_fragment_midpoints(seqdata_filename, chromosome, filter_duplicates=False, map_qual_threshold=1):
-    """ Fragment start, end and midpoint for one chromosome, sorted by start. """
+def in_mask(positions, mask, chromosome):
+    """ Indicator of each position lying in a masked region.
+
+    Args:
+        positions (numpy.array): positions on chromosome
+        mask (pandas.DataFrame): masked regions, columns chromosome, start, end, non overlapping
+        chromosome (str): chromosome of the positions
+
+    Returns:
+        numpy.array: boolean per position
+    """
+    positions = np.asarray(positions)
+    m = mask[mask['chromosome'] == chromosome].sort_values('start')
+    if len(m) == 0:
+        return np.zeros(len(positions), dtype=bool)
+    starts = m['start'].values
+    ends = m['end'].values
+    k = np.searchsorted(starts, positions, side='right') - 1
+    return (k >= 0) & (positions < ends[np.maximum(k, 0)])
+
+
+def read_fragment_midpoints(seqdata_filename, chromosome, filter_duplicates=False, map_qual_threshold=1, mask=None):
+    """ Fragment start, end and midpoint for one chromosome, sorted by start.
+
+    With a mask, fragments whose midpoint is masked are dropped. This is the one place the
+    mask is applied to reads, so that segment counts, bin counts and segment lengths all
+    exclude the same fragments.
+    """
     reads = remixt.seqdataio.read_fragment_data(
         seqdata_filename, chromosome,
         filter_duplicates=filter_duplicates,
@@ -132,10 +157,12 @@ def read_fragment_midpoints(seqdata_filename, chromosome, filter_duplicates=Fals
     )
     reads = reads.sort_values('start')
     reads['midpoint'] = (reads['start'] + reads['end']) // 2
+    if mask is not None:
+        reads = reads[~in_mask(reads['midpoint'].values, mask, chromosome)]
     return reads
 
 
-def count_bins(seqdata_filename, bins, filter_duplicates=False, map_qual_threshold=1):
+def count_bins(seqdata_filename, bins, filter_duplicates=False, map_qual_threshold=1, mask=None):
     """ Count fragment midpoints in each bin.
 
     Args:
@@ -145,6 +172,7 @@ def count_bins(seqdata_filename, bins, filter_duplicates=False, map_qual_thresho
     KwArgs:
         filter_duplicates (bool): filter fragments marked as duplicate
         map_qual_threshold (int): filter fragments with less than this mapping quality
+        mask (pandas.DataFrame): masked regions, fragments with a masked midpoint are not counted
 
     Returns:
         numpy.array: count per bin, in the order of bins
@@ -159,7 +187,7 @@ def count_bins(seqdata_filename, bins, filter_duplicates=False, map_qual_thresho
         idx = idx[order]
         start = bins['start'].values[idx]
         end = bins['end'].values[idx]
-        reads = read_fragment_midpoints(seqdata_filename, chromosome, filter_duplicates, map_qual_threshold)
+        reads = read_fragment_midpoints(seqdata_filename, chromosome, filter_duplicates, map_qual_threshold, mask=mask)
         midpoint = reads['midpoint'].values
         b = np.searchsorted(start, midpoint, side='right') - 1
         inside = (b >= 0) & (midpoint < end[np.maximum(b, 0)])
@@ -510,31 +538,6 @@ def segment_expected(segments, bins, expected, fragment_mean, mask=None):
     return result
 
 
-def masked_contained_counts(seqdata_filename, segments, mask, filter_duplicates=False, map_qual_threshold=1):
-    """ Count fragments contained in each segment whose midpoint is masked.
-
-    Subtract from the segment readcount so that counts and lengths both exclude the mask.
-    """
-    counts = np.zeros(len(segments), dtype=np.int64)
-    for chromosome in segments['chromosome'].unique():
-        m = mask[mask['chromosome'] == chromosome].sort_values('start')
-        if len(m) == 0:
-            continue
-        seg_idx = np.where(segments['chromosome'].values == chromosome)[0]
-        reads = read_fragment_midpoints(seqdata_filename, chromosome, filter_duplicates, map_qual_threshold)
-        k = np.searchsorted(m['start'].values, reads['midpoint'].values, side='right') - 1
-        in_mask = (k >= 0) & (reads['midpoint'].values < m['end'].values[np.maximum(k, 0)])
-        reads = reads[in_mask]
-        segs = segments.iloc[seg_idx]
-        order = np.argsort(segs['start'].values)
-        c = remixt.segalg.contained_counts(
-            segs[['start', 'end']].values[order],
-            reads[['start', 'end']].values,
-        )
-        counts[seg_idx[order]] = c
-    return counts
-
-
 def bin_segment_lengths(
         segments,
         seqdata_filename,
@@ -550,6 +553,10 @@ def bin_segment_lengths(
 ):
     """ Bias corrected segment lengths with the bin level model.
 
+    Masked regions are excluded from bin counts and segment lengths. Segment read counts must
+    exclude them too, by counting with the same mask (segment_readcount with mask_filename);
+    they are not changed here.
+
     Args:
         segments (pandas.DataFrame): segment counts, columns chromosome, start, end, readcount
         seqdata_filename (str): tumour seqdata
@@ -562,8 +569,8 @@ def bin_segment_lengths(
         mask (pandas.DataFrame): masked regions for the panel method
 
     Returns:
-        pandas.DataFrame: segments with readcount reduced by masked fragments, and columns
-            bias (expected count) and length (bias scaled to the total segment length)
+        pandas.DataFrame: segments with columns bias (expected count) and length (bias scaled
+            to the total segment length)
         pandas.DataFrame: bins with readcount and expected columns, for diagnostics
     """
     segments = segments.copy()
@@ -571,28 +578,15 @@ def bin_segment_lengths(
         bins = panel
     bins = bins.reset_index(drop=True)
 
-    readcount = count_bins(seqdata_filename, bins, filter_duplicates, map_qual_threshold).astype(float)
-    if method == 'panel' and mask is not None and len(mask) > 0:
-        # Remove masked fragment midpoints from the bin counts
-        masked_bins = mask[['chromosome', 'start', 'end']].reset_index(drop=True)
-        masked = count_bins(seqdata_filename, masked_bins, filter_duplicates, map_qual_threshold)
-        masked_bins['readcount'] = masked
-        # Each mask bin lies within one panel bin when the panel resolution is a multiple of the mask resolution
-        key = pd.MultiIndex.from_frame(bins[['chromosome', 'start']])
-        panel_bin_size = int((bins['end'] - bins['start']).max())
-        mask_key = pd.MultiIndex.from_arrays([masked_bins['chromosome'], masked_bins['start'] // panel_bin_size * panel_bin_size])
-        pos = key.get_indexer(mask_key)
-        assert (pos >= 0).all()
-        np.subtract.at(readcount, pos, masked)
+    if method != 'panel':
+        mask = None
+
+    readcount = count_bins(seqdata_filename, bins, filter_duplicates, map_qual_threshold, mask=mask).astype(float)
 
     expected = fit_sample_bins(bins, readcount, method, gc_df=gc_df, map_df=map_df)
     bins = bins.assign(readcount=readcount, expected=expected)
 
-    segments['bias'] = segment_expected(segments, bins, expected, fragment_mean,
-                                        mask=mask if method == 'panel' else None)
-    if method == 'panel' and mask is not None and len(mask) > 0:
-        segments['readcount'] -= masked_contained_counts(
-            seqdata_filename, segments, mask, filter_duplicates, map_qual_threshold)
+    segments['bias'] = segment_expected(segments, bins, expected, fragment_mean, mask=mask)
 
     segments = calculate_biased_length(segments)
     return segments, bins
