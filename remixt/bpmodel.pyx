@@ -454,6 +454,8 @@ cdef class RemixtModel:
     cdef public np.float64_t betabin_loh_M_1
 
     cdef public int transition_model
+    cdef public np.float64_t transition_saturation
+    cdef public np.float64_t[:, :] log_prior_state
 
     cdef np.float64_t[:] _p_d
     cdef np.float64_t[:] _allele_cn_change
@@ -486,7 +488,9 @@ cdef class RemixtModel:
         self.x = x
         self.y = y
         self.num_alleles = 2
-        self.cn_max = max(cn_states.max(), brk_states.max())
+        # Largest copy number change between adjacent segments or across a breakpoint,
+        # per clone totals can exceed the largest allele copy number
+        self.cn_max = max(cn_states.sum(axis=-1).max(), brk_states.max())
         self.num_cn_states = self.cn_states.shape[1]
         self.num_brk_states = self.brk_states.shape[0]
 
@@ -597,7 +601,15 @@ cdef class RemixtModel:
         self.betabin_loh_M_1 = 1.
 
         # Temporary buffers
-        self._p_d = np.zeros(((self.cn_max + 1) * 2,))
+        # Indexed by copy number difference d in [-cn_max - 1, cn_max + 1], negative
+        # d wrapping around, so 2 * (cn_max + 1) + 1 entries to avoid collisions
+        self._p_d = np.zeros(((self.cn_max + 1) * 2 + 1,))
+
+        # Per segment state log prior, used to disable padding states
+        self.log_prior_state = np.zeros((self.num_segments, self.num_cn_states))
+
+        self.transition_model = 0
+        self.transition_saturation = 1e9
         self._allele_cn_change = np.zeros((2,))
 
         # Cached transmat expecation for elbo calc, updated with p_breakpoint
@@ -614,6 +626,8 @@ cdef class RemixtModel:
                 return 0.
             else:
                 return 1.
+        elif self.transition_model == 2:
+            return min(fabs(cn_diff), self.transition_saturation)
 
     @cython.wraparound(True)
     cdef void add_log_breakpoint_p_expectation_cn(self, np.float64_t[:] log_breakpoint_p, np.float64_t[:, :] p_cn,
@@ -746,7 +760,7 @@ cdef class RemixtModel:
     cpdef np.float64_t calculate_log_prior_cn(self, int n, int s) except *:
         """ Calculate the log prior of the copy number state for a segment.
         """
-        return -1.0 * self.num_alleles_subclonal[n, s] * self.l[n] * self.divergence_weight
+        return -1.0 * self.num_alleles_subclonal[n, s] * self.l[n] * self.divergence_weight + self.log_prior_state[n, s]
 
     cpdef np.float64_t calculate_log_likelihood_total(self, int n, int s, int u) except *:
         """ Calculate the log likelihood of total read counts for a segment.
