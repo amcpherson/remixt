@@ -231,9 +231,11 @@ tbody tr.selected { background: var(--hover); box-shadow: inset 3px 0 0 var(--ac
       <span class="key"><span class="swatch" style="background:var(--text-primary)"></span>Clonal breakpoint</span>
       <span class="key"><span class="swatch" style="background:var(--subclonal)"></span>Subclonal breakpoint</span>
       <span class="key"><span class="swatch" style="background:var(--axis)"></span>Breakpoint absent</span>
+      <span class="key"><span class="swatch box" style="background:var(--text-secondary)"></span>Masked, depth above max depth</span>
+      <span class="key"><span class="swatch box" style="background:var(--axis)"></span>Masked, short or few genotyped reads</span>
     </div>
     <div class="tracks" id="tracks">
-      <div class="track-title">Total copy number: raw segments, expected from the solution as a line</div>
+      <div class="track-title">Total copy number: raw segments, expected from the solution as a line, masked segments marked above</div>
       <canvas id="track-total"></canvas>
       <div class="track-title">Allele specific copy number: raw segments, expected from the solution as lines</div>
       <canvas id="track-allele"></canvas>
@@ -260,7 +262,7 @@ tbody tr.selected { background: var(--hover); box-shadow: inset 3px 0 0 var(--ac
     </div>
     <div class="card">
       <h2>Read depth</h2>
-      <div class="sub">Length weighted density of segment depth. Ticks mark the allele depth expected for 0, 1, 2… copies.</div>
+      <div class="sub">Length weighted density of segment depth. Ticks mark the allele depth expected for 0, 1, 2… copies, and the solid line the depth above which segments are masked.</div>
       <div class="legend">
         <span class="key"><span class="swatch" style="background:var(--major)"></span>Major</span>
         <span class="key"><span class="swatch" style="background:var(--minor)"></span>Minor</span>
@@ -425,6 +427,9 @@ function chromAt(g) {
 
 // ---------------------------------------------------------------- sample model
 
+const MASK_SHORT = 1, MASK_HIGH_DEPTH = 2, MASK_LOW_GENOTYPED = 3;
+const MASK_LABELS = ['', 'too short', 'depth above max depth', 'too few genotyped reads, allele only'];
+
 const samples = {};          // sample id -> decoded data plus derived arrays
 const selectedSolution = {}; // sample id -> solution id
 
@@ -440,6 +445,20 @@ function prepareSample(data) {
   seg.order = Array.from({ length: n }, (_, i) => i).sort((a, b) => seg.gStart[a] - seg.gStart[b]);
   data.solutionById = {};
   for (const s of data.solutions) data.solutionById[s.id] = s;
+  const reasons = seg.mask_reason || seg.start.map(() => 0);
+  seg.mask_reason = reasons;
+  const masked = [0, 0, 0, 0];
+  let total = 0;
+  for (let i = 0; i < n; i++) {
+    const len = seg.end[i] - seg.start[i];
+    total += len;
+    masked[reasons[i]] += len;
+  }
+  data.maskFrac = {
+    short: total ? masked[MASK_SHORT] / total : NaN,
+    highDepth: total ? masked[MASK_HIGH_DEPTH] / total : NaN,
+    lowGenotyped: total ? masked[MASK_LOW_GENOTYPED] / total : NaN,
+  };
   data.cache = {};
   return data;
 }
@@ -584,6 +603,7 @@ function cohortRows() {
       clone1: d.cloneFractions[0],
       fracSubclonal: d.fracSubclonal,
       fracLoh: d.fracLoh,
+      highDepth: data.maskFrac.highDepth,
       brk: d.numBrkPresent,
       brkTotal: data.breakpoints.prediction_id.length,
       numSolutions: data.solutions.length,
@@ -602,6 +622,7 @@ function renderCohort() {
     { key: 'clone1', label: 'Clone 1 fraction', title: 'Fraction of tumour cells in clone 1', format: r => fmtPct(r.clone1) },
     { key: 'fracSubclonal', label: 'Subclonal', title: 'Fraction of the genome with copy number differing between clones', format: r => fmtPct(r.fracSubclonal) },
     { key: 'fracLoh', label: 'LOH', title: 'Fraction of the genome with no minor allele in any clone', format: r => fmtPct(r.fracLoh) },
+    { key: 'highDepth', label: 'High depth masked', title: 'Fraction of the genome masked from the likelihood for depth above the max depth', format: r => fmtPct(r.highDepth) },
     { key: 'brk', label: 'Breakpoints', title: 'Breakpoints present in a clone, of all breakpoints', format: r => `${fmtInt(r.brk)} / ${fmtInt(r.brkTotal)}` },
     { key: 'numSolutions', label: 'Solutions', title: 'Solutions, and failed fits', format: r => fmtInt(r.numSolutions) + (r.numFailed ? ` <span class="hint">(${r.numFailed} failed)</span>` : '') },
     { key: 'elbo', label: 'ELBO', format: r => fmt(r.elbo, 1) },
@@ -864,6 +885,8 @@ function renderTiles() {
     ['Subclonal', fmtPct(d.fracSubclonal), 'of genome'],
     ['LOH', fmtPct(d.fracLoh), 'of genome'],
     ['Breakpoints', `${fmtInt(d.numBrkPresent)}`, `present of ${fmtInt(data.breakpoints.prediction_id.length)}, ${d.numBrkSubclonal} subclonal`],
+    ['High depth masked', fmtPct(data.maskFrac.highDepth),
+      `of genome${data.max_depth ? `, depth over ${fmt(data.max_depth, 3)}` : ''}; also ${fmtPct(data.maskFrac.short)} short, ${fmtPct(data.maskFrac.lowGenotyped)} low genotyped`],
     ['Divergent', fmtPct(d.sol.proportion_divergent), d.eligible ? 'eligible' : `above ${fmtPct(data.max_prop_diverge)} limit`],
   ];
   document.getElementById('tiles').innerHTML = tiles.map(([l, v, n]) =>
@@ -948,8 +971,19 @@ function drawGenome() {
   // Total copy number
   {
     const { ctx, width, height } = setupCanvas(document.getElementById('track-total'), TRACK_HEIGHT);
-    const frame = drawTrackFrame(ctx, width, height, ymax);
+    const frame = drawTrackFrame(ctx, width, height, ymax, 10);
     ctx.lineCap = lineCap;
+    // Strip marking segments masked from the likelihood
+    for (const i of visible) {
+      const reason = seg.mask_reason[i];
+      if (!reason) continue;
+      const x0 = Math.max(frame.left, plotX(seg.gStart[i], frame.left, frame.right));
+      const x1 = Math.min(frame.right, plotX(seg.gEnd[i], frame.left, frame.right));
+      ctx.fillStyle = css(reason === MASK_HIGH_DEPTH ? '--text-secondary' : '--axis');
+      ctx.fillRect(x0, 0, Math.max(1, x1 - x0), 5);
+    }
+    ctx.strokeStyle = css('--text-muted'); ctx.lineWidth = 2; ctx.globalAlpha = 0.5;
+    for (const i of visible) if (seg.mask_reason[i] === MASK_HIGH_DEPTH) drawSegmentLine(ctx, frame, i, d.rawTotal[i], ymax);
     ctx.strokeStyle = css('--total'); ctx.lineWidth = 3; ctx.globalAlpha = 0.35;
     for (const i of visible) if (seg.total_mask[i]) drawSegmentLine(ctx, frame, i, d.rawTotal[i], ymax);
     ctx.globalAlpha = 1; ctx.lineWidth = 2; ctx.strokeStyle = css('--text-primary');
@@ -1131,7 +1165,8 @@ function setupGenomeInteraction() {
         ...cloneRows(d, i),
         ['Read count', fmtInt(seg.readcount[i])],
         ['Allele read count', fmtInt(seg.allele_readcount[i])],
-        ...(seg.total_mask[i] && seg.allele_mask[i] ? [] : [['Likelihood', seg.total_mask[i] ? 'total only' : 'masked']]),
+        ['Depth', fmt(seg.total_depth[i], 4)],
+        ...(seg.mask_reason[i] ? [['Masked', MASK_LABELS[seg.mask_reason[i]]]] : []),
       ]);
     });
     canvas.addEventListener('mouseleave', () => { crosshair.style.display = 'none'; hideTooltip(); });
@@ -1296,6 +1331,22 @@ function drawDepthPlot() {
     ctx.beginPath();
     rd.depth.forEach((x, i) => i ? ctx.lineTo(sx(x), sy(rd[key][i])) : ctx.moveTo(sx(x), sy(rd[key][i])));
     ctx.strokeStyle = css(color); ctx.lineWidth = 2; ctx.stroke();
+  }
+
+  // Max depth, above which segments are masked from the likelihood
+  if (data.max_depth) {
+    ctx.font = '11px system-ui, sans-serif'; ctx.textBaseline = 'top';
+    ctx.fillStyle = css('--text-secondary');
+    if (data.max_depth <= x1) {
+      const x = sx(data.max_depth);
+      ctx.strokeStyle = css('--text-primary'); ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
+      ctx.textAlign = x > right - 70 ? 'right' : 'left';
+      ctx.fillText('max depth', x + (ctx.textAlign === 'left' ? 4 : -4), top + 4);
+    } else {
+      ctx.textAlign = 'right';
+      ctx.fillText(`max depth ${fmt(data.max_depth, 3)} →`, right, top + 4);
+    }
   }
 
   // Expected depth of an allele with k copies in all tumour clones and 1 copy in the normal

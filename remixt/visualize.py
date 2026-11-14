@@ -88,6 +88,49 @@ def read_depth_densities(read_depth):
     return densities
 
 
+MASK_NONE, MASK_SHORT, MASK_HIGH_DEPTH, MASK_LOW_GENOTYPED = 0, 1, 2, 3
+
+
+def segment_mask_reasons(length, depth, total_mask, allele_mask, min_segment_length):
+    """ Reason each segment is masked from the likelihood, and the inferred max depth.
+
+    The model masks the total and allele likelihood of segments shorter than a
+    minimum length or with depth above a max depth, and additionally the allele
+    likelihood of segments with too few genotyped reads, see remixt.cn_model.
+    The max depth is not stored in the results, so segments with total
+    likelihood masked are attributed to length if shorter than the min segment
+    length, and otherwise to depth.  Short segments are checked first as their
+    depth is noisy and often also above the max depth.
+
+    Args:
+        length (numpy.array): effective length of each segment, as used by the model
+        depth (numpy.array): total depth of each segment
+        total_mask (numpy.array): total likelihood used for each segment
+        allele_mask (numpy.array): allele likelihood used for each segment
+        min_segment_length (float): likelihood_min_segment_length of the model fit
+
+    Returns:
+        numpy.array: MASK_* reason for each segment
+        float: smallest depth masked as too high, or None if none
+    """
+    length = np.asarray(length, dtype=float)
+    depth = np.asarray(depth, dtype=float)
+    total_mask = np.asarray(total_mask, dtype=bool)
+    allele_mask = np.asarray(allele_mask, dtype=bool)
+
+    short = ~total_mask & (length < min_segment_length)
+    high_depth = ~total_mask & ~short
+    reasons = np.full(len(depth), MASK_NONE)
+    reasons[short] = MASK_SHORT
+    reasons[high_depth] = MASK_HIGH_DEPTH
+    reasons[total_mask & ~allele_mask] = MASK_LOW_GENOTYPED
+
+    finite_high_depth = depth[high_depth & np.isfinite(depth)]
+    max_depth = float(finite_high_depth.min()) if len(finite_high_depth) > 0 else None
+
+    return reasons, max_depth
+
+
 def _solution_ids(store):
     """ Ids of solutions in a results store, in order of init id.
     """
@@ -108,7 +151,8 @@ def _breakpoint_type(row):
     return 'deletion' if ends[0][1] == '+' else 'duplication'
 
 
-def load_sample(results_filename, max_prop_diverge=remixt.defaults.max_prop_diverge):
+def load_sample(results_filename, max_prop_diverge=remixt.defaults.max_prop_diverge,
+                min_segment_length=remixt.defaults.likelihood_min_segment_length):
     """ Load the results of one tumour into a JSON serializable dict.
 
     Args:
@@ -117,6 +161,8 @@ def load_sample(results_filename, max_prop_diverge=remixt.defaults.max_prop_dive
     KwArgs:
         max_prop_diverge (float): solutions with a larger proportion divergent
             are only selected as optimal if no solution is below it
+        min_segment_length (float): likelihood_min_segment_length of the model
+            fit, to attribute masked segments to length or depth
 
     Returns:
         dict: segments, breakpoints, solutions and read depth density
@@ -202,6 +248,12 @@ def load_sample(results_filename, max_prop_diverge=remixt.defaults.max_prop_dive
     def column_or(name, default):
         return segments[name] if name in segments else pd.Series(default, index=segments.index)
 
+    total_mask = column_or('total_likelihood_mask', 1).fillna(0).astype(bool).values
+    allele_mask = column_or('allele_likelihood_mask', 1).fillna(0).astype(bool).values
+    mask_reason, max_depth = segment_mask_reasons(
+        segments['length'].values, segments['total_depth'].values, total_mask, allele_mask,
+        min_segment_length)
+
     sample = {
         'num_clones': num_clones,
         'optimal_id': optimal_id,
@@ -219,9 +271,11 @@ def load_sample(results_filename, max_prop_diverge=remixt.defaults.max_prop_dive
             'major_depth': _rounded(segments['major_depth'], 6),
             'minor_depth': _rounded(segments['minor_depth'], 6),
             'total_depth': _rounded(segments['total_depth'], 6),
-            'total_mask': _ints(column_or('total_likelihood_mask', 1).fillna(0).astype(bool)),
-            'allele_mask': _ints(column_or('allele_likelihood_mask', 1).fillna(0).astype(bool)),
+            'total_mask': _ints(total_mask),
+            'allele_mask': _ints(allele_mask),
+            'mask_reason': _ints(mask_reason),
         },
+        'max_depth': max_depth,
         'breakpoints': {
             'prediction_id': [str(a) for a in breakpoint_ids],
         },
@@ -270,7 +324,8 @@ def _encode(data):
 
 
 def create_report(results_filenames, html_filename, title='ReMixT results',
-                  max_prop_diverge=remixt.defaults.max_prop_diverge):
+                  max_prop_diverge=remixt.defaults.max_prop_diverge,
+                  min_segment_length=remixt.defaults.likelihood_min_segment_length):
     """ Create a standalone HTML report of remixt results.
 
     Args:
@@ -280,11 +335,13 @@ def create_report(results_filenames, html_filename, title='ReMixT results',
     KwArgs:
         title (str): title of the report
         max_prop_diverge (float): used to mark solutions eligible to be optimal
+        min_segment_length (float): likelihood_min_segment_length of the model fit
     """
     samples = {}
     for sample_id, results_filename in results_filenames.items():
         logging.info(f'loading results of {sample_id} from {results_filename}')
-        samples[str(sample_id)] = load_sample(results_filename, max_prop_diverge=max_prop_diverge)
+        samples[str(sample_id)] = load_sample(
+            results_filename, max_prop_diverge=max_prop_diverge, min_segment_length=min_segment_length)
 
     report = {
         'title': title,
