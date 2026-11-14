@@ -15,7 +15,7 @@ def pipeline_param_names() {
         'ref_data_dir', 'out_dir', 'breakpoint_file', 'sample_sheet',
         'tumour_sample_ids', 'tumour_bam_files', 'results_files',
         'normal_sample_id', 'normal_bam_file', 'ensembl_genome_version',
-        'genomes', 'remixt_container', 'mappability_chunk_size',
+        'genomes', 'remixt_version', 'remixt_container', 'mappability_chunk_size',
         'tumour_seqdata_files', 'normal_seqdata_file', 'haplotypes_file',
         'bias_bin_size', 'depth_panel', 'depth_panel_mask',
         'panel_sample_ids', 'panel_bam_files', 'panel_seqdata_files', 'panel_female_ids',
@@ -37,6 +37,8 @@ def ref_file(String name) {
  * ========================================================
  */
 workflow {
+
+    log.info "remixt pipeline ${workflow.manifest.version}, container ${params.remixt_container}"
 
     // --- Validate params ---
     if (!params.ref_data_dir) { error "Please provide --ref_data_dir" }

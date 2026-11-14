@@ -288,15 +288,28 @@ The Nextflow pipeline can run entirely in containers using the `docker` profile:
         --chromosomes 15 \
         --chr_name_prefix chr
 
-To use a specific version of the container:
-
-    nextflow run nextflow/main.nf -profile docker --remixt_container quay.io/andrew_mcpherson/remixt:v0.6.1
-
 For Singularity (common on HPC clusters):
 
     nextflow run nextflow/main.nf -profile singularity \
-        --remixt_container docker://quay.io/andrew_mcpherson/remixt:v0.6.1 \
         ...
+
+### Container versions
+
+The container image defaults to the tag matching the pipeline version, `remixt_version` in `nextflow/nextflow.config`, `quay.io/andrew_mcpherson/remixt:v0.6.1` for version 0.6.1.  Running a tagged version of the pipeline therefore uses the container built for that version, either from a checkout of the tag:
+
+    git checkout v0.6.1
+    nextflow run nextflow/main.nf -profile singularity ...
+
+or directly from GitHub, which checks out the tag into the Nextflow assets directory:
+
+    nextflow run amcpherson/remixt -r v0.6.1 -profile singularity ...
+
+Each run logs the pipeline version and container at startup.  To use another container, such as `latest` or a local development build:
+
+    nextflow run nextflow/main.nf -profile docker --remixt_container quay.io/andrew_mcpherson/remixt:latest
+    nextflow run nextflow/main.nf -profile docker --remixt_container remixt:dev
+
+When releasing a version, set `remixt_version` in `nextflow/nextflow.config` in the commit that is tagged, then build and push the image with the same tag as described in [Docker builds](#docker-builds).
 
 ## Pip build
 
