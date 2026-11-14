@@ -5,7 +5,7 @@
  *
  * Orchestrates the full pipeline from seqdata files through to final results:
  *   create_segments -> infer_haps -> prepare_counts -> calc_bias
- *   -> create_experiment -> ploidy_plots -> fit_model
+ *   -> create_experiment -> ploidy_plots -> fit_model -> visualize_results
  *
  * Input:
  *   ch_seqdata       - [sample_id, seqdata.h5] tuples (all samples)
@@ -18,6 +18,7 @@
  *
  * Output:
  *   results          - [tumour_id, results.h5] tuples
+ *   report           - remixt_report.html, one HTML report of all tumours
  */
 
 include { infer_haps }               from './infer_haps'
@@ -27,6 +28,7 @@ include { fit_model }                from './fit_model'
 include { create_segments }          from '../modules/remixt_core'
 include { create_experiment }        from '../modules/remixt_core'
 include { ploidy_analysis_plots }    from '../modules/remixt_core'
+include { visualize_results }        from '../modules/visualize'
 
 
 workflow remixt_seqdata {
@@ -104,6 +106,14 @@ workflow remixt_seqdata {
     )
     // out.results: [tumour_id, results.h5]
 
+    // --- 8. HTML report of all tumours ---
+    visualize_results(
+        fit_model.out.results
+            .toSortedList { a, b -> a[0] <=> b[0] }
+            .map { pairs -> tuple(pairs.collect { it[0] }, pairs.collect { it[1] }) }
+    )
+
     emit:
-    results = fit_model.out.results   // [tumour_id, results.h5]
+    results = fit_model.out.results       // [tumour_id, results.h5]
+    report  = visualize_results.out       // remixt_report.html
 }

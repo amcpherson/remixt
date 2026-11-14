@@ -1,641 +1,314 @@
-import os
+""" Standalone HTML report of remixt results for one or more tumours.
+
+The report is a single HTML file with the results of each tumour embedded as
+gzipped JSON, and plotting done in the browser without external dependencies,
+so the file can be moved or shared on its own.
+
+Every solution is embedded, not only the optimal one, so solutions can be
+compared in the report.  To keep the file small, segment depths are stored
+once per tumour and raw copy number is computed in the browser from the
+haploid depths of each solution.
+"""
+
+import base64
+import gzip
+import html
+import importlib.resources
+import json
 import logging
+import re
+
 import numpy as np
 import pandas as pd
-import math
-import matplotlib.colors
-import matplotlib.pyplot
-import bokeh.models
-import bokeh.plotting
-import bokeh.core.properties
-import bokeh.layouts
 import scipy.stats
 
+import remixt
+import remixt.defaults
 import remixt.utils
 
 
-chromosomes = [str(a) for a in range(1, 23)] + ['X']
+TEMPLATE_NAME = 'visualize_report.html'
+
+# Number of points of the read depth density curves
+NUM_DENSITY_POINTS = 400
 
 
-def _create_chromosome_colors(chromosomes):
-    color_map = matplotlib.pyplot.get_cmap('Set1')
-    chromosome_colors = list()
-    for i in range(len(chromosomes)):
-        rgb_color = color_map(float(i) / float(len(chromosomes)))
-        hex_color = matplotlib.colors.rgb2hex(rgb_color)
-        chromosome_colors.append(hex_color)
-    chromosome_colors = pd.DataFrame({'chromosome': chromosomes, 'scatter_color': chromosome_colors})
-    return chromosome_colors
-
-chromosome_colors = _create_chromosome_colors(chromosomes)
-
-
-def _create_chromosome_indices(chromosomes):
-    chromosome_indices = dict([(chromosome, idx) for idx, chromosome in enumerate(chromosomes)])
-    return chromosome_indices
-
-chromosome_indices = _create_chromosome_indices(chromosomes)
-
-
-def major_minor_scatter_plot(source):
-    """ Plot a major / minor scatter plot from a copy number data source
+def chromosome_sort_key(chromosome):
+    """ Sort chromosomes numerically, then X, Y, M, then any others by name.
     """
-    p = bokeh.plotting.Figure(
-        title='raw major vs minor',
-        plot_width=1000, plot_height=500,
-        tools='pan,wheel_zoom,box_select,reset,lasso_select',
-        # logo=None,
-        x_range=[-0.5, 6.5],
-        y_range=[-0.5, 4.5],
-    )
-
-    p.title.text_font_size=bokeh.core.properties.value('10pt')
-
-    p.circle(
-        x='major_raw', y='minor_raw',
-        size='scatter_size', color='scatter_color', alpha=0.5,
-        source=source,
-    )
-
-    return p
+    name = re.sub('^chr', '', str(chromosome))
+    if name.isdigit():
+        return (0, int(name), '')
+    order = {'X': 1, 'Y': 2, 'M': 3, 'MT': 3}
+    return (order.get(name, 4), 0, name)
 
 
-def major_minor_segment_plot(source, major_column, minor_column, x_range, name, width=1000):
-    """ Plot a major / minor line plot from a copy number data source
+def _rounded(values, decimals):
+    """ List of rounded floats with nan and inf as None for JSON.
     """
-    hover = bokeh.models.HoverTool(
-        tooltips=[
-            ('segment_idx', '@segment_idx'),
-            ('chromosome', '@chromosome'),
-            ('start', '@start'),
-            ('end', '@end'),
-            ('major_raw', '@major_raw'),
-            ('minor_raw', '@minor_raw'),
-        ]
-    )
-
-    tools = [
-        bokeh.models.PanTool(dimensions='width'),
-        bokeh.models.WheelZoomTool(dimensions='width'),
-        bokeh.models.BoxZoomTool(),
-        bokeh.models.BoxSelectTool(),
-        bokeh.models.ResetTool(),
-        bokeh.models.TapTool(),
-        hover,
-    ]
-
-    p = bokeh.plotting.Figure(
-        title=name + ' chromosome major/minor',
-        plot_width=width, plot_height=200,
-        tools=tools,
-        # logo=None,
-        toolbar_location='above',
-        x_range=x_range,
-        y_range=[-0.5, 6.5],
-    )
-
-    p.title.text_font_size = bokeh.core.properties.value('10pt')
-
-    p.quad(
-        top=major_column, bottom=0, left='plot_start', right='plot_end',
-        source=source, color='red', alpha=0.05, line_width=0)
-
-    p.quad(
-        top=minor_column, bottom=0, left='plot_start', right='plot_end',
-        source=source, color='blue', alpha=0.05, line_width=0)
-
-    p.segment(
-        y0=major_column, y1=major_column, x0='plot_start', x1='plot_end',
-        source=source, color='red', alpha=1.0, line_width=4)
-
-    p.segment(
-        y0=minor_column, y1=minor_column, x0='plot_start', x1='plot_end',
-        source=source, color='blue', alpha=1.0, line_width=2)
-
-    return p
+    values = np.asarray(values, dtype=float)
+    values = np.where(np.isfinite(values), np.round(values, decimals), np.nan)
+    return [None if np.isnan(v) else float(v) for v in values]
 
 
-def breakpoints_plot(source, x_range, width=1000):
-    """ Plot break ends from a breakpoint source
+def _ints(values):
+    return [int(v) for v in np.asarray(values)]
+
+
+def _weighted_density(xs, data, weights, bw_method=0.02):
+    """ Weighted gaussian kernel density, zero where it cannot be estimated.
     """
-    hover = bokeh.models.HoverTool(
-        tooltips=[
-            ('prediction_id', '@prediction_id'),
-            ('chromosome', '@chromosome'),
-            ('position', '@position'),
-            ('strand', '@strand'),
-            ('other_chromosome', '@other_chromosome'),
-            ('other_position', '@other_position'),
-            ('other_strand', '@other_strand'),
-            ('type', '@type'),
-        ]
-    )
-
-    tools = [
-        bokeh.models.PanTool(dimensions='width'),
-        bokeh.models.WheelZoomTool(dimensions='width'),
-        bokeh.models.BoxSelectTool(),
-        bokeh.models.ResetTool(),
-        bokeh.models.TapTool(),
-        hover,
-    ]
-
-    p = bokeh.plotting.Figure(
-        title='break ends',
-        plot_width=width, plot_height=150,
-        tools=tools,
-        # logo=None,
-        x_range=x_range,
-        y_range=['+', '-'],
-    )
-
-    p.title.text_font_size = bokeh.core.properties.value('10pt')
-
-    p.triangle(
-        x='plot_position', y='strand', size=10, angle='strand_angle',
-        line_color='grey', fill_color='clonality_color', alpha=1.0,
-        source=source)
-
-    return p
+    finite = np.isfinite(data) & np.isfinite(weights) & (weights > 0)
+    if finite.sum() < 2 or np.ptp(data[finite]) == 0:
+        return np.zeros(len(xs))
+    density = scipy.stats.gaussian_kde(data[finite], weights=weights[finite], bw_method=bw_method)
+    return density(xs)
 
 
-def setup_genome_plot_axes(p, chromosome_plot_info):
-    """ Configure axes of a genome view
+def read_depth_densities(read_depth):
+    """ Length weighted densities of the major, minor and total read depth of segments.
     """
-    chromosomes = list(chromosome_plot_info['chromosome'].values)
-    chromosome_bounds = [0] + list(chromosome_plot_info['chromosome_plot_end'].values)
-    chromosome_mids = list(chromosome_plot_info['chromosome_plot_mid'].values)
+    read_depth = read_depth.replace([np.inf, -np.inf], np.nan).dropna(subset=['major', 'minor', 'total', 'length'])
+    if 'high_quality' in read_depth:
+        high_quality = read_depth[read_depth['high_quality']]
+        if len(high_quality) >= 2:
+            read_depth = high_quality
 
-    p.xgrid.ticker = bokeh.models.FixedTicker(ticks=[-1] + chromosome_bounds + [chromosome_bounds[-1] + 1])
-    p.xgrid.band_fill_alpha = 0.1
-    p.xgrid.band_fill_color = "navy"
+    if len(read_depth) < 2:
+        return None
 
-    p.xaxis[0].ticker = bokeh.models.FixedTicker(ticks=chromosome_bounds)
-    p.xaxis[0].major_label_text_font_size = '0pt'
+    depth_max = remixt.utils.weighted_percentile(read_depth['total'].values, read_depth['length'].values, 95)
+    depths = np.linspace(0., depth_max * 1.1, NUM_DENSITY_POINTS)
 
-    p.text(x=chromosome_mids, y=-0.5, text=chromosomes, text_font_size=bokeh.core.properties.value('0.5em'), text_align='center')
+    densities = {'depth': _rounded(depths, 6)}
+    for allele in ('minor', 'major', 'total'):
+        density = _weighted_density(depths, read_depth[allele].values, read_depth['length'].values)
+        densities[allele] = _rounded(density, 4)
+
+    return densities
 
 
-def create_chromosome_plot_info(cnv, chromosome=''):
-    """ Create information about chromosome start ends for genome view
+def _solution_ids(store):
+    """ Ids of solutions in a results store, in order of init id.
     """
-    cnv['chromosome_index'] = cnv['chromosome'].apply(lambda a: chromosome_indices[a])
-    cnv.sort_values(['chromosome_index', 'start'], inplace=True)
+    stats = store['stats']
+    return sorted(stats['init_id'].astype(int).values)
 
-    info = (
-        cnv.groupby('chromosome', sort=False)['end']
-        .max().reset_index().rename(columns={'end': 'chromosome_length'}))
 
-    info['chromosome_plot_end'] = np.cumsum(info['chromosome_length'])
-    info['chromosome_plot_start'] = info['chromosome_plot_end'].shift(1)
-    info.loc[info.index[0], 'chromosome_plot_start'] = 0
-    info['chromosome_plot_mid'] = 0.5 * (info['chromosome_plot_start'] + info['chromosome_plot_end'])
+def _segment_key(cn):
+    return list(zip(cn['chromosome'].astype(str), cn['start'], cn['end']))
 
-    return info
 
+def _breakpoint_type(row):
+    if row['chromosome_1'] != row['chromosome_2']:
+        return 'translocation'
+    if row['strand_1'] == row['strand_2']:
+        return 'inversion'
+    ends = sorted([(row['position_1'], row['strand_1']), (row['position_2'], row['strand_2'])])
+    return 'deletion' if ends[0][1] == '+' else 'duplication'
 
-def prepare_cnv_data(cnv, chromosome_plot_info, smooth_segments=False):
-    """ Prepare copy number data for loading in the a data source
-    """
-    # Group segments with same state
-    if smooth_segments:
-        cnv['chromosome_index'] = cnv['chromosome'].apply(lambda a: chromosome_indices[a])
-        cnv['diff'] = cnv[['chromosome_index', 'major_1', 'major_2', 'minor_1', 'minor_2']].diff().abs().sum(axis=1)
-        cnv['is_diff'] = (cnv['diff'] != 0)
-        cnv['cn_group'] = cnv['is_diff'].cumsum()
 
-        def agg_segments(df):
-
-            stable_cols = [
-                'chromosome',
-                'major_1',
-                'major_2',
-                'minor_1',
-                'minor_2',
-                'major_raw_e',
-                'minor_raw_e',
-            ]
-
-            a = df[stable_cols].iloc[0]
-
-            a['start'] = df['start'].min()
-            a['end'] = df['end'].max()
-            a['length'] = df['length'].sum()
-
-            length_normalized_cols = [
-                'major_raw',
-                'minor_raw',
-            ]
-
-            for col in length_normalized_cols:
-                a[col] = (df[col] * df['length']).sum() / (df['length'].sum() + 1e-16)
-
-            return a
-
-        cnv = cnv.groupby('cn_group').apply(agg_segments)
-
-    # Scatter size scaled by segment length
-    cnv['scatter_size'] = 2. * np.sqrt(cnv['length'] / 1e6)
-
-    # Scatter color by chromosome
-    cnv = cnv.merge(chromosome_colors)
-
-    # Calculate plot start and end
-    cnv = cnv.merge(chromosome_plot_info[['chromosome', 'chromosome_plot_start']])
-    cnv['plot_start'] = cnv['start'] + cnv['chromosome_plot_start']
-    cnv['plot_end'] = cnv['end'] + cnv['chromosome_plot_start']
-
-    # Drop nan values
-    cnv = cnv.replace(np.inf, np.nan).fillna(0)
-
-    return cnv
-
-
-def prepare_brk_data(brk_cn, chromosome_plot_info):
-    """ Prepare breakpoint data for loading into a breakpoint source
-    """
-    def calculate_breakpoint_type(row):
-        if row['chromosome_1'] != row['chromosome_2']:
-            return 'translocation'
-        if row['strand_1'] == row['strand_2']:
-            return 'inversion'
-        positions = sorted([(row['position_{0}'.format(side)], row['strand_{0}'.format(side)]) for side in (1, 2)])
-        if positions[0][1] == '+':
-            return 'deletion'
-        else:
-            return 'duplication'
-    brk_cn['type'] = brk_cn.apply(calculate_breakpoint_type, axis=1)
-
-    # Duplicate required columns before stack
-    brk_cn['type_1'] = brk_cn['type']
-    brk_cn['type_2'] = brk_cn['type']
-
-    # Stack break ends
-    brk_ends = brk_cn[[
-        'prediction_id',
-        'chromosome_1', 'strand_1', 'position_1',
-        'chromosome_2', 'strand_2', 'position_2',
-    ]]
-    brk_ends.set_index(['prediction_id'], inplace=True)
-    brk_ends = brk_ends.filter(regex='(_1|_2)')
-    def split_col_name(col):
-        parts = col.split('_')
-        return '_'.join(parts[:-1]), parts[-1]
-    brk_ends.columns = pd.MultiIndex.from_tuples([split_col_name(col) for col in brk_ends.columns])
-    brk_ends.columns.names = 'value', 'side'
-    brk_ends = brk_ends.stack()
-    brk_ends.reset_index(inplace=True)
-
-    # Add columns for other side
-    brk_ends_2 = brk_ends[['prediction_id', 'side', 'chromosome', 'strand', 'position']].copy()
-    def swap_side(side):
-        if side == '1':
-            return '2'
-        elif side == '2':
-            return '1'
-        else:
-            raise ValueError()
-    brk_ends_2['side'] = brk_ends_2['side'].apply(swap_side)
-    brk_ends_2.rename(
-        columns={
-            'chromosome': 'other_chromosome',
-            'strand': 'other_strand',
-            'position': 'other_position',
-        },
-        inplace=True
-    )
-    brk_ends = brk_ends.merge(brk_ends_2)
-
-    # Annotate with copy number
-    brk_ends = brk_ends.merge(brk_cn[['prediction_id', 'cn_1', 'cn_2']], on='prediction_id')
-
-    # Annotate with strand related appearance
-    strand_angle = pd.DataFrame({'strand': ['+', '-'], 'strand_angle': [math.pi / 6., -math.pi / 6.]})
-    brk_ends = brk_ends.merge(strand_angle)
-
-    # Calculate plot start and end
-    brk_ends = brk_ends.merge(chromosome_plot_info[['chromosome', 'chromosome_plot_start']])
-    brk_ends['plot_position'] = brk_ends['position'] + brk_ends['chromosome_plot_start']
-
-    # Annotate with clonal information
-    brk_ends['clone_1_color'] = np.where(brk_ends['cn_1'] > 0, '00', 'ff')
-    brk_ends['clone_2_color'] = np.where(brk_ends['cn_2'] > 0, '00', 'ff')
-    brk_ends['clonality_color'] = '#ff' + brk_ends['clone_1_color'] + brk_ends['clone_2_color']
-
-    brk_ends.sort_values(['prediction_id', 'side'], inplace=True)
-
-    return brk_ends
-
-
-def build_genome_panel(cnv_source, brk_source, chromosome_plot_info, width=1000):
-    """ Build the genome pannel with scatter, line and break end plots and breakpoint table
-    """
-    init_x_range = [0, chromosome_plot_info['chromosome_plot_end'].max()]
-
-    scatter_plot = major_minor_scatter_plot(cnv_source)
-    line_plot1 = major_minor_segment_plot(cnv_source, 'major_raw', 'minor_raw', init_x_range, 'raw', width)
-    line_plot2 = major_minor_segment_plot(cnv_source, 'major_raw_e', 'minor_raw_e', line_plot1.x_range, 'expected', width)
-    line_plot3 = major_minor_segment_plot(cnv_source, 'major_1', 'minor_1', line_plot1.x_range, 'clone 1', width)
-    line_plot4 = major_minor_segment_plot(cnv_source, 'major_2', 'minor_2', line_plot1.x_range, 'clone 2', width)
-    line_plot5 = major_minor_segment_plot(cnv_source, 'major_diff', 'minor_diff', line_plot1.x_range, 'clone diff', width)
-    brk_plot = breakpoints_plot(brk_source, line_plot1.x_range, width)
-
-    for p in [line_plot1, line_plot2, line_plot3, line_plot4, line_plot5, brk_plot]:
-        setup_genome_plot_axes(p, chromosome_plot_info)
-
-    columns = [
-        'prediction_id',
-        'chromosome', 'position', 'strand',
-        'cn_1', 'cn_2']
-    columns = [bokeh.models.TableColumn(field=a, title=a, width=10) for a in columns]
-    data_table = bokeh.models.DataTable(source=brk_source, columns=columns, width=1000, height=1000)
-
-    panel = bokeh.models.Panel(title='Genome View', closable=False)
-    panel.child = bokeh.layouts.column(scatter_plot, line_plot1, line_plot2, line_plot3, line_plot4, line_plot5, brk_plot, data_table)
-
-    return panel
-
-
-def create_genome_visualization(cn, brk_cn, html_filename):
-    """ Create a genome visualization and output to an html file
-    """
-    try:
-        os.remove(html_filename)
-    except OSError:
-        pass
-    bokeh.plotting.output_file(html_filename)
-
-    chromosome_plot_info = create_chromosome_plot_info(cn)
-    cnv_data = prepare_cnv_data(cn, chromosome_plot_info)
-    brk_data = prepare_brk_data(brk_cn, chromosome_plot_info)
-
-    cnv_source = bokeh.models.ColumnDataSource(cnv_data)
-    brk_source = bokeh.models.ColumnDataSource(brk_data)
-
-    tabs = bokeh.models.Tabs()
-    tabs.tabs.append(build_genome_panel(cnv_source, brk_source, chromosome_plot_info))
-    main_box = bokeh.layouts.row(tabs)
-
-    bokeh.plotting.save(main_box)
-
-
-def retrieve_solutions(store):
-    """ Retrieve a list of solutions from the data store
-    """
-    return list(store['stats']['init_id'].astype(str).values)
-
-
-def retrieve_cnv_data(store, solution, chromosome=''):
-    """ Retrieve copy number data for a specific solution
-    """
-    cnv = store['solutions/solution_{0}/cn'.format(solution)]
-
-    if chromosome != '':
-        cnv = cnv[cnv['chromosome'] == chromosome].copy()
-
-    cnv['segment_idx'] = cnv.index
-
-    return cnv
-
-
-def retrieve_brk_data(store, solution, chromosome_plot_info):
-    """ Retrieve breakpoint copy number data for a specific solution
-    """
-    brk_cn = store['/solutions/solution_{0}/brk_cn'.format(solution)]
-
-    return prepare_brk_data(brk_cn, chromosome_plot_info)
-
-
-def retrieve_chromosome_plot_info(store, solution, chromosome=''):
-    """ Retrieve chromosome plot info for a specific solution
-    """
-    cnv = retrieve_cnv_data(store, solution, chromosome)
-
-    return create_chromosome_plot_info(cnv, chromosome=chromosome)
-
-
-def create_cnv_brk_data(store, solution, chromosome_plot_info):
-    """ Create dataframes for copy number and breakpoints given a specific solution
-    """
-    cnv = retrieve_cnv_data(store, solution)
-    cnv_data = prepare_cnv_data(cnv, chromosome_plot_info)
-    brk_data = retrieve_brk_data(store, solution, chromosome_plot_info)
-
-    assert cnv_data.notnull().all().all()
-    assert brk_data.notnull().all().all()
-
-    return cnv_data, brk_data
-
-
-def retrieve_solution_data(store):
-    """ Retrieve solution data from the data store
-    """
-    solutions_df = store['stats']
-
-    for idx, row in solutions_df.iterrows():
-
-        # Calculate ploidy
-        cnv = retrieve_cnv_data(store, row['init_id'])
-        cnv = cnv.replace([np.inf, -np.inf], np.nan).dropna()
-        ploidy = (cnv['length'] * (cnv['major_raw_e'] + cnv['minor_raw_e'])).sum() / cnv['length'].sum()
-        solutions_df.loc[idx, 'ploidy'] = ploidy
-
-        # Calculate proportion subclonal
-        subclonal = (
-            ((cnv['major_1'] != cnv['major_2']) * 1) +
-            ((cnv['minor_1'] != cnv['minor_2']) * 1))
-        prop_subclonal = (subclonal * cnv['length']).sum() / (2. * cnv['length'].sum())
-        solutions_df.loc[idx, 'prop_subclonal'] = prop_subclonal
-
-        # Add haploid normal/tumour depth and clone fraction
-        h = store['/solutions/solution_{0}/h'.format(row['init_id'])]
-        solutions_df.loc[idx, 'haploid_normal'] = h.values[0]
-        solutions_df.loc[idx, 'haploid_tumour'] = h.values[1:].sum()
-        solutions_df.loc[idx, 'haploid_tumour_mode'] = h.values.sum()
-        solutions_df.loc[idx, 'clone_1_fraction'] = h.values[1] / h.values[1:].sum()
-        solutions_df.loc[idx, 'clone_2_fraction'] = 1. - solutions_df.loc[idx, 'clone_1_fraction']
-
-    return solutions_df
-
-
-def _weighted_density(xs, data, weights, bw_method=0.01):
-    density = scipy.stats.gaussian_kde(data, weights=weights, bw_method=bw_method)
-    ys = density(xs)
-    ys[0] = 0.0
-    ys[-1] = 0.0
-    return ys
-
-
-def prepare_read_depth_data(store, solution):
-    """ Prepare read depth data for plotting
-    """
-    read_depth_df = store['read_depth']
-
-    read_depth_min = 0.0
-    read_depth_max = remixt.utils.weighted_percentile(read_depth_df['total'].values, read_depth_df['length'].values, 95)
-    read_depths = [read_depth_min] + list(np.linspace(read_depth_min, read_depth_max, 2000)) + [read_depth_max]
-
-    minor_density = _weighted_density(read_depths, read_depth_df['minor'], read_depth_df['length'])
-    major_density = _weighted_density(read_depths, read_depth_df['major'], read_depth_df['length'])
-    total_density = _weighted_density(read_depths, read_depth_df['total'], read_depth_df['length'])
-
-    data = pd.DataFrame({
-        'read_depth': read_depths,
-        'minor_density': minor_density,
-        'major_density': major_density,
-        'total_density': total_density,
-    })
-
-    return data
-
-
-def build_solutions_panel(solutions_source, read_depth_source):
-    """ Build an overview of solutions including a read depth plot
-    """
-    solutions_columns = [
-        ('init_id', bokeh.models.NumberFormatter(format='0')),
-        ('elbo', bokeh.models.NumberFormatter(format='0.000')),
-        ('ploidy', bokeh.models.NumberFormatter(format='0.000')),
-        ('prop_subclonal', bokeh.models.NumberFormatter(format='0.000')),
-        ('haploid_normal', bokeh.models.NumberFormatter(format='0.000')),
-        ('haploid_tumour', bokeh.models.NumberFormatter(format='0.000')),
-        ('clone_1_fraction', bokeh.models.NumberFormatter(format='0.000')),
-        ('clone_2_fraction', bokeh.models.NumberFormatter(format='0.000')),
-        ('divergence_weight', None),
-    ]
-    columns = [bokeh.models.TableColumn(field=a, title=a, formatter=f) for a, f in solutions_columns]
-    solutions_table = bokeh.models.DataTable(source=solutions_source, columns=columns, width=1000, height=500)
-
-    readdepth_plot = bokeh.plotting.Figure(
-        title='major/minor/total read depth',
-        plot_width=1000, plot_height=300,
-        tools='pan,wheel_zoom,reset',
-        # logo=None,
-    )
-
-    readdepth_plot.title.text_font_size = bokeh.core.properties.value('10pt')
-
-    readdepth_plot.patch('read_depth', 'minor_density', color='blue', alpha=0.5, source=read_depth_source)
-    readdepth_plot.patch('read_depth', 'major_density', color='red', alpha=0.5, source=read_depth_source)
-    readdepth_plot.patch('read_depth', 'total_density', color='grey', alpha=0.5, source=read_depth_source)
-
-    readdepth_plot.circle(x='haploid_normal', y=0, size=10, source=solutions_source, color='orange')
-    readdepth_plot.circle(x='haploid_tumour_mode', y=0, size=10, source=solutions_source, color='green')
-
-    panel = bokeh.models.Panel(title='Solutions View', closable=False)
-    panel.child = bokeh.layouts.column(solutions_table, readdepth_plot)
-
-    return panel
-
-
-def create_source_select(sources, title, name):
-    """ Create a general data source selection widget
+def load_sample(results_filename, max_prop_diverge=remixt.defaults.max_prop_diverge):
+    """ Load the results of one tumour into a JSON serializable dict.
 
     Args:
-        sources(list): selected and selectable sources
-        title(str): title of widget
-        name(str): name of widget
+        results_filename (str): results HDF5 from remixt collate
+
+    KwArgs:
+        max_prop_diverge (float): solutions with a larger proportion divergent
+            are only selected as optimal if no solution is below it
 
     Returns:
-        bokeh.models.Select: selection widget
-    
-    The sources are provided as a list of tuples, where each tuple has length 2.  The first item in
-    the tuple is the datasource the user has selected, and the second item is a dictionary of possible data
-    sources keyed by an id for the source.
+        dict: segments, breakpoints, solutions and read depth density
     """
-    names = list(sources[0][1].keys())
-    initial_value = names[0]
-    
-    callback_code = "var t = cb_obj.value;\n"
-    callback_args = {}
-
-    for idx, (to_source, from_sources) in enumerate(sources):
-        to_source.data = bokeh.models.ColumnDataSource.from_df(from_sources[initial_value])
-
-        for s_name in names:
-            callback_code += f"if (t == '{s_name}') {{\n"
-            callback_code += f"  var d = source_{idx}_{s_name};\n"
-            callback_code += "}\n"
-
-        callback_code += "source_{}.data = d;\n".format(idx)
-        callback_code += "source_{}.change.emit();\n".format(idx)
-
-        callback_args["source_{}".format(idx)] = to_source
-        for s_name, s_data in from_sources.items():
-            callback_args['source_{}_{}'.format(idx, s_name)] = bokeh.models.ColumnDataSource.from_df(s_data)
-
-    callback = bokeh.models.CustomJS(args=callback_args, code=callback_code)
-
-    source_select = bokeh.models.Select(
-        title=title,
-        name=name,
-    )
-    
-    source_select.options = list(from_sources.keys())
-    source_select.value = initial_value
-    source_select.js_on_change('value', callback)
-    
-    return source_select
-
-
-def create_solutions_visualization(results_filename, html_filename):
-    """ Create a multi-tab visualization of remixt solutions
-    """
-    try:
-        os.remove(html_filename)
-    except OSError:
-        pass
-    bokeh.plotting.output_file(html_filename)
-
-    logging.info('generating solutions tables')
-
     with pd.HDFStore(results_filename, 'r') as store:
-        solutions = list(retrieve_solutions(store))
+        keys = set(store.keys())
+        solution_ids = _solution_ids(store)
+        stats = store['stats'].set_index('init_id')
+        failed_fits = store['failed_fits'] if '/failed_fits' in keys else pd.DataFrame()
+        read_depth = store['read_depth'] if '/read_depth' in keys else None
+        minor_modes = store['minor_modes'] if '/minor_modes' in keys else None
+        optimal_mix = store['mix'].values if '/mix' in keys else None
 
-        chromosome_plot_info = retrieve_chromosome_plot_info(store, solutions[0])
-        cnv_selected_data, brk_selected_data = create_cnv_brk_data(store, solutions[0], chromosome_plot_info)
+        solutions_cn = {}
+        solutions_brk_cn = {}
+        solutions_h = {}
+        for solution_id in solution_ids:
+            prefix = f'/solutions/solution_{solution_id}'
+            solutions_cn[solution_id] = store[prefix + '/cn']
+            solutions_brk_cn[solution_id] = store[prefix + '/brk_cn']
+            solutions_h[solution_id] = store[prefix + '/h'].values
 
-        cnv_solution_sources = {}
-        brk_solution_sources = {}
-        for solution in solutions:
-            cnv_source, brk_source = create_cnv_brk_data(store, solution, chromosome_plot_info)
+    # The optimal solution, chosen as in remixt.analysis.pipeline.store_optimal_solution
+    eligible = stats[stats['proportion_divergent'] < max_prop_diverge]
+    if len(eligible) == 0:
+        eligible = stats
+    optimal_id = int(eligible['elbo'].idxmax())
 
-            cnv_solution_sources[solution] = cnv_source
-            brk_solution_sources[solution] = brk_source
+    # Segments are shared by all solutions, checked against the optimal solution
+    segments = solutions_cn[optimal_id].copy()
+    segments['chromosome'] = segments['chromosome'].astype(str)
+    segment_key = _segment_key(segments)
+    num_clones = len(solutions_h[optimal_id])
 
-        solutions_data = retrieve_solution_data(store)
-        read_depth_data = prepare_read_depth_data(store, solution)
+    # Breakpoints are shared by all solutions, with copy number per solution
+    breakpoints = solutions_brk_cn[optimal_id]
+    if len(breakpoints) > 0 and 'chromosome_1' in breakpoints:
+        breakpoints = breakpoints.drop_duplicates('prediction_id').copy()
+        breakpoints['type'] = breakpoints.apply(_breakpoint_type, axis=1)
+    else:
+        breakpoints = pd.DataFrame(columns=['prediction_id'])
+    breakpoint_ids = breakpoints['prediction_id'].values
 
-    assert solutions_data.notnull().all().all()
-    assert read_depth_data.notnull().all().all()
+    solutions = []
+    for solution_id in solution_ids:
+        cn = solutions_cn[solution_id]
+        if _segment_key(cn) != segment_key:
+            cn = (
+                cn.assign(chromosome=cn['chromosome'].astype(str))
+                .set_index(['chromosome', 'start', 'end'])
+                .reindex(segment_key)
+                .reset_index())
 
-    logging.info('creating bokeh data sources')
+        h = solutions_h[solution_id]
+        if len(h) != num_clones:
+            logging.warning(f'skipping solution {solution_id} of {results_filename} with {len(h)} clones')
+            continue
 
-    cnv_selected_source = bokeh.models.ColumnDataSource(cnv_selected_data)
-    brk_selected_source = bokeh.models.ColumnDataSource(brk_selected_data)
-    solutions_source = bokeh.models.ColumnDataSource(solutions_data)
-    read_depth_source = bokeh.models.ColumnDataSource(read_depth_data)
+        solution_stats = stats.loc[solution_id]
+        solution = {
+            'id': int(solution_id),
+            'h': _rounded(h, 8),
+            'elbo': float(solution_stats['elbo']),
+            'ploidy': float(solution_stats['ploidy']),
+            'proportion_divergent': float(solution_stats['proportion_divergent']),
+            'divergence_weight': float(solution_stats.get('divergence_weight', np.nan)),
+            'mode_idx': int(solution_stats.get('mode_idx', -1)),
+            'major': [_ints(cn[f'major_{m}'].fillna(0)) for m in range(num_clones)],
+            'minor': [_ints(cn[f'minor_{m}'].fillna(0)) for m in range(num_clones)],
+        }
 
-    # TODO: selecting the data source doesnt work
-    solution_select = create_source_select(
-        [
-            (cnv_selected_source, cnv_solution_sources),
-            (brk_selected_source, brk_solution_sources),
-        ],
-        "Solution:",
-        'solutions',
-    )
+        brk_cn = solutions_brk_cn[solution_id]
+        if len(breakpoint_ids) > 0:
+            brk_cn = brk_cn.drop_duplicates('prediction_id').set_index('prediction_id').reindex(breakpoint_ids)
+            solution['brk_cn'] = [
+                _ints(brk_cn.get(f'cn_{m}', pd.Series(0, index=brk_cn.index)).fillna(0))
+                for m in range(1, num_clones)]
+        else:
+            solution['brk_cn'] = [[] for m in range(1, num_clones)]
 
-    logging.info('building bokeh interface')
+        solutions.append(solution)
 
-    # Create main interface
-    tabs = bokeh.models.Tabs()
-    tabs.tabs.append(build_solutions_panel(solutions_source, read_depth_source))
-    tabs.tabs.append(build_genome_panel(cnv_selected_source, brk_selected_source, chromosome_plot_info))
-    input_box = bokeh.models.Column(solution_select)
-    main_box = bokeh.layouts.row(input_box, tabs)
+    def column_or(name, default):
+        return segments[name] if name in segments else pd.Series(default, index=segments.index)
 
-    bokeh.plotting.save(main_box)
+    sample = {
+        'num_clones': num_clones,
+        'optimal_id': optimal_id,
+        'optimal_mix': _rounded(optimal_mix, 6) if optimal_mix is not None else None,
+        'max_prop_diverge': max_prop_diverge,
+        'num_failed_fits': int(len(failed_fits)),
+        'segments': {
+            'chromosome': list(segments['chromosome'].values),
+            'start': _ints(segments['start']),
+            'end': _ints(segments['end']),
+            'length': _rounded(segments['length'], 1),
+            'readcount': _ints(column_or('readcount', 0).fillna(0)),
+            'allele_readcount': _ints(
+                (column_or('major_readcount', 0) + column_or('minor_readcount', 0)).fillna(0)),
+            'major_depth': _rounded(segments['major_depth'], 6),
+            'minor_depth': _rounded(segments['minor_depth'], 6),
+            'total_depth': _rounded(segments['total_depth'], 6),
+            'total_mask': _ints(column_or('total_likelihood_mask', 1).fillna(0).astype(bool)),
+            'allele_mask': _ints(column_or('allele_likelihood_mask', 1).fillna(0).astype(bool)),
+        },
+        'breakpoints': {
+            'prediction_id': [str(a) for a in breakpoint_ids],
+        },
+        'solutions': solutions,
+        'read_depth': read_depth_densities(read_depth) if read_depth is not None else None,
+        'minor_modes': _rounded(minor_modes.values, 6) if minor_modes is not None else None,
+    }
+
+    for col in ('chromosome_1', 'chromosome_2', 'strand_1', 'strand_2', 'type'):
+        if col in breakpoints:
+            sample['breakpoints'][col] = [str(a) for a in breakpoints[col].values]
+    for col in ('position_1', 'position_2'):
+        if col in breakpoints:
+            sample['breakpoints'][col] = _ints(breakpoints[col])
+
+    return sample
 
 
+def chromosome_info(samples):
+    """ Chromosome order and lengths, from the largest segment end over all samples.
+    """
+    lengths = {}
+    for sample in samples.values():
+        segments = sample['segments']
+        for chromosome, end in zip(segments['chromosome'], segments['end']):
+            lengths[chromosome] = max(lengths.get(chromosome, 0), end)
+        breakpoints = sample['breakpoints']
+        for side in ('1', '2'):
+            for chromosome, position in zip(
+                    breakpoints.get('chromosome_' + side, []), breakpoints.get('position_' + side, [])):
+                if chromosome in lengths:
+                    lengths[chromosome] = max(lengths[chromosome], position)
 
+    chromosomes = sorted(lengths, key=chromosome_sort_key)
+    return {
+        'names': chromosomes,
+        'lengths': [int(lengths[c]) for c in chromosomes],
+    }
+
+
+def _encode(data):
+    """ Gzipped, base64 encoded JSON.
+    """
+    raw = json.dumps(data, separators=(',', ':'), allow_nan=False).encode('utf-8')
+    return base64.b64encode(gzip.compress(raw, compresslevel=9)).decode('ascii')
+
+
+def create_report(results_filenames, html_filename, title='ReMixT results',
+                  max_prop_diverge=remixt.defaults.max_prop_diverge):
+    """ Create a standalone HTML report of remixt results.
+
+    Args:
+        results_filenames (dict): results HDF5 filename keyed by tumour id
+        html_filename (str): output HTML filename
+
+    KwArgs:
+        title (str): title of the report
+        max_prop_diverge (float): used to mark solutions eligible to be optimal
+    """
+    samples = {}
+    for sample_id, results_filename in results_filenames.items():
+        logging.info(f'loading results of {sample_id} from {results_filename}')
+        samples[str(sample_id)] = load_sample(results_filename, max_prop_diverge=max_prop_diverge)
+
+    report = {
+        'title': title,
+        'version': getattr(remixt, '__version__', ''),
+        'chromosomes': chromosome_info(samples),
+        'sample_ids': list(samples.keys()),
+    }
+
+    payload = {
+        'report': report,
+        'samples': {sample_id: _encode(sample) for sample_id, sample in samples.items()},
+    }
+
+    template = importlib.resources.files('remixt').joinpath(TEMPLATE_NAME).read_text(encoding='utf-8')
+
+    # JSON in a script tag must not contain a closing script tag
+    payload_json = json.dumps(payload, separators=(',', ':')).replace('</', '<\\/')
+
+    page = (
+        template
+        .replace('{{TITLE}}', html.escape(title))
+        .replace('{{PAYLOAD}}', payload_json))
+
+    with open(html_filename, 'w', encoding='utf-8') as f:
+        f.write(page)
+
+    logging.info(f'wrote report of {len(samples)} samples to {html_filename}')

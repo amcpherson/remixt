@@ -188,13 +188,14 @@ If preferred, it is possible to extract copy number and metadata in TSV and YaML
     remixt write_results \
         $results_h5 $cn_table $brk_cn_table $meta_data
 
-### ReMixT Viewer
+### ReMixT Report
 
-There is an experimental viewer for ReMixT at `tools/remixt_viewer_app.py`.  Bokeh '>0.10.0' is required.  To use the viewer app, organize your patient sample results files as `./patient_*/sample_*.h5`.  From the directory containing patient subdirectories, run the bokeh server:
+The Nextflow pipeline writes `remixt_report.html` to the output directory, a single standalone HTML report of all tumours.  The results are embedded in the file, so it can be opened in a browser or shared without the results files or a network connection.  The report has a cohort view summarizing the selected solution of each tumour, and a tumour view with genome wide raw, expected and clone specific copy number, breakpoints, read depth, and every solution, any of which can be selected for comparison with the optimal solution.
 
-    bokeh-server --script $REMIXT_DIR/tools/remixt_viewer_app.py
+The report can also be created from results files with the `remixt visualize_solutions` sub-command, giving each results file as `tumour_id:path`, or as a path named `<tumour_id>.h5`:
 
-Then navigate to `http://127.0.0.1:5006/remixt`.
+    remixt visualize_solutions report.html \
+        tumour_a:tumour_a.h5 tumour_b:tumour_b.h5
 
 ## Test Dataset for ReMixT
 
@@ -239,10 +240,10 @@ Use the `remixt write_results` sub-command to write out tables of results and a 
         $WORK_DIR/HCC1395_brk_cn.tsv \
         $WORK_DIR/HCC1395_info.yaml
 
-Finally, create a visualization of the solutions using the `remixt visualize_solutions` sub-command.
+Finally, open `$WORK_DIR/remixt_report.html` in a browser to view the results.  The report can also be recreated from the results using the `remixt visualize_solutions` sub-command.
 
-    remixt visualize_solutions $WORK_DIR/HCC1395.h5 \
-        $WORK_DIR/HCC1395.html
+    remixt visualize_solutions $WORK_DIR/remixt_report.html \
+        $WORK_DIR/HCC1395.h5
 
 # Build
 

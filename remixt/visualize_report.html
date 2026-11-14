@@ -1,0 +1,1547 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11,11,11,0.10);
+  --band: rgba(11,11,11,0.035);
+  --minor: #2a78d6;
+  --major: #eb6834;
+  --subclonal: #1baf7a;
+  --total: #52514e;
+  --accent: #2a78d6;
+  --cn0: #184f95;
+  --cn1: #86b6ef;
+  --cn2: #e7e6e1;
+  --cn3: #f2a7a4;
+  --cn4: #e34948;
+  --cn5: #a3302f;
+  --hover: rgba(42,120,214,0.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255,255,255,0.10);
+    --band: rgba(255,255,255,0.035);
+    --minor: #3987e5;
+    --major: #d95926;
+    --subclonal: #199e70;
+    --total: #c3c2b7;
+    --accent: #3987e5;
+    --cn0: #5598e7;
+    --cn1: #1c5cab;
+    --cn2: #383835;
+    --cn3: #7a2b2a;
+    --cn4: #c94342;
+    --cn5: #f08c8b;
+    --hover: rgba(57,135,229,0.14);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255,255,255,0.10);
+  --band: rgba(255,255,255,0.035);
+  --minor: #3987e5;
+  --major: #d95926;
+  --subclonal: #199e70;
+  --total: #c3c2b7;
+  --accent: #3987e5;
+  --cn0: #5598e7;
+  --cn1: #1c5cab;
+  --cn2: #383835;
+  --cn3: #7a2b2a;
+  --cn4: #c94342;
+  --cn5: #f08c8b;
+  --hover: rgba(57,135,229,0.14);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--page);
+  color: var(--text-primary);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+header {
+  display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+  padding: 14px 24px 0;
+}
+header h1 { font-size: 18px; font-weight: 600; margin: 0; }
+header .meta { color: var(--text-muted); font-size: 12px; }
+header .spacer { flex: 1; }
+nav.tabs { display: flex; gap: 4px; padding: 10px 24px 0; border-bottom: 1px solid var(--border); }
+nav.tabs button {
+  border: 0; background: none; color: var(--text-secondary); font: inherit;
+  padding: 8px 12px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+nav.tabs button.active { color: var(--text-primary); border-bottom-color: var(--accent); font-weight: 600; }
+main { padding: 16px 24px 48px; max-width: 1600px; }
+section.view { display: none; }
+section.view.active { display: block; }
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 16px; margin-bottom: 16px;
+}
+.card h2 { font-size: 14px; font-weight: 600; margin: 0 0 2px; }
+.card .sub { color: var(--text-muted); font-size: 12px; margin-bottom: 10px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; margin-bottom: 14px; }
+.toolbar label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--text-secondary); }
+select, button.btn {
+  font: inherit; font-size: 13px; color: var(--text-primary); background: var(--surface);
+  border: 1px solid var(--axis); border-radius: 6px; padding: 5px 8px; min-height: 32px;
+}
+button.btn { cursor: pointer; }
+button.btn:hover { background: var(--hover); }
+select#sample-select { min-width: 180px; }
+select#solution-select { min-width: 280px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.tile .label { font-size: 12px; color: var(--text-secondary); }
+.tile .value { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tile .note { font-size: 11px; color: var(--text-muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-secondary); margin: 4px 0 6px; }
+.legend .key { display: inline-flex; align-items: center; gap: 6px; }
+.legend .swatch { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.legend .swatch.dash { background: none !important; border-top: 2px dashed; height: 0; }
+.legend .swatch.box { height: 10px; width: 14px; border-radius: 2px; }
+.legend .swatch.dot { width: 9px; height: 9px; border-radius: 50%; }
+.tracks { position: relative; }
+.track-title { font-size: 12px; color: var(--text-secondary); margin: 8px 0 2px 56px; }
+canvas { display: block; width: 100%; }
+.crosshair { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--text-muted); pointer-events: none; display: none; opacity: 0.6; }
+.brush { position: absolute; top: 0; bottom: 0; background: var(--hover); border-left: 1px solid var(--accent); border-right: 1px solid var(--accent); pointer-events: none; display: none; }
+.grid2 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 1100px) { .grid2 { grid-template-columns: 1fr; } }
+.grid2 .card { margin-bottom: 0; }
+.table-wrap { overflow: auto; max-height: 460px; border: 1px solid var(--border); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+th, td { padding: 5px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--grid); }
+th:first-child, td:first-child { text-align: left; }
+td.text, th.text { text-align: left; }
+th { position: sticky; top: 0; background: var(--surface); color: var(--text-secondary); font-weight: 600; cursor: pointer; user-select: none; z-index: 1; }
+th .arrow { color: var(--text-muted); font-size: 10px; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--hover); }
+tbody tr.selected { background: var(--hover); box-shadow: inset 3px 0 0 var(--accent); }
+.badge { display: inline-block; font-size: 10.5px; padding: 0 6px; border-radius: 9px; border: 1px solid var(--axis); color: var(--text-secondary); margin-left: 6px; }
+.tooltip {
+  position: fixed; pointer-events: none; z-index: 10; display: none;
+  background: var(--surface); color: var(--text-primary); border: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.14); border-radius: 6px; padding: 8px 10px; font-size: 12px;
+  max-width: 340px;
+}
+.tooltip .tt-title { font-weight: 600; margin-bottom: 4px; }
+.tooltip table { font-size: 12px; }
+.tooltip td { border: 0; padding: 1px 6px 1px 0; }
+.tooltip td:first-child { color: var(--text-secondary); }
+.hint { color: var(--text-muted); font-size: 12px; }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+#loading { padding: 40px 24px; color: var(--text-secondary); }
+@media (max-width: 640px) {
+  header, nav.tabs, main { padding-left: 16px; padding-right: 16px; }
+  select#solution-select { min-width: 0; width: 100%; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title"></h1>
+  <span class="meta" id="meta"></span>
+  <span class="spacer"></span>
+  <button class="btn" id="theme-toggle" title="Toggle light and dark theme">Theme</button>
+</header>
+<nav class="tabs">
+  <button data-view="cohort" class="active">Cohort</button>
+  <button data-view="sample">Tumour</button>
+</nav>
+<div id="loading">Loading results…</div>
+<main id="main" hidden>
+
+<section class="view active" id="view-cohort">
+  <div class="card">
+    <h2>Tumours</h2>
+    <div class="sub">Selected solution of each tumour, the optimal solution unless changed in the tumour view. Click a row to open the tumour.</div>
+    <div class="table-wrap" id="cohort-table"></div>
+  </div>
+  <div class="card">
+    <h2>Copy number across tumours</h2>
+    <div class="sub">Expected total copy number of the tumour cells, averaged over clones by clone fraction.</div>
+    <div class="legend" id="cohort-legend"></div>
+    <canvas id="cohort-heatmap"></canvas>
+    <canvas id="cohort-axis"></canvas>
+  </div>
+</section>
+
+<section class="view" id="view-sample">
+  <div class="toolbar">
+    <label>Tumour
+      <select id="sample-select"></select>
+    </label>
+    <label>Solution
+      <select id="solution-select"></select>
+    </label>
+    <label>Region
+      <select id="region-select"></select>
+    </label>
+    <label>Max copy number
+      <select id="ymax-select">
+        <option value="auto">Auto</option>
+        <option>4</option><option>6</option><option>8</option><option>10</option><option>15</option><option>20</option>
+      </select>
+    </label>
+    <button class="btn" id="zoom-out">Zoom out</button>
+    <button class="btn" id="zoom-reset">Reset</button>
+    <span class="hint">Drag across a track to zoom, double click to zoom out.</span>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="card">
+    <h2>Genome</h2>
+    <div class="legend">
+      <span class="key"><span class="swatch" style="background:var(--major)"></span>Major allele</span>
+      <span class="key"><span class="swatch" style="background:var(--minor)"></span>Minor allele</span>
+      <span class="key"><span class="swatch" style="background:var(--total)"></span>Total</span>
+      <span class="key"><span class="swatch dash" style="border-color:var(--text-secondary)"></span>Clone 2 and later</span>
+      <span class="key"><span class="swatch box" style="background:var(--subclonal);opacity:.35"></span>Subclonal segment</span>
+      <span class="key"><span class="swatch" style="background:var(--text-primary)"></span>Clonal breakpoint</span>
+      <span class="key"><span class="swatch" style="background:var(--subclonal)"></span>Subclonal breakpoint</span>
+      <span class="key"><span class="swatch" style="background:var(--axis)"></span>Breakpoint absent</span>
+    </div>
+    <div class="tracks" id="tracks">
+      <div class="track-title">Total copy number: raw segments, expected from the solution as a line</div>
+      <canvas id="track-total"></canvas>
+      <div class="track-title">Allele specific copy number: raw segments, expected from the solution as lines</div>
+      <canvas id="track-allele"></canvas>
+      <div class="track-title">Clone copy number: integer major and minor per clone</div>
+      <canvas id="track-clones"></canvas>
+      <div class="track-title">Breakpoints</div>
+      <canvas id="track-brk"></canvas>
+      <canvas id="track-axis"></canvas>
+      <div class="crosshair" id="crosshair"></div>
+      <div class="brush" id="brush"></div>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-bottom:16px">
+    <div class="card">
+      <h2>Solutions</h2>
+      <div class="sub">Ploidy and evidence lower bound of each solution. Click a point to select it.</div>
+      <div class="legend">
+        <span class="key"><span class="swatch dot" style="background:var(--accent)"></span>Eligible</span>
+        <span class="key"><span class="swatch dot" style="border:1.5px solid var(--text-muted)"></span>Too divergent</span>
+        <span class="key"><span class="swatch dot" style="border:2px solid var(--text-primary)"></span>Selected</span>
+      </div>
+      <canvas id="solutions-plot"></canvas>
+    </div>
+    <div class="card">
+      <h2>Read depth</h2>
+      <div class="sub">Length weighted density of segment depth. Ticks mark the allele depth expected for 0, 1, 2… copies.</div>
+      <div class="legend">
+        <span class="key"><span class="swatch" style="background:var(--major)"></span>Major</span>
+        <span class="key"><span class="swatch" style="background:var(--minor)"></span>Minor</span>
+        <span class="key"><span class="swatch" style="background:var(--total)"></span>Total</span>
+      </div>
+      <canvas id="depth-plot"></canvas>
+    </div>
+    <div class="card">
+      <h2>Major vs minor</h2>
+      <div class="sub">Raw copy number of each segment in view, sized by length.</div>
+      <div class="legend">
+        <span class="key"><span class="swatch dot" style="background:var(--total)"></span>Clonal</span>
+        <span class="key"><span class="swatch dot" style="background:var(--subclonal)"></span>Subclonal</span>
+      </div>
+      <canvas id="scatter-plot"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>All solutions</h2>
+    <div class="sub">Click a row to select the solution.</div>
+    <div class="table-wrap" id="solutions-table"></div>
+  </div>
+
+  <div class="card">
+    <h2>Breakpoints</h2>
+    <div class="sub">Copy number of each breakpoint in the selected solution. Click a row to zoom to it.</div>
+    <label class="check" style="margin-bottom:8px"><input type="checkbox" id="brk-present-only"> Only breakpoints present in a clone</label>
+    <div class="table-wrap" id="brk-table"></div>
+  </div>
+</section>
+</main>
+<div class="tooltip" id="tooltip"></div>
+
+<script id="remixt-data" type="application/json">{{PAYLOAD}}</script>
+<script>
+'use strict';
+
+const PAYLOAD = JSON.parse(document.getElementById('remixt-data').textContent);
+const REPORT = PAYLOAD.report;
+const MARGIN_LEFT = 56;
+const MARGIN_RIGHT = 12;
+
+// ---------------------------------------------------------------- utilities
+
+function css(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function fmt(value, digits = 2) {
+  if (value === null || value === undefined || Number.isNaN(value)) return '–';
+  return Number(value).toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+function fmtPct(value) {
+  if (value === null || value === undefined || Number.isNaN(value)) return '–';
+  return (100 * value).toFixed(1) + '%';
+}
+
+function fmtInt(value) {
+  return Number(value).toLocaleString();
+}
+
+function fmtPos(value) {
+  if (value >= 1e6) return (value / 1e6).toFixed(value >= 1e8 ? 0 : 1) + ' Mb';
+  if (value >= 1e3) return (value / 1e3).toFixed(0) + ' kb';
+  return value + ' b';
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+async function decode(b64) {
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return JSON.parse(await new Response(stream).text());
+}
+
+function setupCanvas(canvas, height) {
+  const dpr = window.devicePixelRatio || 1;
+  const width = canvas.clientWidth || canvas.parentElement.clientWidth;
+  canvas.style.height = height + 'px';
+  canvas.width = Math.round(width * dpr);
+  canvas.height = Math.round(height * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+  return { ctx, width, height };
+}
+
+function niceTicks(lo, hi, count) {
+  const span = hi - lo;
+  if (span <= 0) return [lo];
+  const step0 = span / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const err = step0 / mag;
+  const step = (err >= 7.5 ? 10 : err >= 3.5 ? 5 : err >= 1.5 ? 2 : 1) * mag;
+  const ticks = [];
+  for (let t = Math.ceil(lo / step) * step; t <= hi + 1e-9 * span; t += step) ticks.push(t);
+  return ticks;
+}
+
+function weightedPercentile(values, weights, pct) {
+  const idx = values.map((v, i) => i).filter(i => Number.isFinite(values[i]) && weights[i] > 0);
+  idx.sort((a, b) => values[a] - values[b]);
+  const total = idx.reduce((s, i) => s + weights[i], 0);
+  let acc = 0;
+  for (const i of idx) {
+    acc += weights[i];
+    if (acc >= total * pct / 100) return values[i];
+  }
+  return idx.length ? values[idx[idx.length - 1]] : NaN;
+}
+
+// ---------------------------------------------------------------- tooltip
+
+const tooltip = document.getElementById('tooltip');
+
+function showTooltip(event, title, rows) {
+  let html = `<div class="tt-title">${escapeHtml(title)}</div><table>`;
+  for (const [k, v] of rows) html += `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`;
+  html += '</table>';
+  tooltip.innerHTML = html;
+  tooltip.style.display = 'block';
+  const pad = 14;
+  const rect = tooltip.getBoundingClientRect();
+  let x = event.clientX + pad;
+  let y = event.clientY + pad;
+  if (x + rect.width > window.innerWidth - 8) x = event.clientX - rect.width - pad;
+  if (y + rect.height > window.innerHeight - 8) y = event.clientY - rect.height - pad;
+  tooltip.style.left = Math.max(4, x) + 'px';
+  tooltip.style.top = Math.max(4, y) + 'px';
+}
+
+function hideTooltip() {
+  tooltip.style.display = 'none';
+}
+
+// ---------------------------------------------------------------- genome coordinates
+
+const CHROMS = REPORT.chromosomes.names;
+const CHROM_LENGTHS = REPORT.chromosomes.lengths;
+const CHROM_OFFSET = {};
+let genomeLength = 0;
+CHROMS.forEach((c, i) => { CHROM_OFFSET[c] = genomeLength; genomeLength += CHROM_LENGTHS[i]; });
+
+function chromLabel(c) {
+  return String(c).replace(/^chr/, '');
+}
+
+function genomePos(chrom, pos) {
+  return CHROM_OFFSET[chrom] + pos;
+}
+
+function chromAt(g) {
+  for (let i = CHROMS.length - 1; i >= 0; i--) {
+    if (g >= CHROM_OFFSET[CHROMS[i]]) return i;
+  }
+  return 0;
+}
+
+// ---------------------------------------------------------------- sample model
+
+const samples = {};          // sample id -> decoded data plus derived arrays
+const selectedSolution = {}; // sample id -> solution id
+
+function prepareSample(data) {
+  const seg = data.segments;
+  const n = seg.start.length;
+  seg.gStart = new Float64Array(n);
+  seg.gEnd = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    seg.gStart[i] = genomePos(seg.chromosome[i], seg.start[i]);
+    seg.gEnd[i] = genomePos(seg.chromosome[i], seg.end[i]);
+  }
+  seg.order = Array.from({ length: n }, (_, i) => i).sort((a, b) => seg.gStart[a] - seg.gStart[b]);
+  data.solutionById = {};
+  for (const s of data.solutions) data.solutionById[s.id] = s;
+  data.cache = {};
+  return data;
+}
+
+// Raw and expected copy number of a solution, computed as in remixt.analysis.experiment.create_cn_table
+function derived(sampleId, solutionId) {
+  const data = samples[sampleId];
+  if (data.cache[solutionId]) return data.cache[solutionId];
+  const sol = data.solutionById[solutionId];
+  const seg = data.segments;
+  const n = seg.start.length;
+  const M = data.num_clones;
+  const h = sol.h;
+  const hT = h.slice(1).reduce((a, b) => a + b, 0);
+  const hSum = h[0] + hT;
+
+  const rawMajor = new Float64Array(n), rawMinor = new Float64Array(n), rawTotal = new Float64Array(n);
+  const expMajor = new Float64Array(n), expMinor = new Float64Array(n), expTotal = new Float64Array(n);
+  const subclonal = new Uint8Array(n), loh = new Uint8Array(n);
+  let lenSum = 0, lenSubclonal = 0, lenLoh = 0;
+
+  for (let i = 0; i < n; i++) {
+    const n0Major = sol.major[0][i], n0Minor = sol.minor[0][i];
+    rawMajor[i] = (seg.major_depth[i] - n0Major * h[0]) / hT;
+    rawMinor[i] = (seg.minor_depth[i] - n0Minor * h[0]) / hT;
+    rawTotal[i] = (seg.total_depth[i] - (n0Major + n0Minor) * h[0]) / hT;
+    let eMajor = 0, eMinor = 0, isSub = 0, isLoh = 1;
+    for (let m = 1; m < M; m++) {
+      eMajor += sol.major[m][i] * h[m];
+      eMinor += sol.minor[m][i] * h[m];
+      if (sol.major[m][i] !== sol.major[1][i] || sol.minor[m][i] !== sol.minor[1][i]) isSub = 1;
+      if (sol.minor[m][i] !== 0) isLoh = 0;
+    }
+    expMajor[i] = eMajor / hT;
+    expMinor[i] = eMinor / hT;
+    expTotal[i] = expMajor[i] + expMinor[i];
+    subclonal[i] = isSub;
+    loh[i] = isLoh;
+    const len = seg.end[i] - seg.start[i];
+    lenSum += len;
+    if (isSub) lenSubclonal += len;
+    if (isLoh) lenLoh += len;
+  }
+
+  const brkStatus = [];
+  const numBrk = data.breakpoints.prediction_id.length;
+  let numPresent = 0, numSubclonalBrk = 0;
+  for (let b = 0; b < numBrk; b++) {
+    let present = 0, absent = 0;
+    for (const cn of sol.brk_cn) { if (cn[b] > 0) present++; else absent++; }
+    const status = present === 0 ? 'absent' : absent === 0 ? 'clonal' : 'subclonal';
+    brkStatus.push(status);
+    if (present) numPresent++;
+    if (status === 'subclonal') numSubclonalBrk++;
+  }
+
+  const result = {
+    sol, h, hT, rawMajor, rawMinor, rawTotal, expMajor, expMinor, expTotal, subclonal, loh, brkStatus,
+    purity: hT / hSum,
+    cloneFractions: h.slice(1).map(x => x / hT),
+    fracSubclonal: lenSum ? lenSubclonal / lenSum : NaN,
+    fracLoh: lenSum ? lenLoh / lenSum : NaN,
+    numBrkPresent: numPresent,
+    numBrkSubclonal: numSubclonalBrk,
+    eligible: sol.proportion_divergent < data.max_prop_diverge,
+  };
+  data.cache[solutionId] = result;
+  return result;
+}
+
+// ---------------------------------------------------------------- generic sortable table
+
+function renderTable(container, columns, rows, options = {}) {
+  const state = container._sort || { key: options.sortKey, desc: options.sortDesc ?? false };
+  container._sort = state;
+  const sorted = rows.slice();
+  if (state.key) {
+    const col = columns.find(c => c.key === state.key);
+    const value = col.sortValue || (r => r[col.key]);
+    sorted.sort((a, b) => {
+      const va = value(a), vb = value(b);
+      const c = (typeof va === 'number' && typeof vb === 'number') ? va - vb : String(va).localeCompare(String(vb), undefined, { numeric: true });
+      return state.desc ? -c : c;
+    });
+  }
+  let html = '<table><thead><tr>';
+  for (const c of columns) {
+    const arrow = state.key === c.key ? (state.desc ? ' ▼' : ' ▲') : '';
+    html += `<th data-key="${c.key}" class="${c.text ? 'text' : ''}" title="${escapeHtml(c.title || c.label)}">${escapeHtml(c.label)}<span class="arrow">${arrow}</span></th>`;
+  }
+  html += '</tr></thead><tbody>';
+  sorted.forEach((r, i) => {
+    const sel = options.isSelected && options.isSelected(r) ? ' class="selected"' : '';
+    html += `<tr data-row="${rows.indexOf(r)}"${sel}>`;
+    for (const c of columns) {
+      const v = c.format ? c.format(r) : escapeHtml(r[c.key]);
+      html += `<td class="${c.text ? 'text' : ''}">${v}</td>`;
+    }
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+  container.querySelectorAll('th').forEach(th => th.addEventListener('click', () => {
+    const key = th.dataset.key;
+    if (state.key === key) state.desc = !state.desc; else { state.key = key; state.desc = false; }
+    renderTable(container, columns, rows, options);
+  }));
+  if (options.onClick) {
+    container.querySelectorAll('tbody tr').forEach(tr => tr.addEventListener('click', () => options.onClick(rows[+tr.dataset.row])));
+  }
+}
+
+// ---------------------------------------------------------------- cohort view
+
+const CN_COLORS = ['--cn0', '--cn1', '--cn2', '--cn3', '--cn4', '--cn5'];
+
+function cnColor(value) {
+  const cols = CN_COLORS.map(css);
+  if (!Number.isFinite(value)) return css('--grid');
+  const v = Math.max(0, Math.min(5, value));
+  const lo = Math.floor(v), hi = Math.min(5, lo + 1), t = v - lo;
+  return t < 0.01 ? cols[lo] : mixHex(cols[lo], cols[hi], t);
+}
+
+function mixHex(a, b, t) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const ch = (p, s) => (p >> s) & 255;
+  const mix = s => Math.round(ch(pa, s) + (ch(pb, s) - ch(pa, s)) * t);
+  return `rgb(${mix(16)},${mix(8)},${mix(0)})`;
+}
+
+function cohortRows() {
+  return REPORT.sample_ids.map(id => {
+    const data = samples[id];
+    const d = derived(id, selectedSolution[id]);
+    return {
+      id,
+      solution: d.sol.id,
+      isOptimal: d.sol.id === data.optimal_id,
+      ploidy: d.sol.ploidy,
+      purity: d.purity,
+      clone1: d.cloneFractions[0],
+      fracSubclonal: d.fracSubclonal,
+      fracLoh: d.fracLoh,
+      brk: d.numBrkPresent,
+      brkTotal: data.breakpoints.prediction_id.length,
+      numSolutions: data.solutions.length,
+      numFailed: data.num_failed_fits,
+      elbo: d.sol.elbo,
+    };
+  });
+}
+
+function renderCohort() {
+  const columns = [
+    { key: 'id', label: 'Tumour', text: true, format: r => escapeHtml(r.id) },
+    { key: 'solution', label: 'Solution', format: r => r.solution + (r.isOptimal ? '<span class="badge">optimal</span>' : '') },
+    { key: 'ploidy', label: 'Ploidy', format: r => fmt(r.ploidy) },
+    { key: 'purity', label: 'Purity', format: r => fmtPct(r.purity) },
+    { key: 'clone1', label: 'Clone 1 fraction', title: 'Fraction of tumour cells in clone 1', format: r => fmtPct(r.clone1) },
+    { key: 'fracSubclonal', label: 'Subclonal', title: 'Fraction of the genome with copy number differing between clones', format: r => fmtPct(r.fracSubclonal) },
+    { key: 'fracLoh', label: 'LOH', title: 'Fraction of the genome with no minor allele in any clone', format: r => fmtPct(r.fracLoh) },
+    { key: 'brk', label: 'Breakpoints', title: 'Breakpoints present in a clone, of all breakpoints', format: r => `${fmtInt(r.brk)} / ${fmtInt(r.brkTotal)}` },
+    { key: 'numSolutions', label: 'Solutions', title: 'Solutions, and failed fits', format: r => fmtInt(r.numSolutions) + (r.numFailed ? ` <span class="hint">(${r.numFailed} failed)</span>` : '') },
+    { key: 'elbo', label: 'ELBO', format: r => fmt(r.elbo, 1) },
+  ];
+  renderTable(document.getElementById('cohort-table'), columns, cohortRows(), {
+    onClick: r => { showSample(r.id); setView('sample'); },
+  });
+  renderCohortLegend();
+  drawCohortHeatmap();
+}
+
+function renderCohortLegend() {
+  const labels = ['0', '1', '2', '3', '4', '5+'];
+  document.getElementById('cohort-legend').innerHTML = labels.map((l, i) =>
+    `<span class="key"><span class="swatch box" style="background:var(${CN_COLORS[i]})"></span>${l}</span>`).join('');
+}
+
+const cohortGeom = { laneHeight: 18, labelWidth: 120 };
+
+function drawCohortHeatmap() {
+  const canvas = document.getElementById('cohort-heatmap');
+  const ids = REPORT.sample_ids;
+  const laneH = cohortGeom.laneHeight;
+  const { ctx, width, height } = setupCanvas(canvas, ids.length * laneH + 4);
+  const left = cohortGeom.labelWidth, right = width - MARGIN_RIGHT;
+  const scale = (right - left) / genomeLength;
+
+  ids.forEach((id, row) => {
+    const data = samples[id];
+    const d = derived(id, selectedSolution[id]);
+    const seg = data.segments;
+    const y = row * laneH + 2;
+    ctx.fillStyle = css('--text-secondary');
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'right';
+    let label = id;
+    while (ctx.measureText(label).width > left - 12 && label.length > 3) label = label.slice(0, -2) + '…';
+    ctx.fillText(label, left - 8, y + laneH / 2 - 1);
+    ctx.fillStyle = css('--grid');
+    ctx.fillRect(left, y, right - left, laneH - 3);
+    for (let i = 0; i < seg.start.length; i++) {
+      const x0 = left + seg.gStart[i] * scale;
+      const x1 = left + seg.gEnd[i] * scale;
+      ctx.fillStyle = cnColor(d.expTotal[i]);
+      ctx.fillRect(x0, y, Math.max(0.6, x1 - x0), laneH - 3);
+    }
+  });
+
+  ctx.strokeStyle = css('--surface');
+  ctx.lineWidth = 1;
+  for (let i = 1; i < CHROMS.length; i++) {
+    const x = left + CHROM_OFFSET[CHROMS[i]] * scale;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
+  }
+
+  drawGenomeAxis(document.getElementById('cohort-axis'), left, [0, genomeLength]);
+}
+
+function setupCohortHover() {
+  const canvas = document.getElementById('cohort-heatmap');
+  canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    const row = Math.floor((y - 2) / cohortGeom.laneHeight);
+    const left = cohortGeom.labelWidth, right = rect.width - MARGIN_RIGHT;
+    const id = REPORT.sample_ids[row];
+    if (!id || x < left || x > right) { hideTooltip(); return; }
+    const g = (x - left) / (right - left) * genomeLength;
+    const i = segmentAt(samples[id], g);
+    if (i < 0) { hideTooltip(); return; }
+    const seg = samples[id].segments;
+    const d = derived(id, selectedSolution[id]);
+    showTooltip(e, id, [
+      ['Region', `${seg.chromosome[i]}:${fmtInt(seg.start[i])}-${fmtInt(seg.end[i])}`],
+      ['Expected total', fmt(d.expTotal[i])],
+      ['Raw total', fmt(d.rawTotal[i])],
+      ...cloneRows(d, i),
+    ]);
+  });
+  canvas.addEventListener('mouseleave', hideTooltip);
+  canvas.addEventListener('click', e => {
+    const rect = canvas.getBoundingClientRect();
+    const row = Math.floor((e.clientY - rect.top - 2) / cohortGeom.laneHeight);
+    const id = REPORT.sample_ids[row];
+    if (id) { showSample(id); setView('sample'); }
+  });
+  canvas.style.cursor = 'pointer';
+}
+
+function cloneRows(d, i) {
+  const rows = [];
+  for (let m = 1; m < d.sol.major.length; m++) {
+    rows.push([`Clone ${m} major / minor`, `${d.sol.major[m][i]} / ${d.sol.minor[m][i]}`]);
+  }
+  return rows;
+}
+
+// ---------------------------------------------------------------- shared genome axis
+
+function drawGenomeAxis(canvas, left, view) {
+  const { ctx, width } = setupCanvas(canvas, 28);
+  const right = width - MARGIN_RIGHT;
+  const [x0, x1] = view;
+  const scale = (right - left) / (x1 - x0);
+  ctx.strokeStyle = css('--axis');
+  ctx.beginPath(); ctx.moveTo(left, 0.5); ctx.lineTo(right, 0.5); ctx.stroke();
+  ctx.fillStyle = css('--text-muted');
+  ctx.font = '11px system-ui, sans-serif';
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'center';
+
+  const first = chromAt(x0), last = chromAt(Math.max(x0, x1 - 1));
+  if (last > first) {
+    let lastLabelEnd = -Infinity;
+    for (let c = first; c <= last; c++) {
+      const s = Math.max(x0, CHROM_OFFSET[CHROMS[c]]);
+      const e = Math.min(x1, CHROM_OFFSET[CHROMS[c]] + CHROM_LENGTHS[c]);
+      const xs = left + (s - x0) * scale;
+      ctx.strokeStyle = css('--axis');
+      ctx.beginPath(); ctx.moveTo(xs + 0.5, 0); ctx.lineTo(xs + 0.5, 6); ctx.stroke();
+      const mid = left + ((s + e) / 2 - x0) * scale;
+      const label = chromLabel(CHROMS[c]);
+      const w = ctx.measureText(label).width;
+      if (mid - w / 2 > lastLabelEnd + 3) {
+        ctx.fillText(label, mid, 8);
+        lastLabelEnd = mid + w / 2;
+      }
+    }
+  } else {
+    const off = CHROM_OFFSET[CHROMS[first]];
+    for (const t of niceTicks(x0 - off, x1 - off, Math.max(2, Math.floor((right - left) / 110)))) {
+      const x = left + (t + off - x0) * scale;
+      ctx.strokeStyle = css('--axis');
+      ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, 5); ctx.stroke();
+      ctx.fillText(fmtPos(t), x, 8);
+    }
+    ctx.textAlign = 'left';
+    ctx.fillText(CHROMS[first], 2, 8);
+  }
+}
+
+// ---------------------------------------------------------------- sample view state
+
+const view = {
+  sampleId: null,
+  range: [0, 1],
+  ymax: 'auto',
+};
+
+function currentData() { return samples[view.sampleId]; }
+function currentDerived() { return derived(view.sampleId, selectedSolution[view.sampleId]); }
+
+function segmentAt(data, g) {
+  const seg = data.segments, order = seg.order;
+  let lo = 0, hi = order.length - 1, found = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (seg.gStart[order[mid]] <= g) { found = mid; lo = mid + 1; } else hi = mid - 1;
+  }
+  if (found < 0) return -1;
+  const i = order[found];
+  return g <= seg.gEnd[i] ? i : -1;
+}
+
+function sampleRange(data) {
+  // Chromosomes covered by the sample, so a single chromosome run is not dwarfed by an empty genome
+  const seg = data.segments;
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < seg.start.length; i++) {
+    const c = CHROMS.indexOf(seg.chromosome[i]);
+    lo = Math.min(lo, CHROM_OFFSET[CHROMS[c]]);
+    hi = Math.max(hi, CHROM_OFFSET[CHROMS[c]] + CHROM_LENGTHS[c]);
+  }
+  return Number.isFinite(lo) ? [lo, hi] : [0, genomeLength];
+}
+
+function yMax() {
+  if (view.ymax !== 'auto') return +view.ymax;
+  const d = currentDerived(), seg = currentData().segments;
+  const lengths = seg.end.map((e, i) => e - seg.start[i]);
+  const p = weightedPercentile(Array.from(d.rawTotal), lengths, 98);
+  let maxExp = 0;
+  for (let i = 0; i < d.expTotal.length; i++) maxExp = Math.max(maxExp, d.expTotal[i]);
+  return Math.max(4, Math.min(12, Math.ceil(Math.max(p, maxExp) + 0.5)));
+}
+
+function showSample(id) {
+  view.sampleId = id;
+  view.range = sampleRange(samples[id]);
+  document.getElementById('sample-select').value = id;
+  populateSolutionSelect();
+  populateRegionSelect();
+  document.getElementById('brk-table')._sort = null;
+  renderSample();
+  updateHash();
+}
+
+function selectSolution(solutionId) {
+  selectedSolution[view.sampleId] = +solutionId;
+  document.getElementById('solution-select').value = solutionId;
+  renderSample();
+  renderCohort();
+  updateHash();
+}
+
+function setRange(range) {
+  const full = sampleRange(currentData());
+  let [a, b] = range;
+  const minSpan = 1e4;
+  if (b - a < minSpan) { const m = (a + b) / 2; a = m - minSpan / 2; b = m + minSpan / 2; }
+  a = Math.max(full[0], a); b = Math.min(full[1], b);
+  view.range = [a, b];
+  const first = chromAt(a), last = chromAt(b - 1);
+  const regionSelect = document.getElementById('region-select');
+  const c = CHROMS[first];
+  regionSelect.value = first === last && a <= CHROM_OFFSET[c] + 1 && b >= CHROM_OFFSET[c] + CHROM_LENGTHS[first] - 1 ? c
+    : (a <= full[0] && b >= full[1] ? 'all' : 'custom');
+  drawGenome();
+  drawScatter();
+}
+
+function populateSolutionSelect() {
+  const data = currentData();
+  const select = document.getElementById('solution-select');
+  const sols = data.solutions.slice().sort((a, b) => b.elbo - a.elbo);
+  select.innerHTML = sols.map(s => {
+    const d = derived(view.sampleId, s.id);
+    const star = s.id === data.optimal_id ? '★ ' : '';
+    return `<option value="${s.id}">${star}#${s.id} · ploidy ${fmt(s.ploidy)} · purity ${fmtPct(d.purity)} · ELBO ${fmt(s.elbo, 1)}</option>`;
+  }).join('');
+  select.value = selectedSolution[view.sampleId];
+}
+
+function populateRegionSelect() {
+  const data = currentData();
+  const present = new Set(data.segments.chromosome);
+  const select = document.getElementById('region-select');
+  select.innerHTML = '<option value="all">All chromosomes</option><option value="custom" hidden>Zoomed region</option>' +
+    CHROMS.filter(c => present.has(c)).map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  select.value = 'all';
+}
+
+function renderSample() {
+  renderTiles();
+  drawGenome();
+  drawSolutionsPlot();
+  drawDepthPlot();
+  drawScatter();
+  renderSolutionsTable();
+  renderBrkTable();
+}
+
+function renderTiles() {
+  const data = currentData(), d = currentDerived();
+  const tiles = [
+    ['Ploidy', fmt(d.sol.ploidy), `solution #${d.sol.id}${d.sol.id === data.optimal_id ? ', optimal' : ''}`],
+    ['Purity', fmtPct(d.purity), 'tumour fraction of haploid depth'],
+    ...d.cloneFractions.map((f, m) => [`Clone ${m + 1}`, fmtPct(f), 'fraction of tumour']),
+    ['Subclonal', fmtPct(d.fracSubclonal), 'of genome'],
+    ['LOH', fmtPct(d.fracLoh), 'of genome'],
+    ['Breakpoints', `${fmtInt(d.numBrkPresent)}`, `present of ${fmtInt(data.breakpoints.prediction_id.length)}, ${d.numBrkSubclonal} subclonal`],
+    ['Divergent', fmtPct(d.sol.proportion_divergent), d.eligible ? 'eligible' : `above ${fmtPct(data.max_prop_diverge)} limit`],
+  ];
+  document.getElementById('tiles').innerHTML = tiles.map(([l, v, n]) =>
+    `<div class="tile"><div class="label">${escapeHtml(l)}</div><div class="value">${escapeHtml(v)}</div><div class="note">${escapeHtml(n)}</div></div>`).join('');
+}
+
+// ---------------------------------------------------------------- genome tracks
+
+const TRACK_HEIGHT = 170;
+const BRK_HEIGHT = 90;
+
+function plotX(g, left, right) {
+  const [a, b] = view.range;
+  return left + (g - a) / (b - a) * (right - left);
+}
+
+function drawTrackFrame(ctx, width, height, ymax, top = 6, bottom = 6) {
+  const left = MARGIN_LEFT, right = width - MARGIN_RIGHT;
+  const y = v => height - bottom - (v / ymax) * (height - top - bottom);
+
+  // Alternate chromosome bands
+  const [a, b] = view.range;
+  for (let c = chromAt(a); c <= chromAt(Math.max(a, b - 1)); c++) {
+    if (c % 2 === 1) {
+      const s = Math.max(a, CHROM_OFFSET[CHROMS[c]]), e = Math.min(b, CHROM_OFFSET[CHROMS[c]] + CHROM_LENGTHS[c]);
+      ctx.fillStyle = css('--band');
+      ctx.fillRect(plotX(s, left, right), top, plotX(e, left, right) - plotX(s, left, right), height - top - bottom);
+    }
+  }
+
+  ctx.font = '11px system-ui, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  const step = ymax <= 8 ? 1 : ymax <= 16 ? 2 : 5;
+  for (let v = 0; v <= ymax + 1e-9; v += step) {
+    ctx.strokeStyle = v === 0 ? css('--axis') : css('--grid');
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(left, Math.round(y(v)) + 0.5); ctx.lineTo(right, Math.round(y(v)) + 0.5); ctx.stroke();
+    ctx.fillStyle = css('--text-muted');
+    ctx.fillText(String(v), left - 8, y(v));
+  }
+  return { left, right, y };
+}
+
+function visibleSegments(data) {
+  const seg = data.segments, [a, b] = view.range;
+  const out = [];
+  for (const i of seg.order) {
+    if (seg.gEnd[i] < a) continue;
+    if (seg.gStart[i] > b) break;
+    out.push(i);
+  }
+  return out;
+}
+
+function drawSegmentLine(ctx, frame, i, value, ymax, offset = 0) {
+  const seg = currentData().segments;
+  let x0 = plotX(seg.gStart[i], frame.left, frame.right);
+  let x1 = plotX(seg.gEnd[i], frame.left, frame.right);
+  x0 = Math.max(frame.left, x0); x1 = Math.min(frame.right, x1);
+  if (x1 < x0) return;
+  if (x1 - x0 < 1) x1 = x0 + 1;
+  if (!Number.isFinite(value)) return;
+  const v = Math.max(0, Math.min(ymax, value));
+  const yy = frame.y(v) + offset;
+  ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x1, yy); ctx.stroke();
+  if (value > ymax) {
+    // Off scale marker
+    const xm = (x0 + x1) / 2;
+    ctx.save(); ctx.fillStyle = ctx.strokeStyle; ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.moveTo(xm - 3, yy + 4); ctx.lineTo(xm + 3, yy + 4); ctx.lineTo(xm, yy); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawGenome() {
+  const data = currentData(), d = currentDerived(), seg = data.segments;
+  const ymax = yMax();
+  const visible = visibleSegments(data);
+  const lineCap = 'butt';
+
+  // Total copy number
+  {
+    const { ctx, width, height } = setupCanvas(document.getElementById('track-total'), TRACK_HEIGHT);
+    const frame = drawTrackFrame(ctx, width, height, ymax);
+    ctx.lineCap = lineCap;
+    ctx.strokeStyle = css('--total'); ctx.lineWidth = 3; ctx.globalAlpha = 0.35;
+    for (const i of visible) if (seg.total_mask[i]) drawSegmentLine(ctx, frame, i, d.rawTotal[i], ymax);
+    ctx.globalAlpha = 1; ctx.lineWidth = 2; ctx.strokeStyle = css('--text-primary');
+    for (const i of visible) drawSegmentLine(ctx, frame, i, d.expTotal[i], ymax);
+  }
+
+  // Allele specific copy number
+  {
+    const { ctx, width, height } = setupCanvas(document.getElementById('track-allele'), TRACK_HEIGHT);
+    const frame = drawTrackFrame(ctx, width, height, ymax);
+    ctx.lineCap = lineCap;
+    ctx.lineWidth = 3; ctx.globalAlpha = 0.3;
+    ctx.strokeStyle = css('--major');
+    for (const i of visible) if (seg.allele_mask[i]) drawSegmentLine(ctx, frame, i, d.rawMajor[i], ymax);
+    ctx.strokeStyle = css('--minor');
+    for (const i of visible) if (seg.allele_mask[i]) drawSegmentLine(ctx, frame, i, d.rawMinor[i], ymax);
+    ctx.globalAlpha = 1; ctx.lineWidth = 2;
+    ctx.strokeStyle = css('--major');
+    for (const i of visible) drawSegmentLine(ctx, frame, i, d.expMajor[i], ymax);
+    ctx.strokeStyle = css('--minor');
+    for (const i of visible) drawSegmentLine(ctx, frame, i, d.expMinor[i], ymax);
+  }
+
+  // Clone copy number
+  {
+    const { ctx, width, height } = setupCanvas(document.getElementById('track-clones'), TRACK_HEIGHT);
+    const frame = drawTrackFrame(ctx, width, height, ymax);
+    ctx.fillStyle = css('--subclonal'); ctx.globalAlpha = 0.16;
+    for (const i of visible) {
+      if (!d.subclonal[i]) continue;
+      const x0 = Math.max(frame.left, plotX(seg.gStart[i], frame.left, frame.right));
+      const x1 = Math.min(frame.right, plotX(seg.gEnd[i], frame.left, frame.right));
+      ctx.fillRect(x0, 6, Math.max(1, x1 - x0), height - 12);
+    }
+    ctx.globalAlpha = 1; ctx.lineCap = lineCap;
+    const M = data.num_clones;
+    for (let m = M - 1; m >= 1; m--) {
+      ctx.setLineDash(m === 1 ? [] : [5, 3]);
+      ctx.lineWidth = m === 1 ? 2.5 : 2;
+      const off = m === 1 ? 0 : 2.5 * m;
+      ctx.strokeStyle = css('--major');
+      for (const i of visible) drawSegmentLine(ctx, frame, i, d.sol.major[m][i], ymax, -1.5 - off);
+      ctx.strokeStyle = css('--minor');
+      for (const i of visible) drawSegmentLine(ctx, frame, i, d.sol.minor[m][i], ymax, 1.5 + off);
+    }
+    ctx.setLineDash([]);
+  }
+
+  drawBreakpoints();
+  drawGenomeAxis(document.getElementById('track-axis'), MARGIN_LEFT, view.range);
+}
+
+function breakpointEnds() {
+  const data = currentData(), brk = data.breakpoints;
+  const n = brk.prediction_id.length;
+  if (!brk.chromosome_1) return [];
+  const ends = [];
+  for (let b = 0; b < n; b++) {
+    const c1 = brk.chromosome_1[b], c2 = brk.chromosome_2[b];
+    ends.push({
+      b,
+      g1: CHROM_OFFSET[c1] !== undefined ? genomePos(c1, brk.position_1[b]) : null,
+      g2: CHROM_OFFSET[c2] !== undefined ? genomePos(c2, brk.position_2[b]) : null,
+      sameChrom: c1 === c2,
+    });
+  }
+  return ends;
+}
+
+let brkHitTargets = [];
+
+function drawBreakpoints() {
+  const d = currentDerived();
+  const { ctx, width, height } = setupCanvas(document.getElementById('track-brk'), BRK_HEIGHT);
+  const left = MARGIN_LEFT, right = width - MARGIN_RIGHT;
+  const base = height - 8;
+  const [a, b] = view.range;
+  ctx.strokeStyle = css('--axis'); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(left, base + 0.5); ctx.lineTo(right, base + 0.5); ctx.stroke();
+
+  const colors = { clonal: css('--text-primary'), subclonal: css('--subclonal'), absent: css('--axis') };
+  brkHitTargets = [];
+  ctx.save();
+  ctx.beginPath(); ctx.rect(left, 0, right - left, height); ctx.clip();
+  for (const status of ['absent', 'subclonal', 'clonal']) {
+    ctx.strokeStyle = colors[status];
+    ctx.lineWidth = status === 'absent' ? 1 : 1.5;
+    for (const e of breakpointEnds()) {
+      if (d.brkStatus[e.b] !== status) continue;
+      const inView = g => g !== null && g >= a && g <= b;
+      const x1 = e.g1 !== null ? plotX(e.g1, left, right) : null;
+      const x2 = e.g2 !== null ? plotX(e.g2, left, right) : null;
+      if (e.sameChrom && (inView(e.g1) || inView(e.g2) || (e.g1 < a && e.g2 > b) || (e.g2 < a && e.g1 > b))) {
+        const span = Math.abs(x2 - x1);
+        const h = Math.min(base - 6, Math.max(8, span * 0.5));
+        ctx.beginPath();
+        ctx.moveTo(x1, base);
+        ctx.bezierCurveTo(x1, base - h * 1.33, x2, base - h * 1.33, x2, base);
+        ctx.stroke();
+        if (inView(e.g1)) brkHitTargets.push({ x: x1, b: e.b });
+        if (inView(e.g2)) brkHitTargets.push({ x: x2, b: e.b });
+      } else {
+        for (const [g, x] of [[e.g1, x1], [e.g2, x2]]) {
+          if (!inView(g)) continue;
+          ctx.beginPath(); ctx.moveTo(x, base); ctx.lineTo(x, 14); ctx.stroke();
+          ctx.fillStyle = colors[status];
+          ctx.beginPath(); ctx.arc(x, 14, 3, 0, 2 * Math.PI); ctx.fill();
+          brkHitTargets.push({ x, b: e.b });
+        }
+      }
+    }
+  }
+  ctx.restore();
+  ctx.fillStyle = css('--text-muted'); ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+  ctx.fillText('arcs', left - 8, base - 30);
+  ctx.fillText('transl.', left - 8, 9);
+}
+
+function brkTooltipRows(b) {
+  const brk = currentData().breakpoints, d = currentDerived();
+  const rows = [
+    ['Type', brk.type ? brk.type[b] : '–'],
+    ['Break end 1', `${brk.chromosome_1[b]}:${fmtInt(brk.position_1[b])} (${brk.strand_1[b]})`],
+    ['Break end 2', `${brk.chromosome_2[b]}:${fmtInt(brk.position_2[b])} (${brk.strand_2[b]})`],
+    ['Status', d.brkStatus[b]],
+  ];
+  d.sol.brk_cn.forEach((cn, m) => rows.push([`Clone ${m + 1} copies`, String(cn[b])]));
+  return rows;
+}
+
+function setupGenomeInteraction() {
+  const tracks = document.getElementById('tracks');
+  const crosshair = document.getElementById('crosshair');
+  const brush = document.getElementById('brush');
+  const canvases = ['track-total', 'track-allele', 'track-clones', 'track-brk'].map(id => document.getElementById(id));
+  let drag = null;
+
+  const toGenome = (clientX, canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    const left = MARGIN_LEFT, right = rect.width - MARGIN_RIGHT;
+    const x = Math.max(left, Math.min(right, clientX - rect.left));
+    return { g: view.range[0] + (x - left) / (right - left) * (view.range[1] - view.range[0]), x, rect };
+  };
+
+  for (const canvas of canvases) {
+    canvas.style.cursor = 'crosshair';
+    canvas.addEventListener('mousedown', e => {
+      const { g, x } = toGenome(e.clientX, canvas);
+      drag = { g0: g, x0: x, canvas };
+      e.preventDefault();
+    });
+    canvas.addEventListener('mousemove', e => {
+      const { g, x, rect } = toGenome(e.clientX, canvas);
+      const tracksRect = tracks.getBoundingClientRect();
+      crosshair.style.display = 'block';
+      crosshair.style.left = (rect.left - tracksRect.left + x) + 'px';
+      if (drag) { hideTooltip(); return; }
+
+      if (canvas.id === 'track-brk') {
+        let best = null;
+        for (const t of brkHitTargets) {
+          const dist = Math.abs(t.x - x);
+          if (dist < 6 && (!best || dist < best.dist)) best = { ...t, dist };
+        }
+        if (best) {
+          showTooltip(e, `Breakpoint ${currentData().breakpoints.prediction_id[best.b]}`, brkTooltipRows(best.b));
+        } else hideTooltip();
+        return;
+      }
+
+      const data = currentData(), d = currentDerived(), seg = data.segments;
+      const i = segmentAt(data, g);
+      if (i < 0) { hideTooltip(); return; }
+      showTooltip(e, `${seg.chromosome[i]}:${fmtInt(seg.start[i])}-${fmtInt(seg.end[i])}`, [
+        ['Length', fmtPos(seg.end[i] - seg.start[i])],
+        ['Raw total', fmt(d.rawTotal[i])],
+        ['Raw major / minor', `${fmt(d.rawMajor[i])} / ${fmt(d.rawMinor[i])}`],
+        ['Expected major / minor', `${fmt(d.expMajor[i])} / ${fmt(d.expMinor[i])}`],
+        ...cloneRows(d, i),
+        ['Read count', fmtInt(seg.readcount[i])],
+        ['Allele read count', fmtInt(seg.allele_readcount[i])],
+        ...(seg.total_mask[i] && seg.allele_mask[i] ? [] : [['Likelihood', seg.total_mask[i] ? 'total only' : 'masked']]),
+      ]);
+    });
+    canvas.addEventListener('mouseleave', () => { crosshair.style.display = 'none'; hideTooltip(); });
+    canvas.addEventListener('dblclick', () => zoomOut());
+  }
+
+  window.addEventListener('mousemove', e => {
+    if (!drag) return;
+    const { x, rect } = toGenome(e.clientX, drag.canvas);
+    const tracksRect = tracks.getBoundingClientRect();
+    const off = rect.left - tracksRect.left;
+    brush.style.display = 'block';
+    brush.style.left = (off + Math.min(drag.x0, x)) + 'px';
+    brush.style.width = Math.abs(x - drag.x0) + 'px';
+  });
+  window.addEventListener('mouseup', e => {
+    if (!drag) return;
+    const { g, x } = toGenome(e.clientX, drag.canvas);
+    brush.style.display = 'none';
+    const moved = Math.abs(x - drag.x0);
+    const g0 = drag.g0;
+    drag = null;
+    if (moved > 4) setRange([Math.min(g0, g), Math.max(g0, g)]);
+  });
+}
+
+function zoomOut() {
+  const [a, b] = view.range;
+  const m = (a + b) / 2, span = (b - a) * 2;
+  setRange([m - span / 2, m + span / 2]);
+}
+
+// ---------------------------------------------------------------- solutions plot
+
+let solutionPoints = [];
+
+function drawSolutionsPlot() {
+  const data = currentData();
+  const canvas = document.getElementById('solutions-plot');
+  const { ctx, width, height } = setupCanvas(canvas, 280);
+  const left = 64, right = width - 14, top = 10, bottom = height - 34;
+  const sols = data.solutions;
+  const xs = sols.map(s => s.ploidy), ys = sols.map(s => s.elbo);
+  let [x0, x1] = [Math.min(...xs), Math.max(...xs)];
+  let [y0, y1] = [Math.min(...ys), Math.max(...ys)];
+  const px = Math.max(0.2, (x1 - x0) * 0.08), py = Math.max(1, (y1 - y0) * 0.08);
+  x0 -= px; x1 += px; y0 -= py; y1 += py;
+  const sx = v => left + (v - x0) / (x1 - x0) * (right - left);
+  const sy = v => bottom - (v - y0) / (y1 - y0) * (bottom - top);
+
+  drawAxes(ctx, { left, right, top, bottom }, niceTicks(x0, x1, 6), niceTicks(y0, y1, 5), sx, sy, 'Ploidy', 'ELBO', v => fmt(v, 1), v => fmtInt(Math.round(v)));
+
+  solutionPoints = [];
+  const sel = selectedSolution[view.sampleId];
+  for (const s of sols) {
+    const d = derived(view.sampleId, s.id);
+    const x = sx(s.ploidy), y = sy(s.elbo);
+    solutionPoints.push({ x, y, id: s.id });
+    ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI);
+    if (d.eligible) {
+      ctx.fillStyle = css('--accent'); ctx.globalAlpha = 0.75; ctx.fill(); ctx.globalAlpha = 1;
+      ctx.strokeStyle = css('--surface'); ctx.lineWidth = 1.5; ctx.stroke();
+    } else {
+      ctx.strokeStyle = css('--text-muted'); ctx.lineWidth = 1.5; ctx.stroke();
+    }
+  }
+  const selPt = solutionPoints.find(p => p.id === sel);
+  if (selPt) {
+    ctx.strokeStyle = css('--text-primary'); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(selPt.x, selPt.y, 9, 0, 2 * Math.PI); ctx.stroke();
+  }
+  const optPt = solutionPoints.find(p => p.id === data.optimal_id);
+  if (optPt) {
+    ctx.fillStyle = css('--text-secondary'); ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = optPt.x > right - 60 ? 'right' : 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText('optimal', optPt.x + (ctx.textAlign === 'left' ? 10 : -10), optPt.y - 6);
+  }
+}
+
+function drawAxes(ctx, box, xticks, yticks, sx, sy, xlabel, ylabel, xfmt, yfmt) {
+  const { left, right, top, bottom } = box;
+  ctx.font = '11px system-ui, sans-serif';
+  ctx.lineWidth = 1;
+  for (const t of yticks) {
+    const y = Math.round(sy(t)) + 0.5;
+    if (y < top - 1 || y > bottom + 1) continue;
+    ctx.strokeStyle = css('--grid'); ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+    ctx.fillStyle = css('--text-muted'); ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(yfmt(t), left - 6, y);
+  }
+  for (const t of xticks) {
+    const x = Math.round(sx(t)) + 0.5;
+    if (x < left - 1 || x > right + 1) continue;
+    ctx.fillStyle = css('--text-muted'); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(xfmt(t), x, bottom + 5);
+  }
+  ctx.strokeStyle = css('--axis');
+  ctx.beginPath(); ctx.moveTo(left, bottom + 0.5); ctx.lineTo(right, bottom + 0.5); ctx.stroke();
+  ctx.fillStyle = css('--text-secondary'); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillText(xlabel, (left + right) / 2, bottom + 32);
+  ctx.save(); ctx.translate(12, (top + bottom) / 2); ctx.rotate(-Math.PI / 2);
+  ctx.textBaseline = 'top'; ctx.fillText(ylabel, 0, -2); ctx.restore();
+}
+
+function setupSolutionsInteraction() {
+  const canvas = document.getElementById('solutions-plot');
+  const nearest = e => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    let best = null;
+    for (const p of solutionPoints) {
+      const dist = Math.hypot(p.x - x, p.y - y);
+      if (dist < 12 && (!best || dist < best.dist)) best = { ...p, dist };
+    }
+    return best;
+  };
+  canvas.addEventListener('mousemove', e => {
+    const p = nearest(e);
+    canvas.style.cursor = p ? 'pointer' : 'default';
+    if (!p) { hideTooltip(); return; }
+    const d = derived(view.sampleId, p.id), s = d.sol;
+    showTooltip(e, `Solution #${s.id}${s.id === currentData().optimal_id ? ' (optimal)' : ''}`, [
+      ['Ploidy', fmt(s.ploidy)],
+      ['Purity', fmtPct(d.purity)],
+      ['Clone fractions', d.cloneFractions.map(fmtPct).join(', ')],
+      ['ELBO', fmt(s.elbo, 2)],
+      ['Proportion divergent', fmtPct(s.proportion_divergent)],
+      ['Divergence weight', s.divergence_weight.toExponential(0)],
+      ['Init mode', String(s.mode_idx)],
+    ]);
+  });
+  canvas.addEventListener('mouseleave', hideTooltip);
+  canvas.addEventListener('click', e => { const p = nearest(e); if (p) selectSolution(p.id); });
+}
+
+// ---------------------------------------------------------------- read depth plot
+
+function drawDepthPlot() {
+  const data = currentData(), d = currentDerived();
+  const canvas = document.getElementById('depth-plot');
+  const { ctx, width, height } = setupCanvas(canvas, 280);
+  const rd = data.read_depth;
+  if (!rd) {
+    ctx.fillStyle = css('--text-muted'); ctx.fillText('No read depth data', 20, 30);
+    return;
+  }
+  const left = 44, right = width - 14, top = 22, bottom = height - 34;
+  const x1 = rd.depth[rd.depth.length - 1];
+  const ymax = Math.max(...rd.minor, ...rd.major, ...rd.total) * 1.05 || 1;
+  const sx = v => left + v / x1 * (right - left);
+  const sy = v => bottom - v / ymax * (bottom - top);
+
+  drawAxes(ctx, { left, right, top, bottom }, niceTicks(0, x1, 6), [], sx, sy, 'Depth (reads per base)', 'Density', v => fmt(v, v < 0.1 ? 3 : 2), v => '');
+
+  for (const [key, color] of [['total', '--total'], ['major', '--major'], ['minor', '--minor']]) {
+    ctx.beginPath();
+    ctx.moveTo(sx(rd.depth[0]), sy(0));
+    rd.depth.forEach((x, i) => ctx.lineTo(sx(x), sy(rd[key][i])));
+    ctx.lineTo(sx(x1), sy(0));
+    ctx.closePath();
+    ctx.fillStyle = css(color); ctx.globalAlpha = 0.12; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.beginPath();
+    rd.depth.forEach((x, i) => i ? ctx.lineTo(sx(x), sy(rd[key][i])) : ctx.moveTo(sx(x), sy(rd[key][i])));
+    ctx.strokeStyle = css(color); ctx.lineWidth = 2; ctx.stroke();
+  }
+
+  // Expected depth of an allele with k copies in all tumour clones and 1 copy in the normal
+  ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  for (let k = 0; k < 40; k++) {
+    const depth = d.h[0] + k * d.hT;
+    if (depth > x1) break;
+    const x = sx(depth);
+    ctx.strokeStyle = css('--text-secondary'); ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = css('--text-secondary');
+    ctx.fillText(String(k), x, top - 3);
+  }
+}
+
+// ---------------------------------------------------------------- major vs minor scatter
+
+let scatterPoints = [];
+
+function drawScatter() {
+  const data = currentData(), d = currentDerived(), seg = data.segments;
+  const canvas = document.getElementById('scatter-plot');
+  const { ctx, width, height } = setupCanvas(canvas, 280);
+  const ymax = yMax();
+  const xmax = ymax, mmax = Math.max(2, Math.ceil(ymax / 2));
+  const left = 44, right = width - 14, top = 10, bottom = height - 34;
+  const sx = v => left + v / xmax * (right - left);
+  const sy = v => bottom - v / mmax * (bottom - top);
+  const ticksX = Array.from({ length: xmax + 1 }, (_, i) => i).filter(i => xmax <= 10 || i % 2 === 0);
+  const ticksY = Array.from({ length: mmax + 1 }, (_, i) => i);
+  for (const t of ticksX) {
+    ctx.strokeStyle = css('--grid'); ctx.beginPath(); ctx.moveTo(Math.round(sx(t)) + 0.5, top); ctx.lineTo(Math.round(sx(t)) + 0.5, bottom); ctx.stroke();
+  }
+  drawAxes(ctx, { left, right, top, bottom }, ticksX, ticksY, sx, sy, 'Major copy number', 'Minor copy number', String, String);
+
+  scatterPoints = [];
+  const visible = visibleSegments(data).filter(i => seg.allele_mask[i]);
+  visible.sort((a, b) => d.subclonal[a] - d.subclonal[b]);
+  for (const i of visible) {
+    const mj = d.rawMajor[i], mn = d.rawMinor[i];
+    if (!Number.isFinite(mj) || !Number.isFinite(mn)) continue;
+    const x = sx(Math.max(0, Math.min(xmax, mj))), y = sy(Math.max(0, Math.min(mmax, mn)));
+    const r = Math.max(1.5, Math.min(9, 2.2 * Math.sqrt((seg.end[i] - seg.start[i]) / 1e6)));
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI);
+    ctx.fillStyle = css(d.subclonal[i] ? '--subclonal' : '--total');
+    ctx.globalAlpha = 0.45; ctx.fill(); ctx.globalAlpha = 1;
+    scatterPoints.push({ x, y, r, i });
+  }
+}
+
+function setupScatterInteraction() {
+  const canvas = document.getElementById('scatter-plot');
+  canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    let best = null;
+    for (const p of scatterPoints) {
+      const dist = Math.hypot(p.x - x, p.y - y);
+      if (dist < Math.max(6, p.r + 2) && (!best || dist < best.dist)) best = { ...p, dist };
+    }
+    if (!best) { hideTooltip(); return; }
+    const seg = currentData().segments, d = currentDerived(), i = best.i;
+    showTooltip(e, `${seg.chromosome[i]}:${fmtInt(seg.start[i])}-${fmtInt(seg.end[i])}`, [
+      ['Length', fmtPos(seg.end[i] - seg.start[i])],
+      ['Raw major / minor', `${fmt(d.rawMajor[i])} / ${fmt(d.rawMinor[i])}`],
+      ...cloneRows(d, i),
+    ]);
+  });
+  canvas.addEventListener('mouseleave', hideTooltip);
+}
+
+// ---------------------------------------------------------------- tables
+
+function renderSolutionsTable() {
+  const data = currentData();
+  const rows = data.solutions.map(s => {
+    const d = derived(view.sampleId, s.id);
+    return {
+      id: s.id, elbo: s.elbo, ploidy: s.ploidy, purity: d.purity,
+      clones: d.cloneFractions, clone1: d.cloneFractions[0],
+      fracSubclonal: d.fracSubclonal, fracLoh: d.fracLoh,
+      divergent: s.proportion_divergent, eligible: d.eligible,
+      weight: s.divergence_weight, mode: s.mode_idx, brk: d.numBrkPresent,
+    };
+  });
+  const columns = [
+    { key: 'id', label: 'Solution', format: r => r.id + (r.id === data.optimal_id ? '<span class="badge">optimal</span>' : '') },
+    { key: 'elbo', label: 'ELBO', format: r => fmt(r.elbo, 2) },
+    { key: 'ploidy', label: 'Ploidy', format: r => fmt(r.ploidy) },
+    { key: 'purity', label: 'Purity', format: r => fmtPct(r.purity) },
+    { key: 'clone1', label: 'Clone fractions', format: r => r.clones.map(fmtPct).join(' / ') },
+    { key: 'fracSubclonal', label: 'Subclonal', format: r => fmtPct(r.fracSubclonal) },
+    { key: 'fracLoh', label: 'LOH', format: r => fmtPct(r.fracLoh) },
+    { key: 'divergent', label: 'Divergent', format: r => fmtPct(r.divergent) + (r.eligible ? '' : ' <span class="hint">over limit</span>') },
+    { key: 'weight', label: 'Divergence weight', format: r => Number.isFinite(r.weight) ? r.weight.toExponential(0) : '–' },
+    { key: 'mode', label: 'Init mode', format: r => r.mode },
+    { key: 'brk', label: 'Breakpoints present', format: r => fmtInt(r.brk) },
+  ];
+  const container = document.getElementById('solutions-table');
+  if (!container._sort) container._sort = { key: 'elbo', desc: true };
+  renderTable(container, columns, rows, {
+    isSelected: r => r.id === selectedSolution[view.sampleId],
+    onClick: r => selectSolution(r.id),
+  });
+}
+
+function renderBrkTable() {
+  const data = currentData(), d = currentDerived(), brk = data.breakpoints;
+  const container = document.getElementById('brk-table');
+  if (!brk.chromosome_1 || brk.prediction_id.length === 0) {
+    container.innerHTML = '<div class="hint" style="padding:10px">No breakpoints</div>';
+    return;
+  }
+  const presentOnly = document.getElementById('brk-present-only').checked;
+  const rows = [];
+  for (let b = 0; b < brk.prediction_id.length; b++) {
+    if (presentOnly && d.brkStatus[b] === 'absent') continue;
+    rows.push({
+      b, id: brk.prediction_id[b], type: brk.type ? brk.type[b] : '',
+      end1: `${brk.chromosome_1[b]}:${fmtInt(brk.position_1[b])} ${brk.strand_1[b]}`,
+      end2: `${brk.chromosome_2[b]}:${fmtInt(brk.position_2[b])} ${brk.strand_2[b]}`,
+      g1: genomePos(brk.chromosome_1[b], brk.position_1[b]),
+      g2: genomePos(brk.chromosome_2[b], brk.position_2[b]),
+      status: d.brkStatus[b],
+      cn: d.sol.brk_cn.map(cn => cn[b]),
+    });
+  }
+  const columns = [
+    { key: 'id', label: 'Prediction', text: true },
+    { key: 'type', label: 'Type', text: true },
+    { key: 'end1', label: 'Break end 1', text: true, sortValue: r => r.g1 },
+    { key: 'end2', label: 'Break end 2', text: true, sortValue: r => r.g2 },
+    { key: 'status', label: 'Status', text: true },
+    ...d.sol.brk_cn.map((_, m) => ({ key: `cn${m}`, label: `Clone ${m + 1}`, sortValue: r => r.cn[m], format: r => r.cn[m] })),
+  ];
+  if (!container._sort) container._sort = { key: 'status', desc: true };
+  renderTable(container, columns, rows, {
+    onClick: r => {
+      const pad = 2e6;
+      const lo = r.g1 === r.g2 || brk.chromosome_1[r.b] !== brk.chromosome_2[r.b] ? r.g1 : Math.min(r.g1, r.g2);
+      const hi = brk.chromosome_1[r.b] !== brk.chromosome_2[r.b] ? r.g1 : Math.max(r.g1, r.g2);
+      setRange([lo - pad, hi + pad]);
+      document.getElementById('tracks').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    },
+  });
+}
+
+// ---------------------------------------------------------------- navigation
+
+function setView(name) {
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b.dataset.view === name));
+  document.querySelectorAll('section.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + name));
+  if (name === 'sample') renderSample(); else drawCohortHeatmap();
+  updateHash();
+}
+
+function activeView() {
+  return document.querySelector('nav.tabs button.active').dataset.view;
+}
+
+function updateHash() {
+  const params = new URLSearchParams();
+  params.set('view', activeView());
+  if (view.sampleId) {
+    params.set('tumour', view.sampleId);
+    params.set('solution', selectedSolution[view.sampleId]);
+  }
+  history.replaceState(null, '', '#' + params.toString());
+}
+
+function readHash() {
+  const params = new URLSearchParams(location.hash.slice(1));
+  return { view: params.get('view'), tumour: params.get('tumour'), solution: params.get('solution') };
+}
+
+function redrawAll() {
+  if (activeView() === 'sample') renderSample(); else drawCohortHeatmap();
+}
+
+// ---------------------------------------------------------------- startup
+
+async function main() {
+  document.getElementById('title').textContent = REPORT.title;
+  const ids = REPORT.sample_ids;
+  document.getElementById('meta').textContent =
+    `${ids.length} tumour${ids.length === 1 ? '' : 's'}` + (REPORT.version ? ` · remixt ${REPORT.version}` : '');
+
+  if (typeof DecompressionStream === 'undefined') {
+    document.getElementById('loading').textContent = 'This browser cannot read the embedded data, please open the report in a recent Chrome, Firefox, Edge or Safari.';
+    return;
+  }
+  const decoded = await Promise.all(ids.map(id => decode(PAYLOAD.samples[id])));
+  ids.forEach((id, i) => {
+    samples[id] = prepareSample(decoded[i]);
+    selectedSolution[id] = samples[id].optimal_id;
+  });
+
+  const hash = readHash();
+  if (hash.tumour && samples[hash.tumour] && hash.solution && samples[hash.tumour].solutionById[+hash.solution]) {
+    selectedSolution[hash.tumour] = +hash.solution;
+  }
+
+  document.getElementById('loading').hidden = true;
+  document.getElementById('main').hidden = false;
+
+  const sampleSelect = document.getElementById('sample-select');
+  sampleSelect.innerHTML = ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`).join('');
+  sampleSelect.addEventListener('change', () => showSample(sampleSelect.value));
+  document.getElementById('solution-select').addEventListener('change', e => selectSolution(e.target.value));
+  document.getElementById('region-select').addEventListener('change', e => {
+    const v = e.target.value;
+    if (v === 'all') setRange(sampleRange(currentData()));
+    else if (v !== 'custom') { const c = CHROMS.indexOf(v); setRange([CHROM_OFFSET[v], CHROM_OFFSET[v] + CHROM_LENGTHS[c]]); }
+  });
+  document.getElementById('ymax-select').addEventListener('change', e => { view.ymax = e.target.value; drawGenome(); drawScatter(); });
+  document.getElementById('zoom-out').addEventListener('click', zoomOut);
+  document.getElementById('zoom-reset').addEventListener('click', () => setRange(sampleRange(currentData())));
+  document.getElementById('brk-present-only').addEventListener('change', renderBrkTable);
+  document.querySelectorAll('nav.tabs button').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+  document.getElementById('theme-toggle').addEventListener('click', () => {
+    const dark = document.documentElement.dataset.theme
+      ? document.documentElement.dataset.theme === 'dark'
+      : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.dataset.theme = dark ? 'light' : 'dark';
+    redrawAll();
+  });
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redrawAll);
+
+  setupCohortHover();
+  setupGenomeInteraction();
+  setupSolutionsInteraction();
+  setupScatterInteraction();
+
+  let resizeTimer = null;
+  new ResizeObserver(() => { clearTimeout(resizeTimer); resizeTimer = setTimeout(redrawAll, 100); }).observe(document.getElementById('main'));
+
+  showSample(hash.tumour && samples[hash.tumour] ? hash.tumour : ids[0]);
+  renderCohort();
+  setView(hash.view === 'sample' || ids.length === 1 ? 'sample' : 'cohort');
+}
+
+main().catch(err => {
+  document.getElementById('loading').textContent = 'Failed to load report: ' + err;
+  console.error(err);
+});
+</script>
+</body>
+</html>

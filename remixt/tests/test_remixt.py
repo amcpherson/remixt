@@ -20,7 +20,6 @@ import remixt.seqdataio
 import remixt.tests.utils
 import remixt.cn_plot
 import remixt.analysis.pipeline
-import remixt.visualize
 
 np.random.seed(2014)
 
@@ -328,9 +327,6 @@ class remixt_unittest(unittest.TestCase):
         with pd.HDFStore('test.h5', 'w') as store:
             for key, data in evaluation.items():
                 store['/' + key] = data
-
-        print ('creating visualization')
-        remixt.visualize.create_genome_visualization(cn_table, brk_cn_table, 'test.html')
 
         print ('plotting result')
         fig = remixt.cn_plot.experiment_plot(experiment, cn, h, maxcopies=8)

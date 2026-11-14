@@ -36,7 +36,6 @@ requirements:
     - pyyaml ==6.0
     - matplotlib ==3.5.1
     - seaborn ==0.11.2
-    - bokeh ==2.4.2
     - shapeit ==2.r904
     - samtools ==1.6
 
