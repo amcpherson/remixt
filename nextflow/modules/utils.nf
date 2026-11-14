@@ -22,6 +22,7 @@ def remixt_param_names() {
                                          'likelihood_min_segment_length', 'likelihood_min_proportion_genotyped',
                                          'num_em_iter', 'num_update_iter', 'disable_breakpoints', 'do_h_update', 'random_seed'],
         collate_results:                ['max_prop_diverge'],
+        visualize_results:              ['max_prop_diverge'],
         mappability_kmers:              ['mappability_length'],
         annotate_bins:                  ['chromosomes', 'chr_name_prefix', 'map_qual_threshold'],
         count_bins:                     ['filter_duplicates', 'map_qual_threshold'],

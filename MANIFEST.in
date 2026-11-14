@@ -1,3 +1,4 @@
 include versioneer.py
 include remixt/_version.py
+include remixt/visualize_report.html
 graft src/

@@ -83,7 +83,7 @@ setup(
         'pyyaml',
         'matplotlib',
         'seaborn',
-        'bokeh',
     ],
+    package_data={'remixt': ['visualize_report.html']},
     entry_points={'console_scripts': ['remixt = remixt.ui.main:main']},
 )
