@@ -1,6 +1,3 @@
-import sys
-import os
-import itertools
 import pickle
 import pandas as pd
 import numpy as np
@@ -8,9 +5,6 @@ import scipy
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.colors import colorConverter
-from matplotlib.path import Path
-import matplotlib.patches as patches
-from matplotlib.patches import Rectangle
 import matplotlib.backends.backend_pdf
 
 import remixt.analysis.experiment
@@ -427,50 +421,6 @@ def plot_cnv_scatter_density(fig, transform, data, major_col='major', minor_col=
     return fig
 
 
-def plot_breakpoints_genome(ax, breakpoint, chromosome_info, scale_height=1.0):
-    """ Plot breakpoint arcs
-
-    Args:
-        ax (matplotlib.axes.Axes): plot axes
-        breakpoint (pandas.DataFrame): breakpoint
-        chromosome_info (pandas.DataFrame): per chromosome start and end in plot returned from plot_cnv_genome
-
-    """
-
-    plot_height = ax.get_ylim()[1] * 0.8
-    plot_length = ax.get_xlim()[1] - ax.get_xlim()[0]
-
-    for side in ('1', '2'):
-        
-        breakpoint.set_index('chromosome_'+side, inplace=True)
-        breakpoint['chromosome_start_'+side] = chromosome_info['start']
-        breakpoint.reset_index(inplace=True)
-        
-        breakpoint['plot_position_'+side] = breakpoint['position_'+side] + breakpoint['chromosome_start_'+side]
-
-    codes = [Path.MOVETO, Path.CURVE4, Path.CURVE4, Path.CURVE4]
-
-    for idx, row in breakpoint.iterrows():
-
-        pos_1, pos_2 = sorted(row[['plot_position_1', 'plot_position_2']])
-        height = scale_height * 2. * plot_height * (pos_2 - pos_1) / float(plot_length)
-        
-        visible_1 = pos_1 >= ax.get_xlim()[0] and pos_1 <= ax.get_xlim()[1]
-        visible_2 = pos_2 >= ax.get_xlim()[0] and pos_2 <= ax.get_xlim()[1]
-        
-        if not visible_1 and not visible_2:
-            continue
-
-        if not visible_1 or not visible_2:
-            height = plot_height * 10.
-
-        verts = [(pos_1, 0.), (pos_1, height), (pos_2, height), (pos_2, 0.)]
-
-        path = Path(verts, codes)
-        patch = patches.PathPatch(path, facecolor='none', edgecolor='#2eb036', lw=2, zorder=100)
-        ax.add_patch(patch)
-
-
 def experiment_plot(experiment, cn, h, chromosome=None, start=None, end=None, maxcopies=4):
     """ Plot a sequencing experiment
 
@@ -578,7 +528,7 @@ def mixture_plot(mixture):
     data['major_expected'] = np.einsum('ij,j->i', mixture.cn[:,1:,0], tumour_frac)
     data['minor_expected'] = np.einsum('ij,j->i', mixture.cn[:,1:,1], tumour_frac)
 
-    for m in xrange(1, mixture.cn.shape[1]):
+    for m in range(1, mixture.cn.shape[1]):
         data['major_{0}'.format(m)] = mixture.cn[:,m,0]
         data['minor_{0}'.format(m)] = mixture.cn[:,m,1]
 
@@ -618,31 +568,6 @@ def mixture_plot(mixture):
     plt.tight_layout()
 
     return fig
-
-
-def gc_plot(gc_table_filename, plot_filename):
-    """ Plot the probability distribution of GC content for sampled reads
-
-    Args:
-        gc_table_filename (str): table of binned gc values
-        plot_filename (str): plot PDF filename
-
-    """
-    gc_binned = pd.read_csv(gc_table_filename, sep='\t')
-
-    fig = plt.figure(figsize=(4,4))
-
-    plt.scatter(gc_binned['gc_bin'].values, gc_binned['mean'].values, c='k', s=4)
-    plt.plot(gc_binned['gc_bin'].values, gc_binned['smoothed'].values, c='r')
-
-    plt.xlabel('gc %')
-    plt.ylabel('density')
-    plt.xlim((-0.5, 100.5))
-    plt.ylim((-0.01, gc_binned['mean'].max() * 1.1))
-
-    plt.tight_layout()
-
-    fig.savefig(plot_filename, format='pdf', bbox_inches='tight')
 
 
 def plot_depth(ax, read_depth, minor_modes=None):
@@ -762,4 +687,3 @@ def ploidy_analysis_plots(experiment_filename, plots_filename, chromosomes=None)
         plt.close()
 
     pdf.close()
-

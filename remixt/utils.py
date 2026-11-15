@@ -1,9 +1,6 @@
 import csv
 import os
-import shutil
 import itertools
-import collections
-import bisect
 import numpy as np
 import pandas as pd
 import subprocess
@@ -52,18 +49,6 @@ def read_sequences(fasta_filename):
             yield (seq_id, ''.join(sequences))
 
 
-def write_sequence(fasta, seq_id, sequence):
-    fasta.write('>{0}\n'.format(seq_id))
-    idx = 0
-    while idx < len(sequence):
-        line_seq = sequence[idx:idx+80]
-        idx += 80
-        if line_seq == '':
-            continue
-        fasta.write(line_seq)
-        fasta.write('\n')
-
-
 def reverse_complement(sequence):
     return sequence[::-1].translate(str.maketrans('ACTGactg', 'TGACtgac'))
 
@@ -97,13 +82,6 @@ def read_selected_chromosome_lengths(genome_fai_filename, chromosomes, chr_name_
     return {c: l for c, l in chromosome_lengths.items() if c in chromosomes}
 
 
-def merge_files(output_filename, *input_filenames):
-    with open(output_filename, 'w') as output_file:
-        for input_filename in input_filenames:
-            with open(input_filename, 'r') as input_file:
-                shutil.copyfileobj(input_file, output_file)
-
-
 def read_table_raw(filename):
     peek = pd.read_csv(filename, sep='\t', nrows=1)
     columns = peek.columns
@@ -118,14 +96,6 @@ def merge_tables(output_filename, *input_filenames):
     pd.concat(input_data).to_csv(output_filename, sep='\t', index=False)
 
 
-def link_file(target_filename, link_filename):
-    try:
-        os.remove(link_filename)
-    except OSError:
-        pass
-    os.symlink(os.path.abspath(target_filename), link_filename)
-
-
 def sort_chromosome_names(chromosomes):
     def get_chromosome_key(chromosome):
         try:
@@ -133,69 +103,6 @@ def sort_chromosome_names(chromosomes):
         except ValueError:
             return (1, chromosome)
     return [chromosome for chromosome in sorted(chromosomes, key=get_chromosome_key)]
-
-
-class BreakpointDatabase(object):
-    def __init__(self, breakpoints):
-        """ Create a database of breakpoints.
-
-        Args:
-            breakpoints (pandas.DataFrame): table of breakpoints
-
-        Breakpoints table expects the following columns:
-            'prediction_id', 'chromosome_1', 'strand_1', 'position_1',
-            'chromosome_2', 'strand_2', 'position_2'
-        """
-        self.positions = collections.defaultdict(list)
-        self.prediction_ids = collections.defaultdict(set)
-        cols = [
-            'prediction_id',
-            'chromosome_1', 'strand_1', 'position_1',
-            'chromosome_2', 'strand_2', 'position_2'
-        ]
-        for idx, row in breakpoints[cols].drop_duplicates().iterrows():
-            for side in ('1', '2'):
-                self.positions[(row['chromosome_'+side], row['strand_'+side])].append(row['position_'+side])
-                self.prediction_ids[(row['chromosome_'+side], row['strand_'+side], row['position_'+side])].add((row['prediction_id'], side))
-        for key in self.positions.keys():
-            self.positions[key] = sorted(self.positions[key])
-
-    def query(self, row, extend=0):
-        """ Query the database for a breakpoint.
-
-        Args:
-            row (mapping): breakpoint information
-
-        KwArgs:
-            extend (int): inexact search range
-
-        Breakpoint information expects the following keys:
-            'chromosome_1', 'strand_1', 'position_1',
-            'chromosome_2', 'strand_2', 'position_2'
-        """
-        matched_ids = list()
-        for side in ('1', '2'):
-            chrom_strand_positions = self.positions[(row['chromosome_'+side], row['strand_'+side])]
-            idx = bisect.bisect_left(chrom_strand_positions, row['position_'+side] - extend)
-            side_matched_ids = list()
-            while idx < len(chrom_strand_positions):
-                pos = chrom_strand_positions[idx]
-                dist = abs(pos - row['position_'+side])
-                if pos >= row['position_'+side] - extend and pos <= row['position_'+side] + extend:
-                    for prediction_id in self.prediction_ids[(row['chromosome_'+side], row['strand_'+side], pos)]:
-                        side_matched_ids.append((prediction_id, dist))
-                if pos > row['position_'+side] + extend:
-                    break
-                idx += 1
-            matched_ids.append(side_matched_ids)
-        matched_ids_bypos = list()
-        for matched_id_1, dist_1 in matched_ids[0]:
-            for matched_id_2, dist_2 in matched_ids[1]:
-                if matched_id_1[0] == matched_id_2[0] and matched_id_1[1] != matched_id_2[1]:
-                    matched_ids_bypos.append((dist_1 + dist_2, matched_id_1[0]))
-        if len(matched_ids_bypos) == 0:
-            return None
-        return sorted(matched_ids_bypos)[0][1]
 
 
 def execute(*args):
@@ -230,4 +137,3 @@ class AutoSentinal(object):
         func()
         with open(sentinal_filename, 'w'):
             pass
-
