@@ -1,5 +1,5 @@
 import numpy as np
-import scipy.misc
+import scipy.special
 
 
 def geometric_deviation_pmf(base, geom_p, dev_max):
@@ -32,7 +32,7 @@ def geometric_deviation_pmf(base, geom_p, dev_max):
     log_probs[counts < 0] = -np.inf
 
     # Normalize
-    log_norm = scipy.misc.logsumexp(log_probs, axis=1).T
+    log_norm = scipy.special.logsumexp(log_probs, axis=1).T
     log_probs = (log_probs.T - log_norm.T).T
     
     return counts, log_probs

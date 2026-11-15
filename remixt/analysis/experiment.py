@@ -306,6 +306,18 @@ class Experiment(object):
         return self.count_data['length'].values
 
     @property
+    def allele_a_readcount(self):
+        return self.count_data['allele_a_readcount'].values
+
+    @property
+    def allele_b_readcount(self):
+        return self.count_data['allele_b_readcount'].values
+
+    @property
+    def num_hap_blocks(self):
+        return self.count_data['num_hap_blocks'].values
+
+    @property
     def breakpoints(self):
         return convert_breakpoints_to_dict(self.breakpoint_segment_data)
 
@@ -339,9 +351,9 @@ def create_segment_table(experiment):
         'major_readcount': experiment.x[:, 0],
         'minor_readcount': experiment.x[:, 1],
         'readcount': experiment.x[:, 2],
-        'allele_a_readcount': experiment.count_data['allele_a_readcount'].values,
-        'allele_b_readcount': experiment.count_data['allele_b_readcount'].values,
-        'num_hap_blocks': experiment.count_data['num_hap_blocks'].values,
+        'allele_a_readcount': experiment.allele_a_readcount,
+        'allele_b_readcount': experiment.allele_b_readcount,
+        'num_hap_blocks': experiment.num_hap_blocks,
     })
 
     data['allele_ratio'] = data['minor_readcount'] / (data['major_readcount'] + data['minor_readcount'])

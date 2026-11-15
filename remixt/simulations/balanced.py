@@ -1,5 +1,4 @@
 import networkx
-import blossomv.blossomv
 
 
 def identify_balanced_rearrangements(H):
@@ -15,7 +14,7 @@ def identify_balanced_rearrangements(H):
     transverse_edge_cost = 1.
 
     M = networkx.Graph()
-    for node in H.nodes_iter():
+    for node in H.nodes():
         transverse_edge = []
         for color in (1, -1):
             colored_node = node + (color,)
@@ -23,25 +22,28 @@ def identify_balanced_rearrangements(H):
             transverse_edge.append(colored_node)
         M.add_edge(*transverse_edge, cost=transverse_edge_cost)
 
-    for edge in H.edges_iter():
+    for edge in H.edges():
         for multi_edge_idx, edge_attr in H[edge[0]][edge[1]].items():
             color = edge_attr['color']
             colored_node_1 = edge[0] + (color,)
             colored_node_2 = edge[1] + (color,)
-            M.add_edge(colored_node_1, colored_node_2, attr_dict=edge_attr, cost=0.)
+            M.add_edge(colored_node_1, colored_node_2, cost=0., **edge_attr)
 
     M1 = networkx.convert_node_labels_to_integers(M, label_attribute='node_tuple')
 
-    # Min cost perfect matching
+    # Min cost perfect matching, a perfect matching always exists as every
+    # node has a transverse edge, so a min weight maximum cardinality matching
+    # is a min cost perfect matching
     edges = networkx.get_edge_attributes(M1, 'cost')
     for edge in edges.keys():
         if edge[0] == edge[1]:
             raise Exception('self loop {}'.format(M1[edge[0]][edge[1]]))
-    min_cost_edges = blossomv.blossomv.min_weight_perfect_matching(edges)
+    min_cost_edges = networkx.min_weight_matching(M1, weight='cost')
+    assert 2 * len(min_cost_edges) == M1.number_of_nodes()
 
     # Remove unselected edges
-    assert set(min_cost_edges).issubset(edges.keys())
-    remove_edges = set(edges.keys()).difference(min_cost_edges)
+    min_cost_edges = set(frozenset(edge) for edge in min_cost_edges)
+    remove_edges = [edge for edge in edges.keys() if frozenset(edge) not in min_cost_edges]
     M2 = M1.copy()
     M2.remove_edges_from(remove_edges)
 
@@ -50,7 +52,7 @@ def identify_balanced_rearrangements(H):
 
     # Create subgraph of H with only selected edges
     H1 = networkx.Graph()
-    for edge in M3.edges_iter():
+    for edge in M3.edges():
         edge_attr = M3[edge[0]][edge[1]]
         node_1 = edge[0][:-1]
         node_2 = edge[1][:-1]
@@ -59,7 +61,7 @@ def identify_balanced_rearrangements(H):
         if H1.has_edge(node_1, node_2):
             H1.remove_edge(node_1, node_2)
         else:
-            H1.add_edge(node_1, node_2, attr_dict=edge_attr)
+            H1.add_edge(node_1, node_2, **edge_attr)
             
     return H1
 
@@ -88,7 +90,7 @@ def minimize_breakpoint_copies(adjacencies, brk_cn):
                 
             C = identify_balanced_rearrangements(H)
             
-            for edge in C.edges_iter():
+            for edge in C.edges():
                 edge = frozenset(list(edge))
                 if edge not in min_brk_cn:
                     adj = tuple(sorted([a[0][0] for a in edge]))

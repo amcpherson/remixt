@@ -1,383 +1,171 @@
-import sys
-import os
-import unittest
 import copy
-import itertools
+import os
 import pickle
+import tempfile
+import unittest
+
 import numpy as np
 import pandas as pd
-import random
-import joblib
-import scipy
-import scipy.optimize
 
-import remixt.simulations.simple as sim_simple
+import remixt.analysis.experiment
+import remixt.analysis.pipeline
+import remixt.cn_model
+import remixt.cn_plot
 import remixt.simulations.experiment
 import remixt.simulations.pipeline
-import remixt.cn_model as cn_model
-import remixt.likelihood as likelihood
-import remixt.seqdataio
-import remixt.tests.utils
-import remixt.cn_plot
-import remixt.analysis.pipeline
-
-np.random.seed(2014)
+import remixt.visualize
 
 
-def generate_simple_data(N=100, M=3):
+def simulate_experiment(seed, N=300, M=3):
+    """ Simulate a small experiment with a normal and M - 1 tumour clones.
+    """
+    np.random.seed(seed)
 
-    r = np.array([75, 75, 75])
+    params = {
+        'N': N,
+        'M': M,
+        'frac_normal': 0.4,
+        'frac_clone_1': 0.4,
+        'num_ancestral_events': 20,
+        'num_descendent_events': 10,
+        'num_false_breakpoints': 0,
+        'ploidy': 2.5,
+    }
 
-    l = np.random.uniform(low=100000, high=1000000, size=N)
-    phi = np.random.uniform(low=0.2, high=0.4, size=N)
+    rh_sampler = remixt.simulations.experiment.RearrangementHistorySampler(params)
+    gc_sampler = remixt.simulations.experiment.GenomeCollectionSampler(rh_sampler, params)
+    gc = gc_sampler.sample_genome_collection()
 
-    cn = sim_simple.generate_cn(N, M, 2.0, 0.5, 0.5, 1)
-    h = np.random.uniform(low=0.5, high=2.0, size=M)
+    gm_sampler = remixt.simulations.experiment.GenomeMixtureSampler(params)
+    gm = gm_sampler.sample_genome_mixture(gc)
 
-    likelihood_model = likelihood.ReadCountLikelihood(None, l)
-    likelihood_model.h = h
-    likelihood_model.phi = phi
-
-    mu = likelihood_model.expected_read_count(l, cn)
-
-    nb_p = mu / (r + mu)
-
-    x = np.array([np.random.negative_binomial(r, 1.-a) for a in nb_p])
-    x = x.reshape(nb_p.shape)
-    x[:,0:2].sort(axis=1)
-    x[:,0:2] = x[:,2:0:-1]
-
-    return cn, h, l, phi, r, x
-
-
-def load_test_experiment():
-
-    script_directory = os.path.realpath(os.path.dirname(__file__))
-    experiment_filename = os.path.join(script_directory, 'test_experiment.pickle')
-
-    with open(experiment_filename) as experiment_file:
-        experiment = pickle.load(experiment_file)
-
-    return experiment
-    
-    
-def uniform_cn_prior():
-
-    cn_max = 4
-
-    num_haploid_states = cn_max + 1
-    num_cn_states = num_haploid_states * (num_haploid_states + 1) / 2
-    num_total_states = num_cn_states + 1
-
-    cn_prior = np.ones((cn_max + 2, cn_max + 2)) / float(num_total_states)
-
-    return cn_prior
-
-
-def perfect_cn_prior(cn):
-
-    cn_max = 4
-
-    cn_prior = np.zeros((cn_max + 2, cn_max + 2))
-
-    for n in range(cn.shape[0]):
-        for m in range(1, cn.shape[1]):
-            cn_1 = int(cn[n,m,0])
-            cn_2 = int(cn[n,m,1])
-            if cn_1 > cn_max or cn_2 > cn_max:
-                cn_prior[cn_max+1, :] += 1.0
-                cn_prior[:, cn_max+1] += 1.0
-                cn_prior[cn_max+1, cn_max+1] -= 1.0
-            elif cn_1 != cn_2:
-                cn_prior[cn_1, cn_2] += 1.0
-                cn_prior[cn_2, cn_1] += 1.0
-            else:
-                cn_prior[cn_1, cn_2] += 1.0
-
-    cn_prior[:] += 1.0
-
-    cn_prior /= cn.shape[0] * cn.shape[1]
-
-    return cn_prior
-
-
-def generate_tiny_data():
-
-    cn = np.array([[[1, 1],
-                    [2, 2],
-                    [2, 2]],
-                   [[1, 1],
-                    [2, 1],
-                    [2, 2]],
-                   [[1, 1],
-                    [2, 2],
-                    [2, 2]]])
-
-    h = np.array([0.2, 0.3, 0.1])
-
-    l = np.array([10000, 20000, 10000])
-
-    phi = np.array([0.2, 0.2, 0.2])
-
-    p = np.vstack([phi, phi, np.ones(phi.shape)]).T
-
-    mu = likelihood.expected_read_count(l, cn, h, phi)
-
-    x = np.array([np.random.poisson(a) for a in mu])
-    x = x.reshape(mu.shape)
-
-    return x, cn, h, l, phi
+    experiment_sampler = remixt.simulations.experiment.ExperimentSampler(params)
+    return experiment_sampler.sample_experiment(gm)
 
 
 class remixt_unittest(unittest.TestCase):
 
-    def test_evaluate_q_derivative(self):
-
-        cn, h, l, phi, r, x = generate_simple_data()
-
-        emission = likelihood.NegBinBetaBinLikelihood(x, l)
-        emission.h = h
-
-        N = l.shape[0]
-        M = h.shape[0]
-
-        prior = cn_model.CopyNumberPrior(perfect_cn_prior(cn))
-        prior.set_lengths(l)
-        
-        model = cn_model.HiddenMarkovModel(N, M, emission, prior, [(0, N)])
-
-        log_posterior, cns, resps = model.posterior_marginals()
-
-        estimator = em.ExpectationMaximizationEstimator()
-
-        params = [emission.h_param, emission.r_param, emission.M_param, emission.z_param, emission.hdel_mu_param, emission.loh_p_param]
-        value = np.concatenate([p.value for p in params])
-        idxs = np.array([p.length for p in params]).cumsum() - params[0].length
-
-        remixt.tests.utils.assert_grad_correct(
-            estimator.evaluate_q, estimator.evaluate_q_derivative,
-            value, model, cns, resps, params, idxs)
-
-
-    def test_build_cn(self):
-
-        prior = cn_model.CopyNumberPrior(1, 3, uniform_cn_prior())
-        model = cn_model.HiddenMarkovModel(1, 3, None, prior)
-
-        cn_max = 6
-        cn_dev_max = 1
-
-        model.cn_max = cn_max
-        model.cn_dev_max = cn_dev_max
-
-        # Build cn list using the method from CopyNumberModel
-        built_cns = set()
-        for cn in model.build_cn_states():
-            cn_tuple = list()
-            for m in range(3):
-                for ell in range(2):
-                    cn_tuple.append(cn[0,m,ell])
-            cn_tuple = tuple(cn_tuple)
-            self.assertNotIn(cn_tuple, built_cns)
-            built_cns.add(cn_tuple)
-
-        # Build the naive way
-        expected_cns = set()
-        for b1 in range(cn_max+1):
-            for b2 in range(cn_max+1):
-                for d1 in range(-cn_dev_max, cn_dev_max+1):
-                    for d2 in range(-cn_dev_max, cn_dev_max+1):
-                        if b1 + d1 < 0 or b2 + d2 < 0 or b1 + d1 > cn_max or b2 + d2 > cn_max:
-                            continue
-                        if (b1 != b2 or b1+d1 != b2+d2) and (b1 <= b2 and b1+d1 <= b2+d2):
-                            continue
-                        cn_tuple = (1, 1, b1, b2, b1+d1, b2+d2)
-                        self.assertIn(cn_tuple, built_cns)
-                        expected_cns.add(cn_tuple)
-
-        self.assertTrue(expected_cns == built_cns)
-
-
-    def test_simple_genome_graph(self):
-
-        x, cn, h, l, phi = generate_tiny_data()
-
-        emission = likelihood.NegBinBetaBinLikelihood(x, l)
-        emission.h = h
-        emission.phi = phi
-
-        N = l.shape[0]
-        M = h.shape[0]
-
-        prior = cn_model.CopyNumberPrior(l)
-        
-        adjacencies = [(0, 1), (1, 2)]
-        breakpoints = [frozenset([(0, 1), (2, 0)])]
-
-        for i in range(1000):
-            print (i)
-            random.seed(i)
-            np.random.seed(i)
-
-            # Modify copy number from known true
-            cn_init = cn.copy()
-            for n in range(N):
-                m = np.random.randint(low=1, high=M)
-                for allele in range(2):
-                    cn_init[n, m, allele] += np.random.randint(low=-1, high=1)
-
-            # print np.random.randint(low=-1, high=1, size=cn_init[:, 1:, :].shape)
-            # cn_init[:, 1:, :] += np.random.randint(low=-1, high=1, size=cn_init[:, 1:, :].shape)
-
-            graph = genome_graph.GenomeGraphModel(N, M, emission, prior, adjacencies, breakpoints)
-            graph.init_copy_number(cn_init, init_breakpoints=True)
-
-            graph.optimize()
-
-            if not np.all(graph.breakpoint_copy_number[['cn_1', 'cn_2']].values == np.array([1, 0])):
-                print (cn)
-                print (cn_init)
-                print (graph.segment_cn)
-                print (graph.breakpoint_copy_number)
-                import IPython; IPython.embed(); raise
-
-            self.assertTrue(np.all(graph.breakpoint_copy_number[['cn_1', 'cn_2']].values == np.array([1, 0])))
-
-
-    def test_learn_h_graph(self):
-
-        experiment = load_test_experiment()
-
-        emission = likelihood.NegBinBetaBinLikelihood()
-        emission.h = experiment.h
-        emission.learn_parameters(experiment.x, experiment.l)
-
-        N = experiment.l.shape[0]
-        M = experiment.h.shape[0]
-
-        prior = cn_model.CopyNumberPrior(N, M, perfect_cn_prior(experiment.cn))
-        prior.set_lengths(experiment.l)
-
-        model = cn_model.HiddenMarkovModel(N, M, emission, prior)
-        
-        _, cn_init = model.optimal_state()
-
-        graph = genome_graph.GenomeGraph(emission, prior, experiment.adjacencies, experiment.breakpoints)
-        graph.init_copy_number(cn_init)
-
-        h_init = experiment.h + experiment.h * 0.05 * np.random.randn(*experiment.h.shape)
-
-        estimator = em.HardAssignmentEstimator(num_em_iter=1)
-        estimator.learn_param(graph, 'h', h_init)
-
-
-    def test_learn_h(self):
-
-        experiment = load_test_experiment()
-
-        h_init = experiment.h * (1. + 0.05 * np.random.randn(*experiment.h.shape))
-
-        emission = likelihood.NegBinBetaBinLikelihood(experiment.x, experiment.l)
-        emission.h = h_init
-
-        print (experiment.h, h_init)
-
-        N = experiment.l.shape[0]
-        M = experiment.h.shape[0]
-
-        prior = cn_model.CopyNumberPrior(experiment.l)
-
-        model = cn_model.HiddenMarkovModel(N, M, emission, prior, experiment.chains, normal_contamination=False)
-        
-        estimator = em.ExpectationMaximizationEstimator()
-        estimator.learn_param(model, emission.h_param)
-
-
-    def test_learn_h_variational(self):
-
-        experiment = load_test_experiment()
-        
-        h_init = experiment.h * (1. + 0.05 * np.random.randn(*experiment.h.shape))
-
-        init_params = {}
-        init_params['h_normal'] = h_init[0]
-        init_params['h_tumour'] = h_init[1:].sum()
-        init_params['mix_frac'] = h_init[1] / h_init[1:].sum()
-        init_params['divergence_weight'] = 1e-7
-        init_params['mode_idx'] = 0
-        
-        # import pstats, cProfile
-        # cProfile.runctx("fit_results = remixt.analysis.pipeline.fit(experiment, init_params)", globals(), locals(), "Profile.prof")
-        # s = pstats.Stats("Profile.prof")
-        # s.strip_dirs().sort_stats("cumtime").print_stats()
-        # raise
-        fit_results = remixt.analysis.pipeline.fit(experiment, init_params)
-        
-        # with open('test_model.gz', 'w') as f:
-        #     pickle.dump(fit_results, f)
-        
-        h = fit_results['h']
-        cn = fit_results['cn']
-        brk_cn = fit_results['brk_cn']
-
-        cn_table = remixt.analysis.experiment.create_cn_table(experiment, cn, h)
-        brk_cn_table = remixt.analysis.experiment.create_brk_cn_table(experiment, brk_cn)
-
-        evaluation = remixt.simulations.pipeline.evaluate_results(experiment.genome_mixture, cn_table, brk_cn_table, h / h.sum())
-        with pd.HDFStore('test.h5', 'w') as store:
-            for key, data in evaluation.items():
-                store['/' + key] = data
-
-        print ('plotting result')
-        fig = remixt.cn_plot.experiment_plot(experiment, cn, h, maxcopies=8)
-        fig.savefig('test_result.pdf')
-
-
-    def test_learn_r(self):
-
-        experiment = load_test_experiment()
-
-        emission = likelihood.NegBinLikelihood()
-        emission.h = experiment.h
-        emission.phi = experiment.phi
-        emission.r = experiment.negbin_r
-
-        N = experiment.l.shape[0]
-        M = experiment.h.shape[0]
-
-        prior = cn_model.CopyNumberPrior(N, M, perfect_cn_prior(experiment.cn))
-        prior.set_lengths(experiment.l)
-
-        model = cn_model.HiddenMarkovModel(N, M, emission, prior)
-        
-        r_init = experiment.negbin_r + experiment.negbin_r * 0.10 * np.random.randn(*experiment.negbin_r.shape)
-
-        estimator = em.ExpectationMaximizationEstimator(num_em_iter=1)
-        estimator.learn_param(model, 'r', r_init)
-
-
-    def test_learn_phi(self):
-
-        experiment = load_test_experiment()
-
-        emission = likelihood.NegBinLikelihood()
-        emission.h = experiment.h
-        emission.phi = experiment.phi
-        emission.r = experiment.negbin_r
-
-        N = experiment.l.shape[0]
-        M = experiment.h.shape[0]
-
-        prior = cn_model.CopyNumberPrior(N, M, perfect_cn_prior(experiment.cn))
-        prior.set_lengths(experiment.l)
-
-        model = cn_model.HiddenMarkovModel(N, M, emission, prior)
-
-        phi_init = experiment.phi + experiment.phi * 0.02 * np.random.randn(*experiment.phi.shape)
-
-        estimator = em.ExpectationMaximizationEstimator(num_em_iter=1)
-        estimator.learn_param(model, 'phi', phi_init)
-
+    def test_create_cn_states(self):
+        """ Copy number states match a naive enumeration.
+        """
+        num_clones, num_alleles, cn_max, cn_diff_max = 3, 2, 4, 1
+
+        cn_states = remixt.cn_model.BreakpointModel.create_cn_states(
+            None, num_clones, num_alleles, cn_max, cn_diff_max)
+
+        built = set()
+        for cn in cn_states:
+            self.assertEqual(tuple(cn[0]), (1, 1))
+            key = tuple(cn[1:].flatten())
+            self.assertNotIn(key, built)
+            built.add(key)
+
+        expected = set()
+        for b1, b2, c1, c2 in np.ndindex((cn_max + 1,) * 4):
+            if b1 + b2 > cn_max or c1 + c2 > cn_max:
+                continue
+            if abs(b1 - c1) > cn_diff_max or abs(b2 - c2) > cn_diff_max:
+                continue
+            expected.add(frozenset([(b1, b2, c1, c2), (b2, b1, c2, c1)]))
+
+        self.assertEqual(len(built), len(expected))
+        for state in expected:
+            self.assertTrue(any(key in built for key in state))
+
+    def test_simulate_experiment(self):
+        """ Simulated experiments have consistent read counts and copy number.
+        """
+        experiment = simulate_experiment(2014)
+
+        self.assertEqual(experiment.x.shape, (experiment.N, 3))
+        self.assertEqual(experiment.cn.shape, (experiment.N, 3, 2))
+        self.assertEqual(len(experiment.h), 3)
+        self.assertTrue(np.all(experiment.x[:, 0] >= experiment.x[:, 1]))
+        self.assertTrue(np.all(experiment.x[:, 0] + experiment.x[:, 1] <= experiment.x[:, 2]))
+        self.assertTrue(np.all(experiment.cn[:, 0, :] == 1))
+        self.assertTrue(np.all(
+            experiment.allele_a_readcount + experiment.allele_b_readcount == experiment.x[:, 0] + experiment.x[:, 1]))
+
+        table = remixt.analysis.experiment.create_cn_table(experiment, experiment.cn, experiment.h)
+        self.assertEqual(len(table.index), experiment.N)
+
+        remixt.cn_plot.experiment_plot(experiment, experiment.cn, experiment.h, maxcopies=6)
+
+    def test_fit_simulated(self):
+        """ Init, fit, collate and report on a simulated experiment recover the mixture.
+        """
+        experiment = simulate_experiment(2015)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            experiment_filename = os.path.join(tmp, 'experiment.pickle')
+            with open(experiment_filename, 'wb') as f:
+                pickle.dump(experiment, f)
+
+            init_results_filename = os.path.join(tmp, 'init.h5')
+            init_params = remixt.analysis.pipeline.init(init_results_filename, experiment_filename)
+            self.assertGreater(len(init_params), 0)
+
+            # Fit the haploid depths closest to the truth with the strongest and
+            # weakest divergence penalties, the weakest should be selected by elbo
+            def h_error(params):
+                h = np.array([
+                    params['h_normal'],
+                    params['h_tumour'] * params['mix_frac'],
+                    params['h_tumour'] * (1. - params['mix_frac'])])
+                return np.abs(np.sort(h[1:]) - np.sort(experiment.h[1:])).sum() + abs(h[0] - experiment.h[0])
+            best_id = min(init_params, key=lambda i: h_error(init_params[i]))
+            best_h = tuple(init_params[best_id][k] for k in ('h_normal', 'h_tumour', 'mix_frac'))
+            same_h = [
+                i for i, params in init_params.items()
+                if tuple(params[k] for k in ('h_normal', 'h_tumour', 'mix_frac')) == best_h]
+            strong_id = max(same_h, key=lambda i: init_params[i]['divergence_weight'])
+            weak_id = min(same_h, key=lambda i: init_params[i]['divergence_weight'])
+            self.assertNotEqual(strong_id, weak_id)
+
+            fit_results_filenames = {}
+            for init_id in (strong_id, weak_id):
+                fit_results_filenames[init_id] = os.path.join(tmp, 'fit_{}.pickle'.format(init_id))
+                remixt.analysis.pipeline.fit_task(
+                    fit_results_filenames[init_id], experiment_filename, init_params[init_id])
+
+            results_filename = os.path.join(tmp, 'results.h5')
+            remixt.analysis.pipeline.collate(
+                results_filename, experiment_filename, init_results_filename, fit_results_filenames)
+
+            with pd.HDFStore(results_filename, 'r') as store:
+                self.assertEqual(store['failed_fits'].shape[0], 0)
+                stats = store['stats'].set_index('init_id')
+                params = store['params']
+                cn_table = store['/cn']
+                brk_cn_table = store['/brk_cn']
+                mix = store['/mix'].values
+
+            init_id = int(params['optimal_init_id'])
+            self.assertEqual(init_id, weak_id)
+            self.assertGreater(stats.loc[weak_id, 'elbo'], stats.loc[strong_id, 'elbo'])
+            self.assertAlmostEqual(params['max_depth'], init_params[weak_id]['max_depth'])
+            for col in ('is_short', 'is_high_depth', 'is_low_genotyped', 'prob_is_outlier_total', 'num_hap_blocks'):
+                self.assertIn(col, cn_table)
+            self.assertTrue(np.all(
+                (cn_table['total_likelihood_mask'] == 1) == ((cn_table['is_short'] == 0) & (cn_table['is_high_depth'] == 0))))
+
+            sample = remixt.visualize.load_sample(results_filename)
+            self.assertEqual(sample['optimal_id'], init_id)
+            self.assertEqual(len(sample['segments']['start']), experiment.N)
+
+        evaluation = remixt.simulations.pipeline.evaluate_results(
+            experiment.genome_mixture, cn_table, brk_cn_table, mix)
+
+        cn_evaluation = evaluation['cn_evaluation']
+        mix_results = evaluation['mix_results']
+        print(cn_evaluation.to_string())
+        print(mix_results.to_string())
+
+        for m in range(3):
+            self.assertAlmostEqual(mix_results['mix_true_' + str(m)], mix_results['mix_pred_' + str(m)], delta=0.05)
+        self.assertGreater(cn_evaluation['proportion_cn_correct'], 0.75)
+        self.assertGreater(cn_evaluation['proportion_dom_cn_correct'], 0.8)
+        self.assertGreater(cn_evaluation['pred_proportion_divergent'], 0.1)
 
     def test_recreate(self):
 
@@ -400,7 +188,6 @@ class remixt_unittest(unittest.TestCase):
 
         self.assertTrue(np.all(cn_1 == cn_2))
         self.assertTrue(brks_1 == brks_2)
-
 
     def test_rewind(self):
 
@@ -427,7 +214,6 @@ class remixt_unittest(unittest.TestCase):
         self.assertTrue(np.all(cn_1 == cn_2))
         self.assertTrue(brks_1 == brks_2)
 
-
     def test_create_rearranged_sequence(self):
 
         rparams = remixt.simulations.experiment.RearrangedGenome.default_params.copy()
@@ -450,14 +236,27 @@ class remixt_unittest(unittest.TestCase):
             ('2', 1): 'ACACAGACAC',
         }
 
-        true_sequences = ['AAAAACCACCGGGGGTTATTGTTATTACACAGACACACACAGACACAAAAACCACCGGGGACAGACACAAAAACCACCGGGGACAGACAC']
+        # Expected sequences from the segment copies of each rearranged chromosome
+        complement = str.maketrans('ACGT', 'TGCA')
+        true_sequences = []
+        for chromosome in genome.chromosomes:
+            sequence = ''
+            for (segment_idx, allele), orientation in chromosome:
+                chromosome_id = genome.segment_chromosome_id[segment_idx]
+                start, end = genome.segment_start[segment_idx], genome.segment_end[segment_idx]
+                segment_sequence = germline_genome[(chromosome_id, allele)][start:end]
+                if orientation < 0:
+                    segment_sequence = segment_sequence[::-1].translate(complement)
+                sequence += segment_sequence
+            true_sequences.append(sequence)
+
+        self.assertGreater(len(true_sequences), 0)
+        self.assertTrue(any(orientation < 0 for chromosome in genome.chromosomes for _, orientation in chromosome))
 
         test_sequences = genome.create_chromosome_sequences(germline_genome)
 
-        self.assertTrue(test_sequences == true_sequences)
+        self.assertEqual(test_sequences, true_sequences)
 
 
 if __name__ == '__main__':
     unittest.main()
-
-

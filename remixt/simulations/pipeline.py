@@ -615,11 +615,9 @@ def evaluate_results(genome_mixture, cn_table, brk_cn_table, mix_pred):
     if 'cn_2' not in brk_cn_table:
         brk_cn_table['cn_2'] = brk_cn_table['cn_1']
 
+    mix_pred = np.array(mix_pred, dtype=float)
     if len(mix_pred) == 2:
         mix_pred = np.concatenate([mix_pred, [0.]])
-
-    assert isinstance(mix_pred, np.ndarray)
-    assert isinstance(mix_true, np.ndarray)
 
     # Ensure true tumour clones are consistent, largest first
     order_true = np.argsort(mix_true[1:])[::-1]

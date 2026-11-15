@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import scipy
 import scipy.stats
+import scipy.special
 
 import remixt.utils
 import remixt.likelihood
@@ -155,8 +156,7 @@ class RearrangedGenome(object):
 
             chromosome_ids = [str(a) for a in range(1, num_chroms + 1)]
             chromosome_lengths = np.random.dirichlet([chrom_length_concentration] * num_chroms) * genome_length
-            chromosome_lengths.sort_values()
-            chromosome_lengths = chromosome_lengths[::-1]
+            chromosome_lengths = np.sort(chromosome_lengths)[::-1]
 
         chrom_pvals = chromosome_lengths.astype(float) / float(chromosome_lengths.sum())
         chrom_num_segments = np.random.multinomial(self.N - len(chromosome_lengths), pvals=chrom_pvals)
@@ -695,7 +695,7 @@ class RearrangementHistorySampler(object):
 
         fitnesses = np.array(fitnesses)
 
-        prob = np.exp(fitnesses - scipy.misc.logsumexp(fitnesses))
+        prob = np.exp(fitnesses - scipy.special.logsumexp(fitnesses))
 
         return prob
 
@@ -936,7 +936,8 @@ class GenomeCollectionSampler(object):
                 genome.proportion_divergent(ancestral_genome), loc=self.proportion_subclonal, scale=self.proportion_subclonal_stddev)
             return fitness + divergent_log_p
 
-        for m in range(self.M - 2, self.M):
+        # Descendent genomes of the ancestral genome, for M genomes including the wild type
+        for m in range(self.M - 2):
             success = False
             for desc_iter in range(100):
                 descendent_genomes = self.rh_sampler.sample_rearrangement_history(
@@ -1380,6 +1381,11 @@ class ExperimentSampler(object):
                 x[n, 0], x[n, 1] = x[n, 1], x[n, 0]
 
         extra_params['segment_major_is_allele_a'] = major_is_allele_a * 1
+        extra_params['allele_a_readcount'] = np.where(major_is_allele_a, x[:, 0], x[:, 1])
+        extra_params['allele_b_readcount'] = np.where(major_is_allele_a, x[:, 1], x[:, 0])
+
+        # Haplotype blocks are not simulated
+        extra_params['num_hap_blocks'] = np.zeros(N, dtype=int)
 
         def add_beta_noise(mu, var):
             if np.any(var >= mu * (1. - mu)):

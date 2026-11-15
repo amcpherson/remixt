@@ -38,11 +38,11 @@ def create_sim_alleles(chromosome, config, ref_data_dir, recomb_rate=20.0/1.e8):
     num_recombinations = int(np.ceil(recomb_rate * chromosome_length))
 
     # Randomly simulate recombinations
-    recomb_positions = np.random.random_integers(1, chromosome_length - 1, num_recombinations)
+    recomb_positions = np.random.randint(1, chromosome_length, num_recombinations)
     recomb_positions.sort()
 
     # Randomly select individuals for each recombinated region
-    recomb_individuals = np.random.random_integers(0, num_1kg_individuals - 1, num_recombinations + 1)
+    recomb_individuals = np.random.randint(0, num_1kg_individuals, num_recombinations + 1)
 
     # Recombination regions
     recomb_start = np.array([0] + list(recomb_positions))

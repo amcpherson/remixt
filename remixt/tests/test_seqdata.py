@@ -1,69 +1,65 @@
-import sys
 import os
+import tempfile
 import unittest
-import copy
-import itertools
+
 import numpy as np
 import pandas as pd
-import scipy
-import scipy.optimize
 
 import remixt.seqdataio
-
-np.random.seed(2014)
 
 
 class seqdata_unittest(unittest.TestCase):
 
     def test_seqdataio(self):
-
-        writer = remixt.seqdataio.Writer('./test.seqdata', './')
+        """ Fragments and alleles written in chunks are read back whole.
+        """
+        np.random.seed(2014)
 
         chromosome = '1'
 
-        num_reads = 10000000
+        num_reads = 1000000
         num_alleles = num_reads * 4
-        
-        fragments = pd.DataFrame({'start':np.random.randint(0, int(1e8), size=num_reads)})
+
+        fragments = pd.DataFrame({'start': np.random.randint(0, int(1e8), size=num_reads)})
         fragments['end'] = fragments['start'] + np.random.randint(0, 100, size=num_reads)
 
         alleles = pd.DataFrame({
-            'fragment_id':np.sort(np.random.randint(0, num_reads, size=num_alleles)),
-            'position':np.random.randint(0, int(1e8), size=num_alleles),
-            'is_alt':np.random.randint(0, 2, size=num_alleles),
+            'fragment_id': np.sort(np.random.randint(0, num_reads, size=num_alleles)),
+            'position': np.random.randint(0, int(1e8), size=num_alleles),
+            'is_alt': np.random.randint(0, 2, size=num_alleles),
         })
-        alleles = alleles[['fragment_id', 'position', 'is_alt']]
 
-        chunk_size = 1000000
-        num_reads_written = 0
+        with tempfile.TemporaryDirectory() as tmp:
+            seqdata_filename = os.path.join(tmp, 'test.seqdata')
+            writer = remixt.seqdataio.Writer(seqdata_filename)
 
-        while num_reads_written < num_reads:
+            chunk_size = 100000
+            for chunk_start in range(0, num_reads, chunk_size):
+                fragment_ids = np.arange(chunk_start, chunk_start + chunk_size)
 
-            fragment_ids = pd.DataFrame({'fragment_id':np.arange(chunk_size, dtype=int) + num_reads_written})
+                fragments_chunk = fragments.loc[fragment_ids].reset_index(drop=True)
+                fragments_chunk['fragment_id'] = fragment_ids
 
-            fragments_chunk = fragments.reindex(fragment_ids.set_index('fragment_id').index)
-            alleles_chunk = alleles[alleles['fragment_id'].isin(fragment_ids['fragment_id'])].copy()
+                alleles_chunk = alleles[alleles['fragment_id'].isin(fragment_ids)].copy()
 
-            fragments_chunk.reset_index(inplace=True, drop=True)
-            alleles_chunk['fragment_id'] -= num_reads_written
+                writer.write(chromosome, fragments_chunk, alleles_chunk)
 
-            writer.write(chromosome, fragments_chunk, alleles_chunk)
+            writer.close()
 
-            num_reads_written += chunk_size
+            fragments_test = remixt.seqdataio.read_fragment_data(seqdata_filename, chromosome=chromosome)
+            alleles_test = remixt.seqdataio.read_allele_data(seqdata_filename, chromosome=chromosome)
 
-        writer.close()
+        self.assertEqual(len(fragments_test.index), num_reads)
+        self.assertEqual(len(alleles_test.index), num_alleles)
 
-        fragments_test = next(remixt.seqdataio.read_read_data('./test.seqdata', chromosome='1', num_rows=None))
-        alleles_test = next(remixt.seqdataio.read_allele_data('./test.seqdata', chromosome='1', num_rows=None))
+        fragments_test = fragments_test.sort_values('fragment_id')
+        self.assertTrue(np.array_equal(fragments_test['fragment_id'].values, np.arange(num_reads)))
+        self.assertTrue(np.array_equal(fragments_test['start'].values, fragments['start'].values))
+        self.assertTrue(np.array_equal(fragments_test['end'].values, fragments['end'].values))
 
-        self.assertEqual(fragments.values.shape, fragments_test.values.shape)
-        self.assertEqual(alleles.values.shape, alleles_test.values.shape)
-
-        self.assertTrue(np.all(fragments.values == fragments_test.values))
-        self.assertTrue(np.all(alleles.values == alleles_test.values))
+        for col in ('fragment_id', 'position', 'is_alt'):
+            self.assertTrue(np.array_equal(alleles_test[col].values, alleles[col].values))
 
 
 if __name__ == '__main__':
     unittest.main()
-
-

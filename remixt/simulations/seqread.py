@@ -328,7 +328,7 @@ def resample_mixture_read_data(read_data_filename, source_filename, genomes, rea
             data=0,
             columns=['start', 'end', 'allele'],
             index=range(source_fragments['resample_count'].sum()),
-            dtype=np.int)
+            dtype=int)
         sampled_fragments.values[:] = np.repeat(
             source_fragments[['start', 'end', 'allele']].values,
             source_fragments['resample_count'].values,

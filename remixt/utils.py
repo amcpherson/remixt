@@ -1,6 +1,5 @@
 import csv
 import os
-import string
 import shutil
 import itertools
 import collections
@@ -66,7 +65,7 @@ def write_sequence(fasta, seq_id, sequence):
 
 
 def reverse_complement(sequence):
-    return sequence[::-1].translate(string.maketrans('ACTGactg','TGACtgac'))
+    return sequence[::-1].translate(str.maketrans('ACTGactg', 'TGACtgac'))
 
 
 def read_chromosome_lengths(genome_fai_filename):
