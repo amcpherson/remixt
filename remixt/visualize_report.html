@@ -445,8 +445,7 @@ function prepareSample(data) {
   seg.order = Array.from({ length: n }, (_, i) => i).sort((a, b) => seg.gStart[a] - seg.gStart[b]);
   data.solutionById = {};
   for (const s of data.solutions) data.solutionById[s.id] = s;
-  const reasons = seg.mask_reason || seg.start.map(() => 0);
-  seg.mask_reason = reasons;
+  const reasons = seg.mask_reason;
   const masked = [0, 0, 0, 0];
   let total = 0;
   for (let i = 0; i < n; i++) {
@@ -886,7 +885,7 @@ function renderTiles() {
     ['LOH', fmtPct(d.fracLoh), 'of genome'],
     ['Breakpoints', `${fmtInt(d.numBrkPresent)}`, `present of ${fmtInt(data.breakpoints.prediction_id.length)}, ${d.numBrkSubclonal} subclonal`],
     ['High depth masked', fmtPct(data.maskFrac.highDepth),
-      `of genome${data.max_depth ? `, depth over ${fmt(data.max_depth, 3)}` : ''}; also ${fmtPct(data.maskFrac.short)} short, ${fmtPct(data.maskFrac.lowGenotyped)} low genotyped`],
+      `of genome, depth over ${fmt(data.max_depth, 3)}; also ${fmtPct(data.maskFrac.short)} short, ${fmtPct(data.maskFrac.lowGenotyped)} low genotyped`],
     ['Divergent', fmtPct(d.sol.proportion_divergent), d.eligible ? 'eligible' : `above ${fmtPct(data.max_prop_diverge)} limit`],
   ];
   document.getElementById('tiles').innerHTML = tiles.map(([l, v, n]) =>
@@ -1165,6 +1164,8 @@ function setupGenomeInteraction() {
         ...cloneRows(d, i),
         ['Read count', fmtInt(seg.readcount[i])],
         ['Allele read count', fmtInt(seg.allele_readcount[i])],
+        ['Allele a / b reads', `${fmtInt(seg.allele_readcount_a[i])} / ${fmtInt(seg.allele_readcount_b[i])}`],
+        ['Haplotype blocks', fmtInt(seg.num_hap_blocks[i])],
         ['Depth', fmt(seg.total_depth[i], 4)],
         ...(seg.mask_reason[i] ? [['Masked', MASK_LABELS[seg.mask_reason[i]]]] : []),
       ]);
@@ -1334,19 +1335,17 @@ function drawDepthPlot() {
   }
 
   // Max depth, above which segments are masked from the likelihood
-  if (data.max_depth) {
-    ctx.font = '11px system-ui, sans-serif'; ctx.textBaseline = 'top';
-    ctx.fillStyle = css('--text-secondary');
-    if (data.max_depth <= x1) {
-      const x = sx(data.max_depth);
-      ctx.strokeStyle = css('--text-primary'); ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
-      ctx.textAlign = x > right - 70 ? 'right' : 'left';
-      ctx.fillText('max depth', x + (ctx.textAlign === 'left' ? 4 : -4), top + 4);
-    } else {
-      ctx.textAlign = 'right';
-      ctx.fillText(`max depth ${fmt(data.max_depth, 3)} →`, right, top + 4);
-    }
+  ctx.font = '11px system-ui, sans-serif'; ctx.textBaseline = 'top';
+  ctx.fillStyle = css('--text-secondary');
+  if (data.max_depth <= x1) {
+    const x = sx(data.max_depth);
+    ctx.strokeStyle = css('--text-primary'); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
+    ctx.textAlign = x > right - 70 ? 'right' : 'left';
+    ctx.fillText('max depth', x + (ctx.textAlign === 'left' ? 4 : -4), top + 4);
+  } else {
+    ctx.textAlign = 'right';
+    ctx.fillText(`max depth ${fmt(data.max_depth, 3)} →`, right, top + 4);
   }
 
   // Expected depth of an allele with k copies in all tumour clones and 1 copy in the normal

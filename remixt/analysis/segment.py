@@ -233,8 +233,10 @@ def create_segment_allele_counts(segment_data, allele_data):
     Input phased_allele_counts table is expected to have columns 'chromosome', 'start', 'end', 
     'hap_label', 'is_allele_a', 'readcount'.
 
-    Output table will have columns 'chromosome', 'start', 'end', 'readcount', 'major_readcount',
-    'minor_readcount', 'major_is_allele_a'
+    Output table will have columns 'chromosome', 'start', 'end', 'readcount', 'allele_a_readcount',
+    'allele_b_readcount', 'num_hap_blocks', 'major_readcount', 'minor_readcount', 'major_is_allele_a',
+    where 'num_hap_blocks' is the number of haplotype blocks in the segment with at least one
+    allele specific read.
     
     """
 
@@ -249,8 +251,9 @@ def create_segment_allele_counts(segment_data, allele_data):
         .rename(columns={0: 'allele_b_readcount', 1: 'allele_a_readcount'})
     )
 
-    # Merge haplotype blocks contained within the same segment
-    allele_data = allele_data.groupby(level=[0, 1, 2])[['allele_a_readcount', 'allele_b_readcount']].sum()
+    # Merge haplotype blocks contained within the same segment, counting the blocks
+    allele_data['num_hap_blocks'] = 1
+    allele_data = allele_data.groupby(level=[0, 1, 2])[['allele_a_readcount', 'allele_b_readcount', 'num_hap_blocks']].sum()
 
     # Reindex and fill with 0
     allele_data = allele_data.reindex(segment_data.set_index(['chromosome', 'start', 'end']).index, fill_value=0)

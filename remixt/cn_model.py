@@ -171,22 +171,20 @@ class BreakpointModel(object):
         self.x1[self.seg_fwd_remap, :] = x
         self.l1[self.seg_fwd_remap] = l
 
-        # Mask likelihood of poorly modelled segments
-        self._total_likelihood_mask = np.array([True] * len(self.l1))
-        self._allele_likelihood_mask = np.array([True] * len(self.l1))
+        # Mask likelihood of poorly modelled segments, recording each reason separately
+        # Segments shorter than the min segment length
+        self._is_short = (self.l1 < self.min_segment_length)
 
-        # Add segment length mask
-        self._total_likelihood_mask &= (self.l1 >= self.min_segment_length)
-        self._allele_likelihood_mask &= (self.l1 >= self.min_segment_length)
-
-        # Add proportion genotyped mask
+        # Segments with too few genotyped reads, allele likelihood only
         p = self.x1[:,:2].sum(axis=1).astype(float) / (self.x1[:,2].astype(float) + 1e-16)
-        self._allele_likelihood_mask &= (p >= self.min_proportion_genotyped)
-        
-        # Add amplification mask based on max depth
+        self._is_low_genotyped = (p < self.min_proportion_genotyped)
+
+        # Amplified segments with depth above the max depth
         depth = self.x1[:,2].astype(float) / (self.l1.astype(float) + 1e-16)
-        self._total_likelihood_mask &= (depth <= self.max_depth)
-        self._allele_likelihood_mask &= (depth <= self.max_depth)
+        self._is_high_depth = (depth > self.max_depth)
+
+        self._total_likelihood_mask = ~self._is_short & ~self._is_high_depth
+        self._allele_likelihood_mask = self._total_likelihood_mask & ~self._is_low_genotyped
 
         # Optionally disable integrated breakpoint copy number inference
         if self.disable_breakpoints:
@@ -632,6 +630,24 @@ class BreakpointModel(object):
     @property
     def allele_likelihood_mask(self):
         return np.asarray(self.model.allele_likelihood_mask)[self.seg_fwd_remap]
+
+    @property
+    def is_short(self):
+        """ Segment is shorter than the min segment length, masking its likelihood.
+        """
+        return self._is_short[self.seg_fwd_remap]
+
+    @property
+    def is_high_depth(self):
+        """ Segment depth is above the max depth, masking its likelihood.
+        """
+        return self._is_high_depth[self.seg_fwd_remap]
+
+    @property
+    def is_low_genotyped(self):
+        """ Too few of the segment's reads are genotyped, masking its allele likelihood.
+        """
+        return self._is_low_genotyped[self.seg_fwd_remap]
 
 
 def decode_breakpoints_naive(cn, adjacencies, breakpoints):

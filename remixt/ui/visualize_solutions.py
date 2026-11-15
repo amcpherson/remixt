@@ -2,7 +2,6 @@ import argparse
 import logging
 import os
 
-import remixt.defaults
 import remixt.visualize
 
 
@@ -24,8 +23,7 @@ def create_visualization(**args):
     logging.basicConfig(level=logging.INFO)
     results_filenames = dict(parse_results_arg(a) for a in args['results'])
     remixt.visualize.create_report(
-        results_filenames, args['html'], title=args['title'], max_prop_diverge=args['max_prop_diverge'],
-        min_segment_length=args['likelihood_min_segment_length'])
+        results_filenames, args['html'], title=args['title'])
 
 
 def add_arguments(argparser):
@@ -37,13 +35,6 @@ def add_arguments(argparser):
 
     argparser.add_argument('--title', default='ReMixT results',
         help='Title of the report')
-
-    argparser.add_argument('--max_prop_diverge', type=float, default=remixt.defaults.max_prop_diverge,
-        help='Solutions with a larger proportion divergent are marked as too divergent')
-
-    argparser.add_argument('--likelihood_min_segment_length', type=float,
-        default=remixt.defaults.likelihood_min_segment_length,
-        help='Min segment length of the model fit, to attribute masked segments to length or depth')
 
     argparser.set_defaults(func=create_visualization)
 

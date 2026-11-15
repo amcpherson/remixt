@@ -339,6 +339,9 @@ def create_segment_table(experiment):
         'major_readcount': experiment.x[:, 0],
         'minor_readcount': experiment.x[:, 1],
         'readcount': experiment.x[:, 2],
+        'allele_a_readcount': experiment.count_data['allele_a_readcount'].values,
+        'allele_b_readcount': experiment.count_data['allele_b_readcount'].values,
+        'num_hap_blocks': experiment.count_data['num_hap_blocks'].values,
     })
 
     data['allele_ratio'] = data['minor_readcount'] / (data['major_readcount'] + data['minor_readcount'])

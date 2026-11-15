@@ -103,6 +103,7 @@ def init(
     with pd.HDFStore(init_results_filename, 'w') as store:
         store['read_depth'] = read_depth
         store['minor_modes'] = pd.Series(minor_modes, index=range(len(minor_modes)))
+        store['params'] = pd.Series({'max_depth': max_depth})
 
     return dict(enumerate(init_params))
 
@@ -236,6 +237,9 @@ def fit(
     fit_results['p_outlier_allele'] = model.p_outlier_allele
     fit_results['total_likelihood_mask'] = model.total_likelihood_mask
     fit_results['allele_likelihood_mask'] = model.allele_likelihood_mask
+    fit_results['is_short'] = model.is_short
+    fit_results['is_high_depth'] = model.is_high_depth
+    fit_results['is_low_genotyped'] = model.is_low_genotyped
 
     # Save estimation statistics
     fit_results['stats'] = dict()
@@ -256,6 +260,13 @@ def fit(
     fit_results['stats']['mode_idx'] = init_params['mode_idx']
     fit_results['stats']['divergence_weight'] = init_params['divergence_weight']
 
+    # Likelihood mask thresholds, expected to be the same for all initializations
+    fit_results['params'] = {
+        'max_depth': max_depth,
+        'min_segment_length': likelihood_min_segment_length,
+        'min_proportion_genotyped': likelihood_min_proportion_genotyped,
+    }
+
     return fit_results
 
 
@@ -267,11 +278,14 @@ def store_fit_results(store, experiment, fit_results, key_prefix):
     # Create copy number table
     cn_table = remixt.analysis.experiment.create_cn_table(experiment, cn, h)
 
-    # Add columns for outlier / masked status
+    # Add columns for outlier / masked status, and the reason each segment is masked
     cn_table['prob_is_outlier_total'] = fit_results['p_outlier_total'][:, 1]
     cn_table['prob_is_outlier_allele'] = fit_results['p_outlier_allele'][:, 1]
     cn_table['total_likelihood_mask'] = fit_results['total_likelihood_mask']
     cn_table['allele_likelihood_mask'] = fit_results['allele_likelihood_mask']
+    cn_table['is_short'] = fit_results['is_short'].astype(int)
+    cn_table['is_high_depth'] = fit_results['is_high_depth'].astype(int)
+    cn_table['is_low_genotyped'] = fit_results['is_low_genotyped'].astype(int)
 
     brk_cn_table = remixt.analysis.experiment.create_brk_cn_table(brk_cn, experiment.breakpoint_segment_data)
 
@@ -292,6 +306,8 @@ def store_optimal_solution(stats, store, max_prop_diverge=remixt.defaults.max_pr
     store['/cn'] = store[key_prefix + '/cn']
     store['/mix'] = store[key_prefix + '/mix']
     store['/brk_cn'] = store[key_prefix + '/brk_cn']
+
+    return solution_idx
 
 
 def collate(
@@ -322,14 +338,28 @@ def collate(
         raise ValueError('all {} fits failed, first error:\n{}'.format(
             len(failed_table), failed_table['error_message'].iloc[0]))
 
+    # Parameters common to all solutions, from init and checked to agree between fits
+    params = {}
+    for init_id, results_filename in fit_results_filenames.items():
+        results = pickle.load(open(results_filename, 'rb'))
+        for name, value in results['params'].items():
+            if name in params and params[name] != value:
+                raise ValueError('fit {} has {} = {}, differing from {}'.format(
+                    init_id, name, value, params[name]))
+            params[name] = value
+    params['max_prop_diverge'] = max_prop_diverge
+
     # Write out selected solutions
     with pd.HDFStore(collate_filename, 'w') as collated:
         collated['stats'] = stats_table
         collated['failed_fits'] = failed_table
 
         with pd.HDFStore(init_results_filename, 'r') as results:
-            for key, value in results.items():
-                collated[key] = results[key]
+            for key in results.keys():
+                if key == '/params':
+                    params.update(results[key].to_dict())
+                else:
+                    collated[key] = results[key]
 
         with open(experiment_filename, 'rb') as f:
             experiment = pickle.load(f)
@@ -340,4 +370,6 @@ def collate(
                 continue
             store_fit_results(collated, experiment, results, 'solutions/solution_{0}'.format(init_id))
 
-        store_optimal_solution(stats_table, collated, max_prop_diverge=max_prop_diverge)
+        params['optimal_init_id'] = store_optimal_solution(stats_table, collated, max_prop_diverge=max_prop_diverge)
+
+        collated['params'] = pd.Series(params)
