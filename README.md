@@ -188,6 +188,8 @@ If preferred, it is possible to extract copy number and metadata in TSV and YaML
     remixt write_results \
         $results_h5 $cn_table $brk_cn_table $meta_data
 
+The tables are those of the optimal solution selected by the pipeline.  Any other solution can be written by its init id with `--solution`, the ids are listed in the report and in the `stats` table of the results file.
+
 ### ReMixT Report
 
 The Nextflow pipeline writes `remixt_report.html` to the output directory, a single standalone HTML report of all tumours.  The results are embedded in the file, so it can be opened in a browser or shared without the results files or a network connection.  The report has a cohort view summarizing the selected solution of each tumour, and a tumour view with genome wide raw, expected and clone specific copy number, breakpoints, read depth, and every solution, any of which can be selected for comparison with the optimal solution.

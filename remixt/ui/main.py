@@ -22,3 +22,7 @@ def main():
     else:
         argparser.print_help()
 
+
+
+if __name__ == '__main__':
+    main()

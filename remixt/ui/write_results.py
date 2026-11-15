@@ -1,52 +1,51 @@
 import argparse
 import yaml
 import pandas as pd
-import numpy as np
 
 
+def write_results_tables(results_filename, cn_filename, brk_cn_filename, meta_filename, solution=None):
+    """ Write the tables of a solution as TSV, and its statistics and parameters as yaml.
 
-def write_results_tables(**args):
-    store = pd.HDFStore(args['results_filename'], 'r')
+    Args:
+        results_filename (str): results HDF5 from remixt collate
+        cn_filename (str): output segment copy number table
+        brk_cn_filename (str): output breakpoint copy number table
+        meta_filename (str): output yaml of solution statistics and fit parameters
 
-    stats = store['stats']
+    KwArgs:
+        solution (int): init id of the solution to write, default the optimal solution selected by collate
+    """
+    with pd.HDFStore(results_filename, 'r') as store:
+        params = store['params']
+        stats = store['stats'].set_index('init_id')
 
-    # Filter high proportion subclonal
-    stats = stats[stats['proportion_divergent'] <= args['max_proportion_divergent']]
+        if solution is None:
+            solution = int(params['optimal_init_id'])
+        elif solution not in stats.index:
+            raise ValueError('no solution {}, available solutions are {}'.format(
+                solution, ', '.join(str(a) for a in stats.index)))
 
-    # Filter based on ploidy range
-    if args.get('max_ploidy') is not None:
-        stats = stats[stats['ploidy'] < args['max_ploidy']]
-    if args.get('min_ploidy') is not None:
-        stats = stats[stats['ploidy'] > args['min_ploidy']]
+        prefix = 'solutions/solution_{}/'.format(solution)
+        cn = store[prefix + 'cn']
+        brk_cn = store[prefix + 'brk_cn']
+        h = store[prefix + 'h']
+        mix = store[prefix + 'mix']
 
-    if stats.empty:
-        raise ValueError('filters to restrictive, no solutions')
+    cn.to_csv(cn_filename, sep='\t', index=False)
+    brk_cn.to_csv(brk_cn_filename, sep='\t', index=False)
 
-    # Select highest elbo solution
-    stats = stats.sort_values('elbo', ascending=False).iloc[0]
-    solution = stats['init_id']
+    def native(value):
+        return value.item() if hasattr(value, 'item') else value
 
-    cn = store['solutions/solution_{0}/cn'.format(solution)]
-    brk_cn = store['solutions/solution_{0}/brk_cn'.format(solution)]
-    h = store['solutions/solution_{0}/h'.format(solution)]
-    mix = store['solutions/solution_{0}/mix'.format(solution)]
+    metadata = {key: native(value) for key, value in stats.loc[solution].items()}
+    metadata['init_id'] = int(solution)
+    metadata['is_optimal'] = bool(solution == int(params['optimal_init_id']))
+    metadata['params'] = {key: native(value) for key, value in params.items()}
+    metadata['h'] = h.tolist()
+    metadata['mix'] = mix.tolist()
 
-    cn.to_csv(args['cn_filename'], sep='\t', index=False)
-    brk_cn.to_csv(args['brk_cn_filename'], sep='\t', index=False)
-
-    metadata = dict()
-    for key, value in stats.items():
-        try:
-            metadata[key] = np.asscalar(value)
-        except AttributeError:
-            metadata[key] = value
-    metadata['h'] = list(h.tolist())
-    metadata['mix'] = list(mix.tolist())
-
-    with open(args['meta_filename'], 'w') as f:
+    with open(meta_filename, 'w') as f:
         yaml.dump(metadata, f, default_flow_style=False)
-
-    store.close()
 
 
 def add_arguments(argparser):
@@ -62,14 +61,8 @@ def add_arguments(argparser):
     argparser.add_argument('meta_filename',
         help='Output meta data filename')
 
-    argparser.add_argument('--max_ploidy', type=float, default=None,
-        help='Maximum ploidy')
-
-    argparser.add_argument('--min_ploidy', type=float, default=None,
-        help='Minimum ploidy')
-
-    argparser.add_argument('--max_proportion_divergent', type=float, default=0.5,
-        help='Maximum proportion of the genome divergent')
+    argparser.add_argument('--solution', type=int, default=None,
+        help='Init id of the solution to write, default the optimal solution selected by collate')
 
     argparser.set_defaults(func=write_results_tables)
 
@@ -82,5 +75,3 @@ if __name__ == '__main__':
     args = vars(argparser.parse_args())
     func = args.pop('func')
     func(**args)
-
-

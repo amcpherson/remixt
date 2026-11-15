@@ -6,6 +6,7 @@ import unittest
 
 import numpy as np
 import pandas as pd
+import yaml
 
 import remixt.analysis.experiment
 import remixt.analysis.pipeline
@@ -13,6 +14,7 @@ import remixt.cn_model
 import remixt.cn_plot
 import remixt.simulations.experiment
 import remixt.simulations.pipeline
+import remixt.ui.write_results
 import remixt.visualize
 
 
@@ -152,6 +154,29 @@ class remixt_unittest(unittest.TestCase):
             sample = remixt.visualize.load_sample(results_filename)
             self.assertEqual(sample['optimal_id'], init_id)
             self.assertEqual(len(sample['segments']['start']), experiment.N)
+
+            # Tables of the optimal solution, and of the other solution by init id
+            cn_filename = os.path.join(tmp, 'cn.tsv')
+            brk_cn_filename = os.path.join(tmp, 'brk_cn.tsv')
+            meta_filename = os.path.join(tmp, 'meta.yaml')
+            remixt.ui.write_results.write_results_tables(
+                results_filename, cn_filename, brk_cn_filename, meta_filename)
+            written_cn = pd.read_csv(cn_filename, sep='\t')
+            self.assertEqual(len(written_cn.index), experiment.N)
+            self.assertTrue(np.array_equal(written_cn['major_1'].values, cn_table['major_1'].values))
+            with open(meta_filename) as f:
+                meta = yaml.safe_load(f)
+            self.assertEqual(meta['init_id'], init_id)
+            self.assertTrue(meta['is_optimal'])
+            self.assertAlmostEqual(meta['params']['max_depth'], init_params[weak_id]['max_depth'])
+            self.assertEqual(len(meta['h']), 3)
+
+            remixt.ui.write_results.write_results_tables(
+                results_filename, cn_filename, brk_cn_filename, meta_filename, solution=strong_id)
+            with open(meta_filename) as f:
+                meta = yaml.safe_load(f)
+            self.assertEqual(meta['init_id'], strong_id)
+            self.assertFalse(meta['is_optimal'])
 
         evaluation = remixt.simulations.pipeline.evaluate_results(
             experiment.genome_mixture, cn_table, brk_cn_table, mix)
