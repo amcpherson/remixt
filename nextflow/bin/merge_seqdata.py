@@ -2,7 +2,6 @@
 """Merge per-chromosome seqdata HDF5 files into a single file."""
 
 import click
-import glob
 import remixt.seqdataio
 
 

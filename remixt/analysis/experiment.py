@@ -1,4 +1,3 @@
-import collections
 import itertools
 import pickle
 import numpy as np

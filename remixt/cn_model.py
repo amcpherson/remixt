@@ -2,7 +2,6 @@ import itertools
 import collections
 import numpy as np
 import scipy.optimize
-import pickle
 import contextlib
 import datetime
 import statsmodels.tools.numdiff
@@ -73,7 +72,6 @@ class BreakpointModel(object):
         self.transition_log_prob = kwargs.get('transition_log_prob', 10.)
         self.transition_model = kwargs.get('transition_model', 0)
         self.disable_breakpoints = kwargs.get('disable_breakpoints', False)
-        self.breakpoint_init = kwargs.get('breakpoint_init', None)
         self.normal_copies = kwargs.get('normal_copies', np.array([[1, 1]] * self.N))
         self.do_h_update = kwargs.get('do_h_update', True)
 
@@ -285,29 +283,6 @@ class BreakpointModel(object):
             likelihood_param_values[name] = getattr(self.model, name)
         return likelihood_param_values
 
-    def get_model_data(self):
-        data = {}
-        for a in dir(self.model):
-            if a in ['__doc__', '__pyx_vtable__']:
-                continue
-            if callable(getattr(self.model, a)):
-                continue
-            if type(getattr(self.model, a)).__name__ == '_memoryviewslice':
-                data[a] = np.asarray(getattr(self.model, a))
-            else:
-                data[a] = getattr(self.model, a)
-        return data
-
-    def _write_model(self, model_filename):
-        data = self.get_model_data()
-        pickle.dump(data, open(model_filename, 'w'))
-
-    def _read_model(self, model_filename):
-        data = pickle.load(open(model_filename, 'r'))
-        for a in dir(self.model):
-            if a in data:
-                setattr(self.model, a, data[a])
-
     def _get_hdel_weights(self):
         mask = np.zeros(self.model.posterior_marginals.shape)
         n, s = np.where(np.asarray(self.model.is_hdel) == 1)
@@ -387,21 +362,6 @@ class BreakpointModel(object):
 
         self.model.total_likelihood_mask = self._total_likelihood_mask.astype(int)
         self.model.allele_likelihood_mask = self._allele_likelihood_mask.astype(int)
-
-        if self.breakpoint_init is not None:
-            p_breakpoint = np.ones((self.model.self.num_breakpoints, self.model.num_brk_states))
-            brk_states = np.array(self.model.brk_states)
-
-            for k, bp in enumerate(self.breakpoints):
-                cn = self.breakpoint_init[bp]
-
-                for s in range(self.model.num_brk_states):
-                    if np.all(cn == brk_states[s]):
-                        p_breakpoint[k, s] = 1000.
-
-            p_breakpoint /= np.sum(p_breakpoint, axis=-1)[:, np.newaxis]
-
-            self.model.p_breakpoint = p_breakpoint
 
         self.model.transition_model = self.transition_model
 

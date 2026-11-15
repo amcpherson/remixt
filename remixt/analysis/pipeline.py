@@ -163,7 +163,6 @@ def fit(
     disable_breakpoints=remixt.defaults.disable_breakpoints,
     do_h_update=remixt.defaults.do_h_update,
     random_seed=remixt.defaults.random_seed,
-    optimal_initialization=False,
 ):
     np.random.seed(random_seed)
 
@@ -174,24 +173,6 @@ def fit(
     ])
     divergence_weight = init_params['divergence_weight']
     max_depth = init_params['max_depth']
-
-    # For convergence testing purposes, provide optimal initialization
-    # based on simulated breakpoint copy number
-    breakpoint_init = None
-    if optimal_initialization:
-        breakpoint_init = experiment.genome_mixture.genome_collection.collapsed_breakpoint_copy_number()
-        
-        for bp in experiment.genome_mixture.detected_breakpoints.values():
-            if bp not in breakpoint_init:
-                breakpoint_init[bp] = np.zeros((experiment.genome_mixture.M,))
-
-        swap = (experiment.h[1] < experiment.h[2]) != (h_init[1] < h_init[2])
-
-        if swap:
-            for bp, cn in breakpoint_init.items():
-                cn = cn.copy()
-                cn[1:] = cn[1:][::-1]
-                breakpoint_init[bp] = cn
 
     normal_copies = np.array([[1, 1]] * experiment.l.shape[0])
     if not is_female:
@@ -213,7 +194,6 @@ def fit(
         max_depth=max_depth,
         normal_copies=normal_copies,
         disable_breakpoints=disable_breakpoints,
-        breakpoint_init=breakpoint_init,
         do_h_update=do_h_update,
     )
     

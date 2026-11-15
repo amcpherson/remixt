@@ -1,7 +1,5 @@
 import argparse
-import yaml
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import seaborn
 
@@ -16,47 +14,46 @@ plot_choices = [
 ]
 
 def create_plot(**args):
-    store = pd.HDFStore(args['results'], 'r')
-
     seaborn.set_style('ticks')
 
-    if args['plot_type'] == 'depth':
-        read_depth = store['/read_depth']
-        minor_modes = store['/minor_modes']
+    with pd.HDFStore(args['results'], 'r') as store:
+        if args['plot_type'] == 'depth':
+            read_depth = store['/read_depth']
+            minor_modes = store['/minor_modes']
 
-        fig = plt.figure(figsize=(8, 5))
-        ax = plt.gca()
+            fig = plt.figure(figsize=(8, 5))
+            ax = plt.gca()
 
-        remixt.cn_plot.plot_depth(ax, read_depth, minor_modes=minor_modes)
-        seaborn.despine(trim=True)
+            remixt.cn_plot.plot_depth(ax, read_depth, minor_modes=minor_modes)
+            seaborn.despine(trim=True)
 
-        fig.savefig(args['plot_file'], bbox_inches='tight')
+            fig.savefig(args['plot_file'], bbox_inches='tight')
 
-    elif args['plot_type'] == 'scatter':
-        cnv = store['/cn']
+        elif args['plot_type'] == 'scatter':
+            cnv = store['/cn']
 
-        fig = plt.figure(figsize=(8, 8))
-        ax = plt.gca()
+            fig = plt.figure(figsize=(8, 8))
+            ax = plt.gca()
 
-        remixt.cn_plot.plot_cnv_scatter(ax, cnv, major_col='major_raw', minor_col='minor_raw')
+            remixt.cn_plot.plot_cnv_scatter(ax, cnv, major_col='major_raw', minor_col='minor_raw')
 
-        fig.savefig(args['plot_file'], bbox_inches='tight')
+            fig.savefig(args['plot_file'], bbox_inches='tight')
 
-    elif args['plot_type'] == 'raw':
-        cnv = store['/cn']
+        elif args['plot_type'] == 'raw':
+            cnv = store['/cn']
 
-        cnv['actual_length'] = cnv['end'] - cnv['start']
+            cnv['actual_length'] = cnv['end'] - cnv['start']
 
-        cnv = cnv[
-            (cnv['length'] > 1e5) &
-            (cnv['length'] > 0.75 * cnv['actual_length'])]
+            cnv = cnv[
+                (cnv['length'] > 1e5) &
+                (cnv['length'] > 0.75 * cnv['actual_length'])]
 
-        fig = plt.figure(figsize=(12, 2))
-        ax = plt.gca()
+            fig = plt.figure(figsize=(12, 2))
+            ax = plt.gca()
 
-        remixt.cn_plot.plot_cnv_genome(ax, cnv, major_col='major_raw', minor_col='minor_raw', maxcopies=6)
+            remixt.cn_plot.plot_cnv_genome(ax, cnv, major_col='major_raw', minor_col='minor_raw', maxcopies=6)
 
-        fig.savefig(args['plot_file'], bbox_inches='tight')
+            fig.savefig(args['plot_file'], bbox_inches='tight')
 
 
 def add_arguments(argparser):
