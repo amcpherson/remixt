@@ -67,9 +67,18 @@ def create_chromosome_seqdata(seqdata_filename, bam_filename, snp_filename, chro
     )
 
     with pd.HDFStore(seqdata_filename, 'w', complevel=9, complib='zlib') as store:
-        while reader.ReadAlignments(10000000):
-            _unique_index_append(store, _get_key('fragments', chromosome), reader.GetFragmentTable())
-            _unique_index_append(store, _get_key('alleles', chromosome), reader.GetAlleleTable())
+        # Continue until the bam is exhausted, a chunk may yield no data if all
+        # its reads are filtered, so empty chunks do not signal the end
+        while True:
+            more_alignments = reader.ReadAlignments(10000000)
+            fragment_data = reader.GetFragmentTable()
+            allele_data = reader.GetAlleleTable()
+            if len(fragment_data) > 0:
+                _unique_index_append(store, _get_key('fragments', chromosome), fragment_data)
+            if len(allele_data) > 0:
+                _unique_index_append(store, _get_key('alleles', chromosome), allele_data)
+            if not more_alignments:
+                break
 
 
 def merge_seqdata(out_filename, in_filenames):

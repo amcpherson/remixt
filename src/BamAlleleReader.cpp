@@ -324,7 +324,10 @@ bool AlleleReader::ReadAlignments(int maxAlignments)
 		mPileupEngine.Flush();
 	}
 
-	return !mFragmentData.empty() || !mAlleleData.empty();
+	// Report whether alignments remain, not whether this batch produced data:
+	// a batch can be entirely filtered (e.g. a pileup of millions of discordant
+	// reads at an artifact locus) with many valid reads still to come
+	return !finishedGetAlignments;
 }
 
 void AlleleReader::Visit(const PileupPosition& pileupData)
