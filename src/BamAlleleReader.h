@@ -72,6 +72,8 @@ struct AlleleReader : BamTools::PileupVisitor, BamTools::DiscardAlignmentVisitor
 
 	void ReadSNPs(const std::string& snpFilename);
 
+	// Read up to maxAlignments alignments, returns false once the region is exhausted.
+	// Data from the final call must still be collected.
 	bool ReadAlignments(int maxAlignments);
 
 	void Visit(const BamTools::PileupPosition& pileupData);
