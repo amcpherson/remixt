@@ -7,7 +7,7 @@ import remixt.analysis.experiment
 
 @click.command()
 @click.option('--counts', required=True, help='Input count data TSV file')
-@click.option('--breakpoints', required=True, help='Input breakpoints TSV file')
+@click.option('--breakpoints', default=None, help='Input breakpoints TSV file, omit for no breakpoints')
 @click.option('--output', required=True, help='Output experiment pickle file')
 def main(counts, breakpoints, output):
     remixt.analysis.experiment.create_experiment(

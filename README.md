@@ -78,6 +78,8 @@ ReMixT takes multiple bam files as input.  Bam files should be multiple samples 
 
 Additionally, ReMixT takes a list of predicted breakpoints detected by paired end sequencing as an additional input.
 
+Breakpoints are optional.  To run without breakpoints, omit `--breakpoint_file`, or provide a file with only the header line.  Segment copy number is then inferred without breakpoint information, and the breakpoint copy number table will be empty.
+
 #### Breakpoint Prediction Input Format
 
 The predicted breakpoints should be provided in a tab separated file with the following columns:

@@ -74,12 +74,8 @@ def create_segments(
         changepoints.append((gap_table.loc[idx, 'chromosome'], gap_table.loc[idx, 'end']))
 
     # Add breakends to segmentation if provided
-    if breakpoint_filename is not None:
-        breakpoints = pd.read_csv(
-            breakpoint_filename, sep='\t',
-            converters={'chromosome_1': str, 'chromosome_2': str, 'position_1': int, 'position_2': int}
-        )
-
+    breakpoints = remixt.utils.read_breakpoints(breakpoint_filename)
+    if len(breakpoints) > 0:
         if chr_name_prefix == 'chr':
             assert breakpoints['chromosome_1'].str.startswith('chr').all()
             assert breakpoints['chromosome_2'].str.startswith('chr').all()

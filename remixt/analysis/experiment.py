@@ -3,6 +3,8 @@ import pickle
 import numpy as np
 import pandas as pd
 
+import remixt.utils
+
 
 def find_closest(a, v):
     """ Find closest value in a to values in v
@@ -231,8 +233,7 @@ def create_experiment(count_filename, breakpoint_filename, experiment_filename, 
     if min_length is not None:
         count_data = count_data[count_data['length'] > min_length]
 
-    breakpoint_data = pd.read_csv(breakpoint_filename, sep='\t',
-        converters={'chromosome_1': str, 'chromosome_2': str})
+    breakpoint_data = remixt.utils.read_breakpoints(breakpoint_filename)
 
     experiment = Experiment(count_data, breakpoint_data, max_brk_dist=max_brk_dist)
 
@@ -408,12 +409,13 @@ def create_cn_table(experiment, cn, h, phi=None):
     return data
 
 
-def create_brk_cn_table(brk_cn, breakpoint_segment_data):
+def create_brk_cn_table(brk_cn, breakpoint_segment_data, num_clones):
     """ Create a table of relevant breakpoint copy number data
 
     Args:
-        brk_cn (numpy.array): breakpoint copy number
+        brk_cn (dict): breakpoint copy number by prediction id
         breakpoint_segment_data (DataFrame): breakpoint segment mapping
+        num_clones (int): number of clones including normal
 
     Returns:
         pandas.DataFrame: table of breakpoint copy number information
@@ -424,7 +426,9 @@ def create_brk_cn_table(brk_cn, breakpoint_segment_data):
     """
 
     if len(brk_cn) == 0:
-        return pd.DataFrame(columns=['prediction_id'])
+        cn_columns = ['cn_{}'.format(m) for m in range(num_clones)]
+        return pd.DataFrame(columns=['prediction_id'] + cn_columns + [
+            c for c in breakpoint_segment_data.columns if c != 'prediction_id'])
 
     brk_cn_table = pd.DataFrame(brk_cn.values(), index=brk_cn.keys())
     brk_cn_table.columns = ['cn_{}'.format(m) for m in brk_cn_table.columns]

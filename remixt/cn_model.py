@@ -59,7 +59,8 @@ class BreakpointModel(object):
 
         self.N = x.shape[0]
 
-        self.breakpoint_ids, self.breakpoints = zip(*breakpoints.items())
+        self.breakpoint_ids = tuple(breakpoints.keys())
+        self.breakpoints = tuple(breakpoints.values())
         
         self.max_copy_number = kwargs.get('max_copy_number', 6)
         self.max_copy_number_diff = kwargs.get('max_copy_number_diff', 1)

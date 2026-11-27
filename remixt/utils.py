@@ -82,6 +82,51 @@ def read_selected_chromosome_lengths(genome_fai_filename, chromosomes, chr_name_
     return {c: l for c, l in chromosome_lengths.items() if c in chromosomes}
 
 
+breakpoint_columns = [
+    'prediction_id',
+    'chromosome_1',
+    'strand_1',
+    'position_1',
+    'chromosome_2',
+    'strand_2',
+    'position_2',
+]
+
+
+def read_breakpoints(breakpoint_filename):
+    """ Read a breakpoints TSV, allowing for no breakpoints.
+
+    Args:
+        breakpoint_filename (str or None): breakpoints TSV file
+
+    Returns:
+        pandas.DataFrame: breakpoints with columns given by `breakpoint_columns`
+
+    No breakpoints can be given as None, an empty file, or a file with only a
+    header, and results in an empty table with the expected columns.
+
+    """
+
+    if breakpoint_filename is None or os.path.getsize(breakpoint_filename) == 0:
+        breakpoints = pd.DataFrame(columns=breakpoint_columns)
+
+    else:
+        breakpoints = pd.read_csv(
+            breakpoint_filename, sep='\t',
+            dtype={'chromosome_1': str, 'chromosome_2': str, 'strand_1': str, 'strand_2': str},
+        )
+
+        missing_columns = set(breakpoint_columns) - set(breakpoints.columns)
+        if missing_columns:
+            raise ValueError(f'breakpoint file {breakpoint_filename} missing columns {sorted(missing_columns)}')
+
+    return breakpoints.astype({
+        'chromosome_1': str, 'chromosome_2': str,
+        'strand_1': str, 'strand_2': str,
+        'position_1': int, 'position_2': int,
+    })
+
+
 def read_table_raw(filename):
     peek = pd.read_csv(filename, sep='\t', nrows=1)
     columns = peek.columns

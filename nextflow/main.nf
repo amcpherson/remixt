@@ -50,7 +50,11 @@ workflow {
         log.warn "Param ${name} is not used by any remixt step"
     }
 
-    breakpoints   = file(params.breakpoint_file)
+    // Breakpoints are optional, with none given the empty NO_FILE placeholder is used
+    if (!params.breakpoint_file) { log.info "No --breakpoint_file given, running without breakpoints" }
+    breakpoints   = params.breakpoint_file
+        ? file(params.breakpoint_file, checkIfExists: true)
+        : file("${projectDir}/assets/NO_FILE")
 
     // --- Reference files ---
     genome = params.genomes[params.ensembl_genome_version]

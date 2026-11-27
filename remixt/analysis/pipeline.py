@@ -267,7 +267,7 @@ def store_fit_results(store, experiment, fit_results, key_prefix):
     cn_table['is_high_depth'] = fit_results['is_high_depth'].astype(int)
     cn_table['is_low_genotyped'] = fit_results['is_low_genotyped'].astype(int)
 
-    brk_cn_table = remixt.analysis.experiment.create_brk_cn_table(brk_cn, experiment.breakpoint_segment_data)
+    brk_cn_table = remixt.analysis.experiment.create_brk_cn_table(brk_cn, experiment.breakpoint_segment_data, len(h))
 
     store[key_prefix + '/h'] = pd.Series(h, index=range(len(h)))
     store[key_prefix + '/cn'] = cn_table
